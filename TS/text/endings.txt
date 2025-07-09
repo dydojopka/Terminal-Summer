@@ -1,0 +1,919 @@
+label endings_checker
+    if ($fail_good)
+    {
+        goto main_good_ending
+    }
+    else if ($fail_bad)
+    {
+        goto main_bad_ending
+    }
+    else if ($mi_root)
+    {
+        goto mi_ending
+    }
+    else if ($un_good)
+    {
+        goto un_good_ending
+    }
+    else if ($un_bad)
+    {
+        goto un_bad_ending
+    }
+    else if ($dv_good)
+    {
+        goto dv_good_ending
+    }
+    else if ($dv_bad)
+    {
+        goto dv_bad_ending
+    }
+    else if ($sl_good)
+    {
+        goto sl_good_ending
+    }
+    else if ($sl_bad)
+    {
+        goto sl_bad_ending
+    }
+    else if ($us_good)
+    {
+        goto us_good_ending
+    }
+    else if ($us_bad)
+    {
+        goto us_bad_ending
+    }
+    else if ($harem_root)
+    {
+        goto harem_ending
+    }
+    else if ($uv_root)
+    {
+        goto uv_ending
+    }
+# label postscriptum:
+#     window show
+#     "У каждой истории есть начало и конец."
+#     "У каждой истории есть своя канва, синопсис, содержание, ключевые моменты, прологи и эпилоги."
+#     "И нет такой книги, в которой при каждом новом прочтении не открывались бы вещи, на которые раньше не обращал внимания."
+#     "У каждой истории есть начало и конец."
+#     "Почти у каждой…"
+#     window hide
+#     pause 5)
+#     return
+# init:
+#     transform ending_transform_spanish:
+#         xalign 0.5
+#         ypos 1.3
+#         linear 87.0 ypos -2.12
+
+#     transform ending_transform_italian:
+#         xalign 0.5
+#         ypos 1.3
+#         linear 87.0 ypos -2.0
+
+#     transform ending_transform_chinese:
+#         xalign 0.5
+#         ypos 1.3
+#         linear 87.0 ypos -2.95
+
+#     transform ending_transform_french:
+#         xalign 0.5
+#         ypos 1.3
+#         linear 87.0 ypos -2.76
+
+#     transform ending_transform:
+#         xalign 0.5
+#         ypos 1.3
+#         linear 87.0 ypos -1.55
+
+#     $ credits_text = translation_new["credits
+
+label un_good_ending
+    #$ persistent.sprite_time = "day"
+    scene color black with dissolve2
+    pause 1
+    play music opening fadein 3
+    rollcredits
+    {
+        scene bg ext_square_night with dissolve2 skip
+            # zoom 1.2
+            # anchor (0.1,0.0)
+            # linear 12 anchor (0.0,0.0)
+        show un normal_pioneer size normal at right
+            # pos (0.7, 0)
+            # linear 11 pos (0.2,0)
+        with dissolve2
+        pause hard 8
+        scene cg d1_grasshopper with dissolve2
+            # zoom 1.2
+            # anchor (0,0.1)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 8
+        scene bg ext_polyana_night with dissolve2 skip
+            # zoom 1.2
+            # linear 11 zoom 1.0
+        show un angry_pioneer size normal at cleft
+            # xalign 0.355
+            # xanchor 0.5
+            # yanchor 0.0
+            # zoom 1.2
+            # linear 11 zoom 1.0
+        show dv angry_pioneer size normal at cright
+            # xalign 0.645
+            # xanchor 0.5
+            # yanchor 0.0
+            # zoom 1.2
+            # linear 11 zoom 1.0
+        with dissolve2
+        pause hard 8
+        scene cg d3_un_dance with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.1)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene cg epilogue_un with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.0)
+            # linear 12 anchor (0.0,0.1)
+        pause hard 8
+        scene cg d5_un_island with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.1)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene cg d6_un_evening_1 with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d6_un_evening_2 with dissolve
+        pause hard 4
+        scene cg epilogue_un_good with esflash2
+        pause hard 8
+        scene color black with dissolve2
+        stop music fadeout 3
+        pause hard 4
+        goto exit
+    }
+label un_bad_ending
+    scene color black
+    with dissolve2
+    pause 1
+    play music m_410 fadein 3
+    rollcredits
+    {
+        pause hard 8
+        scene cg epilogue_un_bad with dissolve2
+        pause hard 79
+        scene color black with dissolve2
+        stop music fadeout 5
+        pause hard 4
+        goto exit
+    }
+label main_good_ending
+    #$ persistent.sprite_time = "day"
+    scene color black with dissolve2
+    pause 1
+    play music opening fadein 3
+    rollcredits
+    {
+        pause hard 2
+        scene cg intro_1 with dissolve
+        pause hard 0.5
+        scene cg intro_2 with dissolve
+        pause hard 0.5
+        scene cg intro_3 with dissolve
+        pause hard 0.5
+        scene cg intro_4 with dissolve
+        pause hard 0.5
+        scene cg intro_5 with dissolve
+        pause hard 0.5
+        scene cg intro_6 with dissolve
+        pause hard 0.5
+        scene cg intro_8 with dissolve
+        pause hard 0.5
+        scene cg intro_7 with dissolve
+        pause hard 0.5
+        scene cg intro_9 with dissolve
+        pause hard 0.5
+        scene cg intro_10 with dissolve
+        pause hard 0.5
+        scene cg intro_11 with dissolve
+        pause hard 0.5
+        scene cg intro_13 with dissolve
+        pause hard 0.5
+        scene cg intro_14 with dissolve
+        pause hard 0.5
+        scene cg intro_15 with dissolve
+        pause hard 0.5
+        scene cg intro_16 with dissolve
+        pause hard 0.5
+        scene bg op_back with dissolve2
+        pause hard 1
+        show op_sl with dissolve2
+        pause hard 1
+        scene cg d6_sl_forest with dissolve
+        pause hard 0.5
+        scene cg d3_sl_library with dissolve
+        pause hard 0.5
+        scene bg op_back with dissolve2 skip
+        show op_sl with dissolve2
+        pause hard 1
+        show op_un with dissolve2
+        pause hard 1
+        scene cg d5_un_island with dissolve
+        pause hard 0.5
+        scene cg epilogue_un with dissolve
+        pause hard 0.5
+        scene bg op_back with dissolve2 skip
+        show op_sl
+        show op_un
+        with dissolve2
+        pause hard 1
+        show op_us with dissolve2
+        pause hard 1
+        scene cg d2_ussr_falling with dissolve
+        pause hard 0.5
+        scene cg d4_us_cancer with dissolve
+        pause hard 0.5
+        scene cg d3_ussr_catched with dissolve
+        pause hard 0.5
+        scene bg op_back with dissolve2 skip
+        show op_sl
+        show op_un
+        show op_us
+        with dissolve2
+        pause hard 1
+        show op_dv with dissolve2
+        pause hard 1
+        scene cg d5_dv_argue with dissolve
+        pause hard 0.5
+        scene cg d2_water_dan with dissolve
+        pause hard 0.5
+        scene bg op_back with dissolve2 skip
+        show op_sl
+        show op_un
+        show op_us
+        show op_dv
+        with dissolve2
+        pause hard 1
+        show op_mi with dissolve2
+        pause hard 1
+        scene cg d2_miku_piano with dissolve
+        pause hard 0.5
+        scene cg d4_mi_guitar with dissolve
+        pause hard 0.5
+        scene cg epilogue_mi_1 with dissolve
+        pause hard 0.5
+        scene bg op_back with dissolve2 skip
+        show op_sl
+        show op_un
+        show op_us
+        show op_dv
+        show op_mi
+        with dissolve2
+        pause hard 1
+        show op_uv with dissolve2
+        pause hard 1
+        scene bg ext_road_day with dissolve2
+        pause hard 1
+        show logo_day at center with dissolve2
+            # align (0.5, 0.5)
+        pause hard 12
+        scene color black with dissolve2
+        stop music fadeout 3
+        pause hard 4
+        goto exit
+    }
+label main_bad_ending
+    scene color black with dissolve2
+    pause 1
+    play music m_410 fadein 3
+    rollcredits
+    {
+        pause hard 8
+        scene bg ext_camp_entrance_day_sepia with dissolve2
+        scene color black with dissolve 50 skip
+        pause hard 79
+        stop music fadeout 5
+        pause hard 4
+        goto exit
+    }
+label dv_bad_ending
+    #$ persistent.sprite_time = "day"
+    scene color black with dissolve2
+    pause 1
+    play music opening fadein 3
+    rollcredits
+    {
+        scene bg ext_beach_day with dissolve2 skip
+            # zoom 1.2
+            # anchor (0.1,0.0)
+            # linear 12 anchor (0.0,0.1)
+        show dv smile_pioneer2 size normal at right
+            # pos (0.1, 0)
+            # linear 12 pos (0.7,0)
+        with dissolve2
+        pause hard 8
+        scene cg d2_2ch_beach_1 with dissolve2
+            # pos (0,-1280)
+            # linear 9.0 pos (0,0)
+            # linear 3.0 pos (0, -250)
+        pause hard 8
+        scene bg ext_polyana_night with dissolve2 skip
+            # zoom 1.2
+            # linear 11 zoom 1.0
+        show un scared_pioneer size normal at cright
+            # xalign 0.645
+            # xanchor 0.5
+            # yanchor 0.0
+            # zoom 1.2
+            # linear 11 zoom 1.0
+        show dv rage_pioneer size normal at cleft
+            # xalign 0.355
+            # xanchor 0.5
+            # yanchor 0.0
+            # zoom 1.2
+            # linear 11 zoom 1.0
+        with dissolve2
+        pause hard 8
+        scene cg d3_dv_scene_1 with dissolve2
+            # zoom 1.2
+            # anchor (0.,0.1)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 8
+        scene cg d5_dv_island with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.1)
+        pause hard 8
+        scene cg d7_dv_2 with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 7
+        scene cg d6_dv_fight with dissolve2
+            # zoom 1.1
+            # linear 5 zoom 1.0
+        pause hard 3
+        scene cg d6_dv_fight_2 with dissolve
+        pause hard 3
+        scene cg d6_dv_fight_3 with dissolve
+        pause hard 3
+        scene cg epilogue_dv_2 with esflash2
+        pause hard 8
+        scene color black with dissolve2
+        stop music fadeout 3
+        pause hard 4
+        goto exit
+    }
+label dv_good_ending
+    #$ persistent.sprite_time = "day"
+    scene color black with dissolve2
+    pause 1
+    play music opening fadein 3
+    rollcredits
+    {
+        scene bg ext_beach_day with dissolve2 skip
+            # zoom 1.2
+            # anchor (0.1,0.0)
+            # linear 12 anchor (0.0,0.1)
+        show dv smile_pioneer2 size normal at right
+            # pos (0.1, 0)
+            # linear 12 pos (0.7,0)
+        with dissolve2
+        pause hard 8
+        scene cg d2_2ch_beach_1 with dissolve2
+            # pos (0,-1280)
+            # linear 9.0 pos (0,0)
+            # linear 3.0 pos (0, -250)
+        pause hard 8
+        scene bg ext_polyana_night with dissolve2 skip
+            # zoom 1.2
+            # linear 11 zoom 1.0
+        show un scared_pioneer size normal at cright
+            # xalign 0.645
+            # xanchor 0.5
+            # yanchor 0.0
+            # zoom 1.2
+            # linear 11 zoom 1.0
+        show dv rage_pioneer size normal at cleft
+            # xalign 0.355
+            # xanchor 0.5
+            # yanchor 0.0
+            # zoom 1.2
+            # linear 11 zoom 1.0
+        with dissolve2
+        pause hard 8
+        scene cg d3_dv_scene_2 with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 8
+        scene cg d5_dv_island with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.1)
+        pause hard 8
+        scene cg d7_dv_2 with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 7
+        scene cg d5_dv_argue with dissolve2
+            # zoom 1.1
+            # linear 5 zoom 1.0
+        pause hard 3
+        scene cg d5_dv_argue_2 with dissolve
+        pause hard 3
+        scene cg d5_dv_argue_3 with dissolve
+        pause hard 3
+        scene cg epilogue_dv_3 with esflash2
+        pause hard 8
+        scene color black with dissolve2
+        stop music fadeout 3
+        pause hard 4
+        goto exit
+    }
+label sl_bad_ending
+    #$ persistent.sprite_time = "day"
+    scene color black with dissolve2
+    pause 1
+    play music opening fadein 3
+    rollcredits
+    {
+        scene bg ext_houses_day with dissolve2 skip
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.0)
+        show sl smile2_pioneer size normal at center
+            # pos (0.2, 0)
+            # linear 12 pos (0.5,0)
+        with dissolve2
+        pause hard 8
+        scene cg d1_sl_dinner with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d1_sl_dinner_0 with dissolve
+        pause hard 4
+        scene cg d3_sl_dance with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.0)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene cg d5_sl_sleep with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d5_sl_sleep_2 with dissolve
+        pause hard 4
+        scene cg d3_sl_evening with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 8
+        scene cg d6_sl_forest_2 with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d6_sl_forest with dissolve
+        pause hard 4
+        scene cg d3_sl_library with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.1)
+        pause hard 8
+        scene bg semen_room_window with esflash2
+        pause hard 8
+        scene color black with dissolve2
+        stop music fadeout 3
+        pause hard 4
+        goto exit
+    }
+label sl_good_ending
+    #$ persistent.sprite_time = "day"
+    scene color black with dissolve2
+    pause 1
+    play music opening fadein 3
+    rollcredits
+    {
+        scene bg ext_houses_day with dissolve2 skip
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.0)
+        show sl smile2_pioneer size normal at center
+            # pos (0.2, 0)
+            # linear 12 pos (0.5,0)
+        with dissolve2
+        pause hard 8
+        scene cg d1_sl_dinner with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d1_sl_dinner_0 with dissolve
+        pause hard 4
+        scene cg d3_sl_dance with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.0)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene cg d5_sl_sleep with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d5_sl_sleep_2 with dissolve
+        pause hard 4
+        scene cg d3_sl_evening with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 8
+        scene cg d6_sl_forest_2 with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d6_sl_forest with dissolve
+        pause hard 4
+        scene cg d3_sl_library with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.1)
+        pause hard 8
+        scene cg epilogue_sl with esflash2
+        pause hard 4
+        scene cg epilogue_sl_2 with dissolve
+        pause hard 4
+        scene color black with dissolve2
+        stop music fadeout 3
+        pause hard 4
+        goto exit
+    }
+label us_bad_ending
+    #$ persistent.sprite_time = "day"
+    scene color black with dissolve2
+    pause 1
+    play music opening fadein 3
+    rollcredits
+    {
+        scene bg ext_playground_day with dissolve2 skip
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.1,0.0)
+        show us laugh_sport size normal at right
+            # pos (0.1, 0)
+            # linear 12 pos (0.8,0)
+        with dissolve2
+        pause hard 8
+        scene cg d2_ussr_falling with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene cg d3_soccer with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.1)
+        pause hard 8
+        scene cg d3_us_library_1 with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d3_us_library_2 with dissolve
+        pause hard 4
+        scene cg d3_ussr_catched with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 8
+        scene cg d4_catac_us with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d4_catac_us_2 with dissolve
+        pause hard 4
+        scene cg d5_us_ghost with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 8
+        scene cg epilogue_us with esflash2
+        pause hard 8
+        scene color black with dissolve2
+        stop music fadeout 3
+        pause hard 4
+        goto exit
+    }
+label us_good_ending
+    #$ persistent.sprite_time = "day"
+    scene color black
+    with dissolve2
+    pause 1
+    play music opening fadein 3
+    rollcredits
+    {
+        scene bg ext_playground_day with dissolve2 skip
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.1,0.0)
+        show us laugh_sport size normal at right
+            # pos (0.1, 0)
+            # linear 12 pos (0.8,0)
+        with dissolve2
+        pause hard 8
+        scene cg d2_ussr_falling with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene cg d3_soccer with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.1)
+        pause hard 8
+        scene cg d6_us_film with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.1)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene cg d3_ussr_catched with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 8
+        scene cg d5_us_ghost_2 with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.0)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene cg d5_us_kiss with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 8
+        scene cg epilogue_us_3_a with esflash2
+        pause hard 8
+        scene color black with dissolve2
+        stop music fadeout 3
+        pause hard 4
+        goto exit
+    }
+label mi_ending
+    #$ persistent.sprite_time = "day"
+    scene color black with dissolve2
+    pause 1
+    play music opening fadein 3
+    rollcredits
+    {
+        scene bg ext_musclub_day with dissolve2 skip
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.0)
+        show mi smile_pioneer size normal at center
+            # pos (0.6, 0)
+            # linear 12 pos (0.2,0)
+        with dissolve2
+        pause hard 8
+        scene cg d2_miku_piano2 with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d2_miku_piano with dissolve
+        pause hard 4
+        scene cg d4_mi_guitar with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.1)
+        pause hard 8
+        scene cg d5_mi with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.1)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene cg d4_mi_sing with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 8
+        scene cg epilogue_mi_1 with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.1)
+        pause hard 8
+        scene bg int_musclub_day with dissolve2 skip
+            # zoom 1.1
+            # linear 24 zoom 1.0
+        show mi shy_pioneer size normal at center
+            # xalign 0.5
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        with dissolve2
+        pause hard 2
+        show mi smile_pioneer size normal at center with dissolve
+            # xalign 0.5
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 2
+        show mi laugh_pioneer size normal at center with dissolve
+            # xalign 0.5
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 2
+        show mi happy_pioneer size normal at center with dissolve
+            # xalign 0.5
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 2
+        scene cg epilogue_mi_9 with esflash2
+        pause hard 8
+        scene color black with dissolve2
+        stop music fadeout 3
+        pause hard 4
+        goto exit
+    }
+label harem_ending
+    #$ persistent.sprite_time = "day"
+    scene color black with dissolve2
+    pause 1
+    play music opening fadein 3
+    rollcredits
+    {
+        scene cg d7_pioneers_leaving with dissolve2
+            # zoom 1.2
+            # linear 12 zoom 1.0
+        pause hard 8
+        scene bg ext_square_day with dissolve2 skip
+            # zoom 1.1
+            # linear 12 zoom 1.0
+        show sl smile_pioneer size normal at center
+            # xalign 0.5
+            # xanchor 0.5
+            # yanchor 0.0
+        show dv smile_pioneer size normal behind sl at cleft
+            # xalign 0.355
+            # xanchor 0.5
+            # yanchor 0.0
+        show un smile_pioneer size normal behind sl at cright
+            # xalign 0.645
+            # xanchor 0.5
+            # yanchor 0.0
+        show us smile_pioneer size normal behind dv at fleft
+            # xalign 0.16
+            # xanchor 0.5
+            # yanchor 0.0
+        show mi smile_pioneer size normal behind un at fright
+            # xalign 0.84
+            # xanchor 0.5
+            # yanchor 0.0
+        with dissolve2
+        pause hard 8
+        scene cg d3_disco with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.1)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene cg d2_lineup with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.1)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene bg int_bus_people_day with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 4
+        scene bg int_bus_people_night with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.0)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 4
+        scene bg ext_aidpost_day with dissolve_fast
+        pause hard 0.0
+        scene bg ext_boathouse_day with dissolve_fast
+        pause hard 0.0
+        scene bg ext_clubs_day with dissolve_fast
+        pause hard 0.0
+        scene bg ext_dining_hall_away_day with dissolve_fast
+        pause hard 0.0
+        scene bg ext_house_of_mt_day with dissolve_fast
+        pause hard 0.0
+        scene bg ext_island_day with dissolve_fast
+        pause hard 0.0
+        scene bg ext_library_day with dissolve_fast
+        pause hard 0.0
+        scene bg ext_stage_normal_day with dissolve_fast
+        pause hard 0.0
+        scene bg ext_washstand_day with dissolve_fast
+        pause hard 0.0
+        scene bg int_aidpost_day with dissolve_fast
+        pause hard 0.0
+        scene bg int_clubs_male_day with dissolve_fast
+        pause hard 0.0
+        scene bg int_dining_hall_people_day with dissolve_fast
+        pause hard 0.0
+        scene bg int_house_of_dv_day with dissolve_fast
+        pause hard 0.0
+        scene bg int_house_of_mt_day with dissolve_fast
+        pause hard 0.0
+        scene bg int_house_of_sl_day with dissolve_fast
+        pause hard 0.0
+        scene bg int_house_of_un_day with dissolve_fast
+        pause hard 0.0
+        scene bg ext_beach_day with dissolve2 skip
+            # zoom 1.1
+            # linear 12 zoom 1.0
+        show sl smile_swim size normal at center
+            # xalign 0.5
+            # xanchor 0.5
+            # yanchor 0.0
+        show dv smile_swim size normal behind sl at cleft
+            # xalign 0.355
+            # xanchor 0.5
+            # yanchor 0.0
+        show un smile_swim size normal behind sl at cright
+            # xalign 0.645
+            # xanchor 0.5
+            # yanchor 0.0
+        show us smile_swim size normal behind dv at fleft 
+            # xalign 0.16
+            # xanchor 0.5
+            # yanchor 0.0
+        show mi smile_swim size normal behind un at fright
+            # xalign 0.84
+            # xanchor 0.5
+            # yanchor 0.0
+        with dissolve2
+        pause hard 8
+        scene cg final_all_2 with esflash2
+        pause hard 8
+        scene color black with dissolve2
+        stop music fadeout 3
+        pause hard 4
+        goto exit
+    }
+label uv_ending
+    #$ persistent.sprite_time = "day"
+    scene color black with dissolve2
+    pause 1
+    play music opening fadein 3
+    rollcredits
+    {
+        scene bg ext_polyana_day
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.0)
+        show uv smile_  size normal at center
+            # pos (0.6, 0)
+            # linear 12 pos (0.2,0)
+        with dissolve2
+        pause hard 8
+        scene cg d4_uv_1 with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d4_uv with dissolve
+        pause hard 4
+        scene cg d6_uv_2 with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.1)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 8
+        scene cg d5_uv with dissolve2
+            # zoom 1.1
+            # linear 6 zoom 1.0
+        pause hard 4
+        scene cg d5_uv_2 with dissolve
+        pause hard 4
+        scene cg d7_uv with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.1)
+            # linear 12 anchor (0.1,0.0)
+        pause hard 8
+        scene cg epilogue_uv with dissolve2
+            # zoom 1.2
+            # anchor (0.0,0.0)
+            # linear 12 anchor (0.1,0.1)
+        pause hard 4
+        scene cg d1_uv with dissolve2
+            # zoom 1.2
+            # anchor (0.1,0.1)
+            # linear 12 anchor (0.0,0.0)
+        pause hard 4
+        scene cg epilogue_uv_dv with esflash2
+        pause hard 2
+        scene cg epilogue_uv_sl with dissolve
+        pause hard 2
+        scene cg epilogue_uv_un with dissolve
+        pause hard 2
+        scene cg epilogue_uv_us with dissolve
+        pause hard 2
+        scene cg epilogue_uv_mi with dissolve
+        pause hard 2
+        scene cg epilogue_uv_uv with dissolve
+        pause hard 2
+        scene color black with dissolve2
+        stop music fadeout 3
+        pause hard 4
+        goto exit
+    }
+label exit
