@@ -21,15 +21,44 @@
 #     font-size: 0.5;  /* Уменьшаем размер шрифта */
 # }
 
-GameUI {
+NovelMenu {
     layout: horizontal;
     dock: bottom;
     margin-bottom: 0;
     padding: 0;
 }
 
+PauseMenu {
+    align: center middle;
+
+    PauseMenuContainer {
+        align: center middle;
+        margin-top: 5;
+        background: $boost;
+        border: round white;
+        border-title-align: center;
+        border-title-style: b;
+        max-width: 40;
+        max-height: 25;
+    }
+
+    Button {
+        margin: 1;
+        width: 30;
+    }
+}
+
+SettingsMenu {
+
+}
+
+MainMenu {
+
+}
+
+
 # Кнопки "Назад" и "Вперёд" 
-#back {
+#btn-back {
     dock: left;
     margin-left: 10;
     margin-top: 1;
@@ -37,7 +66,7 @@ GameUI {
     height: 4;
     width: 4;
 }
-#next{
+#btn-next{
     dock: right;
     margin-right: 10;
     margin-top: 1;
@@ -66,4 +95,8 @@ TextBar {
     border-title-style: b;
     border-title-color: yellow;
     color: $text;
+}
+
+.hidden {
+    display: none;
 }
