@@ -1,4 +1,5 @@
 import os
+import json
 
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical
@@ -56,7 +57,7 @@ class SettingQuality(Widget):
         with Vertical():
             yield Button("маленький\n(60x20)", variant="default", id="btn-small")
             yield Button("Средний\n(150x51)", variant="default", id="btn-medium")
-            yield Button("ОГРОМНЫЙ\n(300x101)", variant="success", id="btn-large")
+            yield Button("ОГРОМНЫЙ\n(300x101)", variant="default", id="btn-large")
             yield DescriptionSettingQuality()
 
 class DescriptionSettingQuality(Widget):
@@ -82,6 +83,15 @@ class TextBar(Widget):
 class TerminalSummer(App):
     """Основное приложение новеллы"""
     CSS_PATH = "gameUI.tcss"
+
+    CONFIG_FILE = "settings.json"
+
+    def __init__(self):
+        super().__init__()
+        self.settings = {
+            "header": True,
+            "quality": "medium",
+        }
 
     current_scene = "bus_stop"             # Текущая сцена (имя файла без расширения)
     scenes_dir = "TS/ASCII/ASCII-large/bg" # Папка с ASCII-артами
@@ -132,7 +142,7 @@ class TerminalSummer(App):
 
         # Кнопки в SettingsMenu
         # Header
-        elif button_id == "btn-header-on": # Кнопка "Включить"
+        elif button_id == "btn-header-on":  # Кнопка "Включить"
             # Включаем заголовок
             self.query_one("Header").remove_class("hidden")
 
@@ -140,16 +150,25 @@ class TerminalSummer(App):
             self.query_one("#btn-header-on", Button).variant = "success"
             self.query_one("#btn-header-off", Button).variant = "default"
 
+            # Сохранение в файл настроек
+            self.settings["header"] = True
+            self.save_settings()
+
         elif button_id == "btn-header-off": # Кнопка "Выключить"
-            # Выключаем заголовок
+            # Включаем заголовок
             self.query_one("Header").add_class("hidden")
 
             # Меняем стили кнопок
             self.query_one("#btn-header-on", Button).variant = "default"
             self.query_one("#btn-header-off", Button).variant = "error"
 
+            # Сохранение в файл настроек
+            self.settings["header"] = False
+            self.save_settings()
+
+
         # Quality
-        elif button_id == "btn-small":
+        elif button_id == "btn-small": # Кнопка "маленький"
             # Изменение размера артов на small
             self.scenes_dir = "TS/ASCII/ASCII-small/bg"
             self.scene_cache = {} # Очистка кэша сцен
@@ -161,7 +180,11 @@ class TerminalSummer(App):
             self.query_one("#btn-medium", Button).variant = "default"
             self.query_one("#btn-large", Button).variant = "default"
 
-        elif button_id == "btn-medium":
+            # Сохранение в файл настроек
+            self.settings["quality"] = "small"
+            self.save_settings()
+
+        elif button_id == "btn-medium": # Кнопка "Средний"
             # Изменение размера артов на medium
             self.scenes_dir = "TS/ASCII/ASCII-medium/bg"
             self.scene_cache = {} # Очистка кэша сцен
@@ -173,7 +196,11 @@ class TerminalSummer(App):
             self.query_one("#btn-medium", Button).variant = "warning"
             self.query_one("#btn-large", Button).variant = "default"
 
-        elif button_id == "btn-large":
+            # Сохранение в файл настроек
+            self.settings["quality"] = "medium"
+            self.save_settings()
+
+        elif button_id == "btn-large": # Кнопка "ОГРОМНЫЙ"
             # Изменение размера артов на large
             self.scenes_dir = "TS/ASCII/ASCII-large/bg"
             self.scene_cache = {} # Очистка кэша сцен
@@ -185,11 +212,15 @@ class TerminalSummer(App):
             self.query_one("#btn-medium", Button).variant = "default"
             self.query_one("#btn-large", Button).variant = "success"
 
+            # Сохранение в файл настроек
+            self.settings["quality"] = "large"
+            self.save_settings()
+
 
     def on_mount(self) -> None:
-        """Действия при запуске приложения"""
-        self.preload_scenes()  # Предзагрузка всех сцен
-        self.load_scene(self.current_scene)
+        self.load_settings()
+        self.apply_settings()
+
 
 
     # ============ Функции - бинды ============
@@ -304,6 +335,47 @@ class TerminalSummer(App):
             return sorted(files)
         except FileNotFoundError:
             return []
+
+    def load_settings(self):
+        """Загрузка настроек"""
+        if os.path.exists(self.CONFIG_FILE):
+            with open(self.CONFIG_FILE, "r", encoding="utf-8") as f:
+                self.settings = json.load(f)
+        else:
+            self.save_settings()
+    
+    def save_settings(self):
+        """Сохранение настроек"""
+        with open(self.CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(self.settings, f, indent=4)
+
+    def apply_settings(self):
+        """Применение настроек при старте"""
+        # Header
+        if self.settings["header"]:
+            self.query_one("Header").remove_class("hidden")
+            self.query_one("#btn-header-on", Button).variant = "success"
+            self.query_one("#btn-header-off", Button).variant = "default"
+        else:
+            self.query_one("Header").add_class("hidden")
+            self.query_one("#btn-header-on", Button).variant = "default"
+            self.query_one("#btn-header-off", Button).variant = "error"
+
+        # Quality
+        quality = self.settings["quality"]
+        if quality == "small":
+            self.scenes_dir = "TS/ASCII/ASCII-small/bg"
+            self.query_one("#btn-small", Button).variant = "error"
+        elif quality == "medium":
+            self.scenes_dir = "TS/ASCII/ASCII-medium/bg"
+            self.query_one("#btn-medium", Button).variant = "warning"
+        elif quality == "large":
+            self.scenes_dir = "TS/ASCII/ASCII-large/bg"
+            self.query_one("#btn-large", Button).variant = "success"
+
+        self.scene_cache = {}
+        self.preload_scenes()
+        self.load_scene(self.current_scene)
 
 
 
