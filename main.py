@@ -42,8 +42,8 @@ class TerminalSummer(App):
     """Основное приложение новеллы"""
     CSS_PATH = "gameUI.tcss"
 
-    current_scene = "_test_hight"    # Текущая сцена (имя файла без расширения)
-    scenes_dir = "TS/Large/ASCII-bg" # Папка с ASCII-артами
+    current_scene = "bus_stop"    # Текущая сцена (имя файла без расширения)
+    scenes_dir = "TS/ASCII/ASCII-large/bg" # Папка с ASCII-артами
     scene_cache = {}                 # Кэш для предзагруженных сцен
 
     BINDINGS = [
