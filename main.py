@@ -63,7 +63,7 @@ class SettingQuality(Widget):
 class DescriptionSettingQuality(Widget):
     """Описание настройки Quality"""
     def render(self):
-        return "Размер ASCII артов необходимо подбирать по размеру окна консоли,\nс сильно большим размером - изображение может не поместиться.\n\nМожете так же попробовать уменьшить размер шрифта самой консоли"
+        return 'Размер ASCII артов необходимо подбирать по размеру окна консоли,\nс сильно большим размером - изображение может не поместиться.\n\nМожете так же попробовать уменьшить размер шрифта самой консоли (Обычно это Ctrl+"+" и Ctrl+"-")'
 
 class NovelMenu(Static):
     """Виджет-контейнер для текст бара и кнопок"""
@@ -120,27 +120,29 @@ class TerminalSummer(App):
         """Обработка событий при нажатии кнопки"""
         button_id = event.button.id
 
-        # Кнопки в NovelMenu
-        if button_id == "btn-next":   # Кнопка "Вперёд"
+        # Кнопки в NovelMenu:
+        if   button_id == "btn-next":       # Кнопка "Вперёд"
             self.action_next_scene()
-        elif button_id == "btn-back": # Кнопка "Назад"
+        elif button_id == "btn-back":       # Кнопка "Назад"
             self.action_prev_scene()
 
-        # Кнопки в PauseMenu
-        elif button_id == "btn-continue": # Кнопка "Продолжить"
+
+        # Кнопки в PauseMenu:
+        elif button_id == "btn-continue":   # Кнопка "Продолжить"
             self.action_pause_game()
-        elif button_id == "btn-save":     # Кнопка "Сохранить"
+        elif button_id == "btn-save":       # Кнопка "Сохранить"
             pass
-        elif button_id == "btn-load":     # Кнопка "Загрузить"
+        elif button_id == "btn-load":       # Кнопка "Загрузить"
             pass
-        elif button_id == "btn-settings": # Кнопка "Настройки"
+        elif button_id == "btn-settings":   # Кнопка "Настройки"
             self.action_open_settings()
-        elif button_id == "btn-menu":     # Кнопка "В главное меню"
+        elif button_id == "btn-menu":       # Кнопка "В главное меню"
             pass
-        elif button_id == "btn-exit":     # Кнопка "Выход"
+        elif button_id == "btn-exit":       # Кнопка "Выход"
             self.app.exit()
 
-        # Кнопки в SettingsMenu
+
+        # Кнопки в SettingsMenu:
         # Header
         elif button_id == "btn-header-on":  # Кнопка "Включить"
             # Включаем заголовок
@@ -166,9 +168,8 @@ class TerminalSummer(App):
             self.settings["header"] = False
             self.save_settings()
 
-
         # Quality
-        elif button_id == "btn-small": # Кнопка "маленький"
+        elif button_id == "btn-small":      # Кнопка "маленький"
             # Изменение размера артов на small
             self.scenes_dir = "TS/ASCII/ASCII-small/bg"
             self.scene_cache = {} # Очистка кэша сцен
@@ -184,7 +185,7 @@ class TerminalSummer(App):
             self.settings["quality"] = "small"
             self.save_settings()
 
-        elif button_id == "btn-medium": # Кнопка "Средний"
+        elif button_id == "btn-medium":     # Кнопка "Средний"
             # Изменение размера артов на medium
             self.scenes_dir = "TS/ASCII/ASCII-medium/bg"
             self.scene_cache = {} # Очистка кэша сцен
@@ -200,7 +201,7 @@ class TerminalSummer(App):
             self.settings["quality"] = "medium"
             self.save_settings()
 
-        elif button_id == "btn-large": # Кнопка "ОГРОМНЫЙ"
+        elif button_id == "btn-large":      # Кнопка "ОГРОМНЫЙ"
             # Изменение размера артов на large
             self.scenes_dir = "TS/ASCII/ASCII-large/bg"
             self.scene_cache = {} # Очистка кэша сцен
@@ -218,27 +219,35 @@ class TerminalSummer(App):
 
 
     def on_mount(self) -> None:
+        """Загрузка настроек при запуске"""
         self.load_settings()
         self.apply_settings()
-
 
 
     # ============ Функции - бинды ============
     def action_prev_scene(self) -> None:
         """Переключение на предыдущую сцену"""
         scenes = self.get_scene_list()
-        if scenes:
-            current_index = scenes.index(self.current_scene)
-            new_index = max(0, current_index - 1)
-            self.load_scene(scenes[new_index])
+        novel_menu = self.query_one("#novel-menu")
+        if novel_menu.has_class("hidden"): # Если NovelMenu скрыт - ничего не делать
+            pass
+        else:
+            if scenes:
+                current_index = scenes.index(self.current_scene)
+                new_index = max(0, current_index - 1)
+                self.load_scene(scenes[new_index])
 
     def action_next_scene(self) -> None:
         """Переключение на следующую сцену"""
         scenes = self.get_scene_list()
-        if scenes:
-            current_index = scenes.index(self.current_scene)
-            new_index = min(len(scenes) - 1, current_index + 1)
-            self.load_scene(scenes[new_index])
+        novel_menu = self.query_one("#novel-menu")
+        if novel_menu.has_class("hidden"): # Если NovelMenu скрыт - ничего не делать
+            pass
+        else:
+            if scenes:
+                current_index = scenes.index(self.current_scene)
+                new_index = min(len(scenes) - 1, current_index + 1)
+                self.load_scene(scenes[new_index])
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
@@ -257,6 +266,9 @@ class TerminalSummer(App):
 
                 # Показ меню паузы
                 pause_menu.remove_class("hidden")
+
+                # Устанавливаем фокус на первую кнопку в меню паузы
+                self.query_one("#btn-continue", Button).focus()
             else:
                 # Выключаем паузу: скрытие меню паузы
                 pause_menu.add_class("hidden")
@@ -264,6 +276,9 @@ class TerminalSummer(App):
                 # Показ диологового окна, кнопок перемотки и задника
                 novel_menu.remove_class("hidden")
                 bg_cg.remove_class("hidden")
+
+                # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
+                self.query_one("#btn-next", Button).focus()
         else:
             # Скрытие меню настроек
             settings_menu.add_class("hidden")
@@ -271,6 +286,9 @@ class TerminalSummer(App):
             # Показ диологового окна, кнопок перемотки и задника
             novel_menu.remove_class("hidden")
             bg_cg.remove_class("hidden")
+
+            # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
+            self.query_one("#btn-next", Button).focus()
 
 
 
@@ -290,6 +308,9 @@ class TerminalSummer(App):
 
             # Показ меню настроек
             settings_menu.remove_class("hidden")
+
+            # Устанавливаем фокус на первую кнопку в меню настроек
+            self.query_one("#btn-header-on", Button).focus()
         else:
             # Cкрытие меню настроек
             settings_menu.add_class("hidden")
@@ -297,6 +318,9 @@ class TerminalSummer(App):
             # Показ диологового окна, кнопок перемотки и задника
             novel_menu.remove_class("hidden")
             bg_cg.remove_class("hidden")
+
+            # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
+            self.query_one("#btn-next", Button).focus()
 
     # def action_toggle_dark(self) -> None:
     #     """Смена тёмного/светлого режима"""
