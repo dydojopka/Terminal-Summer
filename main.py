@@ -8,8 +8,26 @@ from textual.widgets import Button, Label, Footer, Header, Static
 from textual.widget import Widget
 
 
+class MainMenu(Static):
+    """Виджет главного меню"""
+    def compose(self):
+        yield Label("Terminal Summer", id="logo")
+        with HorizontalGroup():
+            yield MainMenuStartBtn(id="container-start-game")
+            # yield Button("Сохранение", id="btn-save-load")
+            # yield Button("Галерея", id="btn-gallery")
+        yield Button("Настройки", id="btn-settings-menu")
+        yield Button("Выход", id="btn-exit-menu")
+    
+class MainMenuStartBtn(Vertical):
+    """Виджет для больших кнопок с описанием"""
+    def compose(self):
+        yield Button("Начать игру", id="btn-start-game")
+        yield Label('   Дорогой пионер!\n   Ты — на пороге удивительных открытий.\n   Перед тобой распахнулись двери самого прекрасного места в мире — нашего любимого лагеря "Совёнок". Эта смена запомниться тебе на всю жизнь.\nДобро пожаловать!')
+
+
 class PauseMenu(Static):
-    """Виджет-контейнер для меню паузы"""
+    """Виджет меню паузы"""
     def compose(self):
         yield PauseMenuContainer()
 
@@ -21,18 +39,19 @@ class PauseMenuContainer(VerticalScroll):
         yield Button("Продолжить", id="btn-continue")
         yield Button("Сохранить", id="btn-save")
         yield Button("Загрузить", id="btn-load")
-        yield Button("Настройки", id="btn-settings")
+        yield Button("Настройки", id="btn-settings-pause")
         yield Button("В главное меню", id="btn-menu")
-        yield Button("Выход", id="btn-exit")
+        yield Button("Выход", id="btn-exit-pause")
 
 
 class SettingsMenu(VerticalScroll):
-    """Виджет для меню настроек"""
+    """Виджет меню настроек"""
     BORDER_TITLE = "Настройки"
 
     def compose(self):
         yield SettingHeader()
         yield SettingQuality()
+        yield Button("Назад ↩", id="btn-close-settings")
 
 class SettingHeader(Widget):
     """Виджет с настройкой Header"""
@@ -108,43 +127,42 @@ class TerminalSummer(App):
         yield Header(show_clock=True, classes="hidden")
         yield Footer()
         with Vertical(id="novel-mode"):
+            yield MainMenu(id="main-menu", classes="hidden")
             yield Static("", id="bg-cg", classes="ascii-art")
             yield NovelMenu(id="novel-menu")
             yield PauseMenu(id="pause-menu", classes="hidden")
             yield SettingsMenu(id="settings-menu", classes="hidden")
-            #yield MainMenu(id="main-menu", classes="hidden")
 
 
     # ============ Функции - on_ ============
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Обработка событий при нажатии кнопки"""
+        """Обработка событий при нажатии кнопок"""
         button_id = event.button.id
 
         # Кнопки в NovelMenu:
-        if   button_id == "btn-next":       # Кнопка "Вперёд"
+        if   button_id == "btn-next":             # Кнопка "Вперёд"
             self.action_next_scene()
-        elif button_id == "btn-back":       # Кнопка "Назад"
+        elif button_id == "btn-back":             # Кнопка "Назад"
             self.action_prev_scene()
 
-
         # Кнопки в PauseMenu:
-        elif button_id == "btn-continue":   # Кнопка "Продолжить"
+        elif button_id == "btn-continue":         # Кнопка "Продолжить"
             self.action_pause_game()
-        elif button_id == "btn-save":       # Кнопка "Сохранить"
+        elif button_id == "btn-save":             # Кнопка "Сохранить"
             pass
-        elif button_id == "btn-load":       # Кнопка "Загрузить"
+        elif button_id == "btn-load":             # Кнопка "Загрузить"
             pass
-        elif button_id == "btn-settings":   # Кнопка "Настройки"
+        elif button_id == "btn-settings-pause":   # Кнопка "Настройки"
+            self.query_one("#settings-menu").add_class("open-from-pause") # Класс-флаг что настройки открыты из PauseMenu
             self.action_open_settings()
-        elif button_id == "btn-menu":       # Кнопка "В главное меню"
-            pass
-        elif button_id == "btn-exit":       # Кнопка "Выход"
+        elif button_id == "btn-menu":             # Кнопка "В главное меню"
+            self.action_open_menu()
+        elif button_id == "btn-exit-pause":       # Кнопка "Выход"
             self.app.exit()
-
 
         # Кнопки в SettingsMenu:
         # Header
-        elif button_id == "btn-header-on":  # Кнопка "Включить"
+        elif button_id == "btn-header-on":        # Кнопка "Включить"
             # Включаем заголовок
             self.query_one("Header").remove_class("hidden")
 
@@ -155,8 +173,7 @@ class TerminalSummer(App):
             # Сохранение в файл настроек
             self.settings["header"] = True
             self.save_settings()
-
-        elif button_id == "btn-header-off": # Кнопка "Выключить"
+        elif button_id == "btn-header-off":       # Кнопка "Выключить"
             # Включаем заголовок
             self.query_one("Header").add_class("hidden")
 
@@ -169,7 +186,7 @@ class TerminalSummer(App):
             self.save_settings()
 
         # Quality
-        elif button_id == "btn-small":      # Кнопка "маленький"
+        elif button_id == "btn-small":            # Кнопка "маленький"
             # Изменение размера артов на small
             self.scenes_dir = "TS/ASCII/ASCII-small/bg"
             self.scene_cache = {} # Очистка кэша сцен
@@ -184,8 +201,7 @@ class TerminalSummer(App):
             # Сохранение в файл настроек
             self.settings["quality"] = "small"
             self.save_settings()
-
-        elif button_id == "btn-medium":     # Кнопка "Средний"
+        elif button_id == "btn-medium":           # Кнопка "Средний"
             # Изменение размера артов на medium
             self.scenes_dir = "TS/ASCII/ASCII-medium/bg"
             self.scene_cache = {} # Очистка кэша сцен
@@ -200,8 +216,7 @@ class TerminalSummer(App):
             # Сохранение в файл настроек
             self.settings["quality"] = "medium"
             self.save_settings()
-
-        elif button_id == "btn-large":      # Кнопка "ОГРОМНЫЙ"
+        elif button_id == "btn-large":            # Кнопка "ОГРОМНЫЙ"
             # Изменение размера артов на large
             self.scenes_dir = "TS/ASCII/ASCII-large/bg"
             self.scene_cache = {} # Очистка кэша сцен
@@ -216,6 +231,37 @@ class TerminalSummer(App):
             # Сохранение в файл настроек
             self.settings["quality"] = "large"
             self.save_settings()
+
+        elif button_id == "btn-close-settings":   # Кнопка "Назад"
+            # Если открыто из меню паузы
+            if self.query_one("#settings-menu").has_class("open-from-pause"):
+                self.action_open_settings()
+                #self.query_one("#settings-menu").remove_class("open-from-pause")
+            # Если открыто из главного меню
+            elif self.query_one("#settings-menu").has_class("open-from-menu"):
+                self.action_open_menu()
+                #self.query_one("#settings-menu").remove_class("open-from-menu")
+
+        # Кнопки в MainMenu:
+        elif button_id == "btn-start-game":       # Кнопка "Начать игру"
+            # Скрытие главного меню
+            self.action_open_menu()
+
+            # Отображение NovelMenu
+            self.query_one("#novel-menu").remove_class("hidden")
+            self.query_one("#bg-cg").remove_class("hidden")
+
+            # Фокус на кнопке "Вперёд" в игровом меню
+            self.query_one("#btn-next", Button).focus()
+        elif button_id == "btn-save-load":        # Кнопка "Сохранение"
+            pass
+        elif button_id == "btn-gallery":          # Кнопка "Галерея"
+            pass
+        elif button_id == "btn-settings-menu":    # Кнопка "Настройки"
+            self.query_one("#settings-menu").add_class("open-from-menu") # Класс-флаг что настройки открыты из MainMenu
+            self.action_open_settings()
+        elif button_id == "btn-exit-menu":        # Кнопка "Выход"
+            self.app.exit()
 
 
     def on_mount(self) -> None:
@@ -255,23 +301,34 @@ class TerminalSummer(App):
         novel_menu = self.query_one("#novel-menu")
         bg_cg = self.query_one("#bg-cg")
         settings_menu = self.query_one("#settings-menu")
-        #main_menu = self.query_one("#main-menu")
+        main_menu = self.query_one("#main-menu")
 
-        if settings_menu.has_class("hidden"): # Если не открыто меню настроек
-            # Переключение видимости элементов
-            if pause_menu.has_class("hidden"):
-                # Cкрытие диологового окна, кнопок перемотки и задника
-                novel_menu.add_class("hidden")
-                bg_cg.add_class("hidden")
+        if main_menu.has_class("hidden"): # Если НЕ открыто главное меню
+            if settings_menu.has_class("hidden"): # Если НЕ открыто меню настроек
+                # Переключение видимости элементов
+                if pause_menu.has_class("hidden"):
+                    # Cкрытие диологового окна, кнопок перемотки и задника
+                    novel_menu.add_class("hidden")
+                    bg_cg.add_class("hidden")
 
-                # Показ меню паузы
-                pause_menu.remove_class("hidden")
+                    # Показ меню паузы
+                    pause_menu.remove_class("hidden")
 
-                # Устанавливаем фокус на первую кнопку в меню паузы
-                self.query_one("#btn-continue", Button).focus()
+                    # Фокус на первую кнопку в меню паузы
+                    self.query_one("#btn-continue", Button).focus()
+                else:
+                    # Выключаем паузу: скрытие меню паузы
+                    pause_menu.add_class("hidden")
+
+                    # Показ диологового окна, кнопок перемотки и задника
+                    novel_menu.remove_class("hidden")
+                    bg_cg.remove_class("hidden")
+
+                    # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
+                    self.query_one("#btn-next", Button).focus()
             else:
-                # Выключаем паузу: скрытие меню паузы
-                pause_menu.add_class("hidden")
+                # Скрытие меню настроек
+                settings_menu.add_class("hidden")
 
                 # Показ диологового окна, кнопок перемотки и задника
                 novel_menu.remove_class("hidden")
@@ -279,32 +336,48 @@ class TerminalSummer(App):
 
                 # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
                 self.query_one("#btn-next", Button).focus()
-        else:
-            # Скрытие меню настроек
-            settings_menu.add_class("hidden")
+        else: pass # Не открывать в главном меню
 
-            # Показ диологового окна, кнопок перемотки и задника
-            novel_menu.remove_class("hidden")
-            bg_cg.remove_class("hidden")
+    def action_open_menu(self) -> None:
+        """Открытие главного меню"""
+        pause_menu = self.query_one("#pause-menu")
+        novel_menu = self.query_one("#novel-menu")
+        bg_cg = self.query_one("#bg-cg")
+        settings_menu = self.query_one("#settings-menu")
+        main_menu = self.query_one("#main-menu")
 
-            # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
+        if main_menu.has_class("hidden"):
+            # Скрытие предыдущего меню:
+            if not pause_menu.has_class("hidden"):      # Из паузы
+                pause_menu.add_class("hidden")
+            elif not settings_menu.has_class("hidden"): # Из настроек
+                settings_menu.add_class("hidden")
+
+            # Показ главного меню
+            main_menu.remove_class("hidden")
+
+            # Фокус на кнопке "Начать игру"
             self.query_one("#btn-next", Button).focus()
-
-
+        else:
+            # Скрытие главного меню
+            main_menu.add_class("hidden")
 
     def action_open_settings(self) -> None:
         """Открытие меню настроек"""
         settings_menu = self.query_one("#settings-menu")
         pause_menu = self.query_one("#pause-menu")
+        main_menu = self.query_one("#main-menu")
         novel_menu = self.query_one("#novel-menu")
         bg_cg = self.query_one("#bg-cg")
 
         # Переключение видимости элементов
         if settings_menu.has_class("hidden"):
-            # Скрытие меню паузы
-            #novel_menu.add_class("hidden")
-            #bg_cg.add_class("hidden")
-            pause_menu.add_class("hidden")
+            if settings_menu.has_class("open-from-pause"): # Если открыто из паузы
+                # Скрытие меню паузы
+                pause_menu.add_class("hidden")
+            elif settings_menu.has_class("open-from-menu"): # Если открыто из меню
+                # Скрытие главного меню
+                main_menu.add_class("hidden")
 
             # Показ меню настроек
             settings_menu.remove_class("hidden")
@@ -315,12 +388,25 @@ class TerminalSummer(App):
             # Cкрытие меню настроек
             settings_menu.add_class("hidden")
 
-            # Показ диологового окна, кнопок перемотки и задника
-            novel_menu.remove_class("hidden")
-            bg_cg.remove_class("hidden")
+            if settings_menu.has_class("open-from-pause"): # Если открыто из паузы
+                # Удаление класса-флага
+                settings_menu.remove_class("open-from-pause")
 
-            # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
-            self.query_one("#btn-next", Button).focus()
+                # Показ диологового окна, кнопок перемотки и задника
+                novel_menu.remove_class("hidden")
+                bg_cg.remove_class("hidden")
+
+                # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
+                self.query_one("#btn-next", Button).focus()
+            elif settings_menu.has_class("open-from-menu"): # Если открыто из меню
+                # Удаление класса-флага
+                settings_menu.remove_class("open-from-menu")
+
+                # Показ главного меню
+                main_menu.remove_class("hidden")
+
+                # Возвращаем фокус на кнопку "Начать игру" в главном меню 
+                self.query_one("#btn-start-game", Button).focus()
 
     # def action_toggle_dark(self) -> None:
     #     """Смена тёмного/светлого режима"""
