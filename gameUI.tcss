@@ -93,21 +93,69 @@ SettingsMenu {
 }
 
 MainMenu {
-    content-align: center middle;
-    HorizontalGroup{
+    height: 100%;
+    width: 100%;
+    align: center middle;
+
+
+    border: round white;
+    border-title-align: center;
+    border-title-style: b;
+
+    MainMenuMiddleBtns{
+        align: center middle;
+        border: tab #AF8D6C;
+        border-bottom: hidden;
+        border-title-align: center;
+        border-title-style: b;
+        width: 120;
+
+        Button{
+            width: 26;
+            margin: 1;
+        }
+        Label{
+            width: 29;
+        }
+        
         MainMenuStartBtn {
-            width: 30;
+            width: 31;
             height: 30;
+            border: ascii #B82D37;
+            margin: 5;
+        }
+        MainMenuLoadBtn{
+            width: 31;
+            height: 30;
+            border: ascii #B82D37;
+            margin: 5;
+        }
+        MainMenuGalleryBtn {
+            width: 31;
+            height: 30;
+            border: ascii #B82D37;
+            margin: 5;
+        }
 
-            border: ascii;
+    }
 
-            Button{
-                width: 25;
-                margin: 1;
-            }
-            Label{
-                width: 28;
-            }
+    MainMenuBottomBtns{
+        align: center middle;
+        border: thick #AF8D6C;
+        border-bottom: hidden;
+        width: 120;
+        height: 5;
+
+        #btn-achievements {
+            dock: left;
+            margin-left: 2;
+        }
+        #btn-settings-menu {
+            width: 25;
+        }
+        #btn-exit-menu {
+            dock: right;
+            margin-right: 2;
         }
     }
 }

@@ -10,20 +10,43 @@ from textual.widget import Widget
 
 class MainMenu(Static):
     """Виджет главного меню"""
+    BORDER_TITLE="Главное меню"
     def compose(self):
-        yield Label("Terminal Summer", id="logo")
-        with HorizontalGroup():
-            yield MainMenuStartBtn(id="container-start-game")
-            # yield Button("Сохранение", id="btn-save-load")
-            # yield Button("Галерея", id="btn-gallery")
-        yield Button("Настройки", id="btn-settings-menu")
-        yield Button("Выход", id="btn-exit-menu")
+        yield MainMenuMiddleBtns()
+        yield MainMenuBottomBtns()
     
-class MainMenuStartBtn(Vertical):
-    """Виджет для больших кнопок с описанием"""
+class MainMenuMiddleBtns(HorizontalGroup):
+    """Виджет-контейнер для центарльных кнопок"""
+    BORDER_TITLE="Информация"
     def compose(self):
-        yield Button("Начать игру", id="btn-start-game")
+            yield MainMenuStartBtn(id="container-start-game")
+            yield MainMenuLoadBtn(id="container-save-load")
+            yield MainMenuGalleryBtn(id="container-gallery")
+
+class MainMenuBottomBtns(HorizontalGroup):
+    """Виджет-контейнер для нижних кнопок"""
+    def compose(self):
+        yield Button("Достижения 🏅", id="btn-achievements")
+        yield Button("Настройки 🪛", id="btn-settings-menu")
+        yield Button("Выход 🚪", id="btn-exit-menu")
+
+class MainMenuStartBtn(Vertical):
+    """Виджет для кнопки "Начать игру" с описанием"""
+    def compose(self):
+        yield Button("Начать игру ▶", id="btn-start-game")
         yield Label('   Дорогой пионер!\n   Ты — на пороге удивительных открытий.\n   Перед тобой распахнулись двери самого прекрасного места в мире — нашего любимого лагеря "Совёнок". Эта смена запомниться тебе на всю жизнь.\nДобро пожаловать!')
+
+class MainMenuLoadBtn(Vertical):
+    """Виджет для кнопки "Соханение" с описанием"""
+    def compose(self):
+        yield Button("Сохранение 📒", id="btn-save-load")
+        yield Label('   Бережно относись к истории своего лагеря. Тщательно записывай свои наблюдения и мысли о прошедших днях.\nПри помощи сохранений ты всегда сможешь вернутся назад к пройденному эпизоду и осмыслить его заново. Удачи тебе в твоих начинаниях!\n   Если что-то пойдёт не так, ты знаешь, что делать')
+
+class MainMenuGalleryBtn(Vertical):
+    """Виджет для кнопки "Галерея" с описанием"""
+    def compose(self):
+        yield Button("Галерея 📷", id="btn-save-load")
+        yield Label('   Здесь представлены работы участников нашего фотокружка. Твои товарищи всегда готовы запечателеть важные моменты из жини лагеря, а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим поведением подавай пример окружающим.')
 
 
 class PauseMenu(Static):
@@ -240,7 +263,7 @@ class TerminalSummer(App):
             # Если открыто из главного меню
             elif self.query_one("#settings-menu").has_class("open-from-menu"):
                 self.action_open_menu()
-                #self.query_one("#settings-menu").remove_class("open-from-menu")
+                self.query_one("#settings-menu").remove_class("open-from-menu")
 
         # Кнопки в MainMenu:
         elif button_id == "btn-start-game":       # Кнопка "Начать игру"
@@ -304,7 +327,10 @@ class TerminalSummer(App):
         main_menu = self.query_one("#main-menu")
 
         if main_menu.has_class("hidden"): # Если НЕ открыто главное меню
-            if settings_menu.has_class("hidden"): # Если НЕ открыто меню настроек
+            if settings_menu.has_class("open-from-menu"):
+                pass
+
+            elif settings_menu.has_class("hidden"): # Если НЕ открыто меню настроек
                 # Переключение видимости элементов
                 if pause_menu.has_class("hidden"):
                     # Cкрытие диологового окна, кнопок перемотки и задника
