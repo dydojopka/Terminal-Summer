@@ -4,7 +4,7 @@
 # }
 
 # Базовые стили для ASCII-артов
-.ascii-art {
+#bg-cg {
     column-span: 1;
     # width: 100%;
     content-align: center middle;
@@ -122,19 +122,20 @@ MainMenu {
             width: 31;
             height: 30;
             border: ascii #B82D37;
-            margin: 5;
+            # margin: 5;
         }
         MainMenuLoadBtn{
             width: 31;
             height: 30;
             border: ascii #B82D37;
-            margin: 5;
+            margin-left: 5;
+            margin-right: 5;
         }
         MainMenuGalleryBtn {
             width: 31;
             height: 30;
             border: ascii #B82D37;
-            margin: 5;
+            # margin: 5;
         }
 
     }

@@ -46,7 +46,7 @@ class MainMenuGalleryBtn(Vertical):
     """Виджет для кнопки "Галерея" с описанием"""
     def compose(self):
         yield Button("Галерея 📷", id="btn-save-load")
-        yield Label('   Здесь представлены работы участников нашего фотокружка. Твои товарищи всегда готовы запечателеть важные моменты из жини лагеря, а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим поведением подавай пример окружающим.')
+        yield Label('   Здесь представлены работы участников нашего фотокружка. Твои товарищи всегда готовы запечатлеть важные моменты из жини лагеря, а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим поведением подавай пример окружающим.')
 
 
 class PauseMenu(Static):
@@ -150,9 +150,9 @@ class TerminalSummer(App):
         yield Header(show_clock=True, classes="hidden")
         yield Footer()
         with Vertical(id="novel-mode"):
-            yield MainMenu(id="main-menu", classes="hidden")
-            yield Static("", id="bg-cg", classes="ascii-art")
-            yield NovelMenu(id="novel-menu")
+            yield MainMenu(id="main-menu")
+            yield Static("", id="bg-cg", classes="hidden")
+            yield NovelMenu(id="novel-menu", classes="hidden")
             yield PauseMenu(id="pause-menu", classes="hidden")
             yield SettingsMenu(id="settings-menu", classes="hidden")
 
