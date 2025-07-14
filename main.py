@@ -1,11 +1,47 @@
 import os
 import json
+import simpleaudio as sa
+import threading
 
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical
 from textual.reactive import reactive
 from textual.widgets import Button, Label, Footer, Header, Static
 from textual.widget import Widget
+
+
+class AudioPlayer:
+    """Класс для управления аудио"""
+    def __init__(self):
+        self.current_playback = None
+        
+    def play_sound(self, file_path, loop=False):
+        """Воспроизведение звука в отдельном потоке"""
+        def play():
+            try:
+                wave_obj = sa.WaveObject.from_wave_file(file_path)
+                play_obj = wave_obj.play()
+                
+                if loop:
+                    play_obj.wait_done()
+                    self.play_sound(file_path, loop=True)
+                    
+            except Exception as e:
+                print(f"Ошибка воспроизведения звука: {e}")
+        
+        # Останавливаем предыдущее воспроизведение
+        if self.current_playback:
+            self.current_playback.stop()
+            
+        # Запускаем в отдельном потоке
+        self.current_playback = threading.Thread(target=play, daemon=True)
+        self.current_playback.start()
+    
+    def stop(self):
+        """Остановка воспроизведения"""
+        if self.current_playback:
+            sa.stop_all()
+
 
 
 class MainMenu(Static):
@@ -45,9 +81,32 @@ class MainMenuLoadBtn(Vertical):
 class MainMenuGalleryBtn(Vertical):
     """Виджет для кнопки "Галерея" с описанием"""
     def compose(self):
-        yield Button("Галерея 📷", id="btn-save-load")
+        yield Button("Галерея 📷", id="btn-gallery")
         yield Label('   Здесь представлены работы участников нашего фотокружка. Твои товарищи всегда готовы запечатлеть важные моменты из жини лагеря, а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим поведением подавай пример окружающим.')
 
+
+class GalleryMenu(Static):
+    """Виджет галереи"""
+    BORDER_TITLE = "Галерея"
+    def compose(self):
+        yield GalleryMenuTopBtns()
+        yield GalleryMenuMidBtns()
+        
+
+class GalleryMenuTopBtns(HorizontalGroup):
+    """Виджет-контейнер для кнопок галереи сверху"""
+    def compose(self):
+        yield Button("Музыка", id="btn-gallery-music")
+        yield Button("Иллюстрации", id="btn-gallery-cg")
+        yield Button("Фоны", id="btn-gallery-bg")
+        yield Button("Назад ↩", id="btn-close-gallery")
+
+class GalleryMenuMidBtns(HorizontalGroup):
+    """Виджет-контейнер для кнопок и арт-пространства галереи в центре"""
+    def compose(self):
+        yield Button("<\n<\n<\n<", id="btn-back-gallery")
+        yield Static("", id="bg-cg-gallery")
+        yield Button(">\n>\n>\n>", id="btn-next-gallery")
 
 class PauseMenu(Static):
     """Виджет меню паузы"""
@@ -57,7 +116,6 @@ class PauseMenu(Static):
 class PauseMenuContainer(VerticalScroll):
     """Доп контейнер для меню паузы(Для отображения title)"""
     BORDER_TITLE = "Пауза"
-
     def compose(self):
         yield Button("Продолжить", id="btn-continue")
         yield Button("Сохранить", id="btn-save")
@@ -107,6 +165,7 @@ class DescriptionSettingQuality(Widget):
     def render(self):
         return 'Размер ASCII артов необходимо подбирать по размеру окна консоли,\nс сильно большим размером - изображение может не поместиться.\n\nМожете так же попробовать уменьшить размер шрифта самой консоли (Обычно это Ctrl+"+" и Ctrl+"-")'
 
+
 class NovelMenu(Static):
     """Виджет-контейнер для текст бара и кнопок"""
     def compose(self):
@@ -134,6 +193,7 @@ class TerminalSummer(App):
             "header": True,
             "quality": "medium",
         }
+        self.audio_player = AudioPlayer()
 
     current_scene = "bus_stop"             # Текущая сцена (имя файла без расширения)
     scenes_dir = "TS/ASCII/ASCII-large/bg" # Папка с ASCII-артами
@@ -155,6 +215,7 @@ class TerminalSummer(App):
             yield NovelMenu(id="novel-menu", classes="hidden")
             yield PauseMenu(id="pause-menu", classes="hidden")
             yield SettingsMenu(id="settings-menu", classes="hidden")
+            yield GalleryMenu(id="gallery-menu", classes="hidden")
 
 
     # ============ Функции - on_ ============
@@ -279,13 +340,16 @@ class TerminalSummer(App):
         elif button_id == "btn-save-load":        # Кнопка "Сохранение"
             pass
         elif button_id == "btn-gallery":          # Кнопка "Галерея"
-            pass
+            self.action_open_gallery()
         elif button_id == "btn-settings-menu":    # Кнопка "Настройки"
             self.query_one("#settings-menu").add_class("open-from-menu") # Класс-флаг что настройки открыты из MainMenu
             self.action_open_settings()
         elif button_id == "btn-exit-menu":        # Кнопка "Выход"
             self.app.exit()
 
+        # Кнопки в GalleryMenu:
+        elif button_id == "btn-close-gallery":    # Кнопка "Назад"
+            self.action_open_gallery()
 
     def on_mount(self) -> None:
         """Загрузка настроек при запуске"""
@@ -293,7 +357,7 @@ class TerminalSummer(App):
         self.apply_settings()
 
 
-    # ============ Функции - бинды ============
+    # ============ Функции - action_ ============
     def action_prev_scene(self) -> None:
         """Переключение на предыдущую сцену"""
         scenes = self.get_scene_list()
@@ -325,8 +389,9 @@ class TerminalSummer(App):
         bg_cg = self.query_one("#bg-cg")
         settings_menu = self.query_one("#settings-menu")
         main_menu = self.query_one("#main-menu")
+        gallery_menu = self.query_one("#gallery-menu")
 
-        if main_menu.has_class("hidden"): # Если НЕ открыто главное меню
+        if main_menu.has_class("hidden") and gallery_menu.has_class("hidden"): # Если НЕ открыто главное меню
             if settings_menu.has_class("open-from-menu"):
                 pass
 
@@ -367,8 +432,6 @@ class TerminalSummer(App):
     def action_open_menu(self) -> None:
         """Открытие главного меню"""
         pause_menu = self.query_one("#pause-menu")
-        novel_menu = self.query_one("#novel-menu")
-        bg_cg = self.query_one("#bg-cg")
         settings_menu = self.query_one("#settings-menu")
         main_menu = self.query_one("#main-menu")
 
@@ -383,7 +446,7 @@ class TerminalSummer(App):
             main_menu.remove_class("hidden")
 
             # Фокус на кнопке "Начать игру"
-            self.query_one("#btn-next", Button).focus()
+            self.query_one("#btn-start-game", Button).focus()
         else:
             # Скрытие главного меню
             main_menu.add_class("hidden")
@@ -433,6 +496,29 @@ class TerminalSummer(App):
 
                 # Возвращаем фокус на кнопку "Начать игру" в главном меню 
                 self.query_one("#btn-start-game", Button).focus()
+
+    def action_open_gallery(self) -> None:
+        """Открытие меню галереи"""
+        main_menu = self.query_one("#main-menu")
+        gallery_menu = self.query_one("#gallery-menu")
+
+        if gallery_menu.has_class("hidden"):
+            # Скрываем главное меню
+            self.action_open_menu()
+            #main_menu.add_class("hidden")
+
+            # Показываем меню галереи
+            gallery_menu.remove_class("hidden")
+
+            # Устанавливаем фокус на первую кнопку в меню галереи
+            self.query_one("#btn-close-gallery", Button).focus()
+        else:
+            # Скрываем меню галереи
+            gallery_menu.add_class("hidden")
+
+            # Показываем главное меню
+            self.action_open_menu()
+            #main_menu.remove_class("hidden")
 
     # def action_toggle_dark(self) -> None:
     #     """Смена тёмного/светлого режима"""
