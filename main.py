@@ -85,28 +85,41 @@ class MainMenuGalleryBtn(Vertical):
         yield Label('   Здесь представлены работы участников нашего фотокружка. Твои товарищи всегда готовы запечатлеть важные моменты из жини лагеря, а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим поведением подавай пример окружающим.')
 
 
-class GalleryMenu(Static):
+class GalleryMenu(HorizontalGroup):
     """Виджет галереи"""
     BORDER_TITLE = "Галерея"
     def compose(self):
-        yield GalleryMenuTopBtns()
+        yield GalleryMenuLeftBtns()
         yield GalleryMenuMidBtns()
         
 
-class GalleryMenuTopBtns(HorizontalGroup):
+class GalleryMenuLeftBtns(Vertical):
     """Виджет-контейнер для кнопок галереи сверху"""
     def compose(self):
-        yield Button("Музыка", id="btn-gallery-music")
-        yield Button("Иллюстрации", id="btn-gallery-cg")
-        yield Button("Фоны", id="btn-gallery-bg")
         yield Button("Назад ↩", id="btn-close-gallery")
+        with Static(id="container-left-btns"):
+            yield Button("Музыка", variant="default", id="btn-gallery-music")
+            yield Button("Иллюстрации", variant="primary", id="btn-gallery-cg")
+            yield Button("Фоны", variant="default", id="btn-gallery-bg")
 
-class GalleryMenuMidBtns(HorizontalGroup):
+class GalleryMenuMidBtns(Vertical):
     """Виджет-контейнер для кнопок и арт-пространства галереи в центре"""
+    BORDER_TITLE="Название bg/cg"
     def compose(self):
-        yield Button("<\n<\n<\n<", id="btn-back-gallery")
-        yield Static("", id="bg-cg-gallery")
-        yield Button(">\n>\n>\n>", id="btn-next-gallery")
+        with HorizontalGroup():
+            yield Button("<\n<\n<\n<", id="btn-back-gallery")
+            yield Static("", id="bg-cg-gallery")
+            yield Button(">\n>\n>\n>", id="btn-next-gallery")
+        yield GalleryMenuBottomBtns()
+        
+
+class GalleryMenuBottomBtns(HorizontalGroup):
+    """Виджет-контейнер для кнопок качества"""
+    def compose(self):
+        yield Button("маленький", variant="default", id="btn-small-gallery")
+        yield Button("Средний", variant="warning", id="btn-medium-gallery")
+        yield Button("ОГРОМНЫЙ", variant="default", id="btn-large-gallery")
+
 
 class PauseMenu(Static):
     """Виджет меню паузы"""
@@ -137,7 +150,6 @@ class SettingsMenu(VerticalScroll):
 class SettingHeader(Widget):
     """Виджет с настройкой Header"""
     BORDER_TITLE = "Верхняя панель(Header)"
-
     def compose(self):
         with HorizontalGroup():
             yield Button("Включить", variant="default", id="btn-header-on")
@@ -152,7 +164,6 @@ class DescriptionSettingHeader(Widget):
 class SettingQuality(Widget):
     """Виджет с настройкой размера ASCII-артов"""
     BORDER_TITLE = "Размер ASCII артов"
-
     def compose(self):
         with Vertical():
             yield Button("маленький\n(60x20)", variant="default", id="btn-small")
@@ -209,13 +220,12 @@ class TerminalSummer(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True, classes="hidden")
         yield Footer()
-        with Vertical(id="novel-mode"):
-            yield MainMenu(id="main-menu")
-            yield Static("", id="bg-cg", classes="hidden")
-            yield NovelMenu(id="novel-menu", classes="hidden")
-            yield PauseMenu(id="pause-menu", classes="hidden")
-            yield SettingsMenu(id="settings-menu", classes="hidden")
-            yield GalleryMenu(id="gallery-menu", classes="hidden")
+        yield MainMenu(id="main-menu")
+        yield Static("", id="bg-cg", classes="hidden")
+        yield NovelMenu(id="novel-menu", classes="hidden")
+        yield PauseMenu(id="pause-menu", classes="hidden")
+        yield SettingsMenu(id="settings-menu", classes="hidden")
+        yield GalleryMenu(id="gallery-menu", classes="hidden")
 
 
     # ============ Функции - on_ ============
@@ -348,6 +358,52 @@ class TerminalSummer(App):
             self.app.exit()
 
         # Кнопки в GalleryMenu:
+        # LeftBtns
+        elif button_id == "btn-gallery-music":    # Кнопка "Музыка"
+            
+            # Меняем стили кнопок
+            self.query_one("#btn-gallery-music", Button).variant = "primary"
+            self.query_one("#btn-gallery-cg", Button).variant = "default"
+            self.query_one("#btn-gallery-bg", Button).variant = "default"
+        elif button_id == "btn-gallery-cg":       # Кнопка "Иллюстрации"
+            
+            # Меняем стили кнопок
+            self.query_one("#btn-gallery-music", Button).variant = "default"
+            self.query_one("#btn-gallery-cg", Button).variant = "primary"
+            self.query_one("#btn-gallery-bg", Button).variant = "default"
+        elif button_id == "btn-gallery-bg":       # Кнопка "Фоны"
+
+            # Меняем стили кнопок
+            self.query_one("#btn-gallery-music", Button).variant = "default"
+            self.query_one("#btn-gallery-cg", Button).variant = "default"
+            self.query_one("#btn-gallery-bg", Button).variant = "primary"
+
+        # Перелистывание bg и cg
+        elif button_id == "btn-back-gallery":     # Кнопка "<<<"
+            pass
+        elif button_id == "btn-next-gallery":     # Кнопка ">>>"
+            pass
+
+        # Quality
+        elif button_id == "btn-small-gallery":    # Кнопка "маленький"
+
+            # Меняем стили кнопок
+            self.query_one("#btn-small-gallery", Button).variant = "error"
+            self.query_one("#btn-medium-gallery", Button).variant = "default"
+            self.query_one("#btn-large-gallery", Button).variant = "default"
+        elif button_id == "btn-medium-gallery":   # Кнопка "Средний"
+            
+            # Меняем стили кнопок
+            self.query_one("#btn-small-gallery", Button).variant = "default"
+            self.query_one("#btn-medium-gallery", Button).variant = "warning"
+            self.query_one("#btn-large-gallery", Button).variant = "default"
+        elif button_id == "btn-large-gallery":    # Кнопка "ОГРОМНЫЙ"
+            
+            # Меняем стили кнопок
+            self.query_one("#btn-small-gallery", Button).variant = "default"
+            self.query_one("#btn-medium-gallery", Button).variant = "default"
+            self.query_one("#btn-large-gallery", Button).variant = "success"
+
         elif button_id == "btn-close-gallery":    # Кнопка "Назад"
             self.action_open_gallery()
 

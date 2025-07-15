@@ -186,24 +186,34 @@ GalleryMenu {
     border-title-align: center;
     border-title-style: b;
 
-    GalleryMenuTopBtns {
-        align: center top;
-        padding-left: 11;
-    }
+    content-align: center middle;
 
-    GalleryMenuTopBtns {
-        Button {
-            width: 35;
-            margin: 0 2 0 2
+    GalleryMenuLeftBtns {
+        height: 100%;
+        # border: solid blue;
+        
+        #container-left-btns {
+            align: center middle;
+            margin: 3 0 3 0;
+            Button {
+                width: 20;
+                height: 5;
+                margin: 1;
+            }
         }
     }
 
     GalleryMenuMidBtns {
-        width: 100%;
-        height: 80%;
-        border: solid red;
-        
-        align: center middle;
+        width: 85%;
+        height: 100%;
+        border: panel #CAD06B;
+        border-title-align: center;
+        border-bottom: none;
+        border-right: none;
+
+        #bg-cg-gallery{
+            # border: solid yellow;
+        }
 
         #btn-back-gallery {
             min-width: 3;
@@ -219,12 +229,22 @@ GalleryMenu {
         }
     }
 
+    GalleryMenuBottomBtns {
+        # border: solid green;
+        dock: bottom;
+        align: center bottom;
+        width: 100%;
+        
+        Button {
+            height: 3;
+        }
+    }
+    
     #btn-close-gallery {
         height: 3;
         min-width: 9;
         width: 9;
-        dock: right;
-        margin: 0 3 0 0;
+        margin: 1 0 0 2;
     }
 }
 
