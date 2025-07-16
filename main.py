@@ -104,7 +104,7 @@ class GalleryMenuLeftBtns(Vertical):
 
 class GalleryMenuMidBtns(Vertical):
     """Виджет-контейнер для кнопок и арт-пространства галереи в центре"""
-    BORDER_TITLE="Название bg/cg"
+    BORDER_TITLE=""
     def compose(self):
         with HorizontalGroup():
             yield Button("<\n<\n<\n<", id="btn-back-gallery")
@@ -209,6 +209,12 @@ class TerminalSummer(App):
     current_scene = "bus_stop"             # Текущая сцена (имя файла без расширения)
     scenes_dir = "TS/ASCII/ASCII-large/bg" # Папка с ASCII-артами
     scene_cache = {}                       # Кэш для предзагруженных сцен
+
+    gallery_mode = "cg"
+    gallery_size = "medium"  # small | medium | large
+    gallery_index = 0
+    gallery_images = []
+
 
     BINDINGS = [
         #("space", "next_scene", "Далее"),
@@ -360,49 +366,68 @@ class TerminalSummer(App):
         # Кнопки в GalleryMenu:
         # LeftBtns
         elif button_id == "btn-gallery-music":    # Кнопка "Музыка"
-            
             # Меняем стили кнопок
             self.query_one("#btn-gallery-music", Button).variant = "primary"
             self.query_one("#btn-gallery-cg", Button).variant = "default"
             self.query_one("#btn-gallery-bg", Button).variant = "default"
+
         elif button_id == "btn-gallery-cg":       # Кнопка "Иллюстрации"
-            
             # Меняем стили кнопок
             self.query_one("#btn-gallery-music", Button).variant = "default"
             self.query_one("#btn-gallery-cg", Button).variant = "primary"
             self.query_one("#btn-gallery-bg", Button).variant = "default"
-        elif button_id == "btn-gallery-bg":       # Кнопка "Фоны"
 
+            self.gallery_mode = "cg"
+            self.load_gallery_images()
+            self.update_gallery_display()
+        elif button_id == "btn-gallery-bg":       # Кнопка "Фоны"
             # Меняем стили кнопок
             self.query_one("#btn-gallery-music", Button).variant = "default"
             self.query_one("#btn-gallery-cg", Button).variant = "default"
             self.query_one("#btn-gallery-bg", Button).variant = "primary"
 
+            self.gallery_mode = "bg"
+            self.load_gallery_images()
+            self.update_gallery_display()
+
         # Перелистывание bg и cg
         elif button_id == "btn-back-gallery":     # Кнопка "<<<"
-            pass
+            if self.gallery_index > 0:
+                self.gallery_index -= 1
+                self.update_gallery_display()
         elif button_id == "btn-next-gallery":     # Кнопка ">>>"
-            pass
+            if self.gallery_index < len(self.gallery_images) - 1:
+                self.gallery_index += 1
+                self.update_gallery_display()
 
         # Quality
         elif button_id == "btn-small-gallery":    # Кнопка "маленький"
-
             # Меняем стили кнопок
             self.query_one("#btn-small-gallery", Button).variant = "error"
             self.query_one("#btn-medium-gallery", Button).variant = "default"
             self.query_one("#btn-large-gallery", Button).variant = "default"
+
+            self.gallery_size = "small"
+            self.load_gallery_images()
+            self.update_gallery_display()
         elif button_id == "btn-medium-gallery":   # Кнопка "Средний"
-            
             # Меняем стили кнопок
             self.query_one("#btn-small-gallery", Button).variant = "default"
             self.query_one("#btn-medium-gallery", Button).variant = "warning"
             self.query_one("#btn-large-gallery", Button).variant = "default"
+        
+            self.gallery_size = "medium"
+            self.load_gallery_images()
+            self.update_gallery_display()
         elif button_id == "btn-large-gallery":    # Кнопка "ОГРОМНЫЙ"
-            
             # Меняем стили кнопок
             self.query_one("#btn-small-gallery", Button).variant = "default"
             self.query_one("#btn-medium-gallery", Button).variant = "default"
             self.query_one("#btn-large-gallery", Button).variant = "success"
+
+            self.gallery_size = "large"
+            self.load_gallery_images()
+            self.update_gallery_display()
 
         elif button_id == "btn-close-gallery":    # Кнопка "Назад"
             self.action_open_gallery()
@@ -568,6 +593,18 @@ class TerminalSummer(App):
 
             # Устанавливаем фокус на первую кнопку в меню галереи
             self.query_one("#btn-close-gallery", Button).focus()
+
+            # Загружаем иллюстрации
+            self.gallery_mode = "cg"
+            self.gallery_size = "medium"
+            self.gallery_index = 0
+            self.load_gallery_images()
+            self.update_gallery_display()
+
+            # Стильи кнопок при открытии 
+            self.query_one("#btn-small-gallery", Button).variant = "default"
+            self.query_one("#btn-medium-gallery", Button).variant = "warning"
+            self.query_one("#btn-large-gallery", Button).variant = "default"
         else:
             # Скрываем меню галереи
             gallery_menu.add_class("hidden")
@@ -655,6 +692,46 @@ class TerminalSummer(App):
         self.preload_scenes()
         self.load_scene(self.current_scene)
 
+    def load_gallery_images(self):
+        """Загружает список файлов из директории по текущим настройкам"""
+        folder = f"TS/ASCII/ASCII-{self.gallery_size}/{self.gallery_mode}"
+        previous_filename = (
+            self.gallery_images[self.gallery_index]
+            if self.gallery_images and 0 <= self.gallery_index < len(self.gallery_images)
+            else None
+        )
+
+        if os.path.exists(folder):
+            self.gallery_images = sorted([
+                f for f in os.listdir(folder)
+                if f.endswith(".txt")
+            ])
+        else:
+            self.gallery_images = []
+
+        # Сохраняем индекс, если арт с тем же именем существует
+        if previous_filename in self.gallery_images:
+            self.gallery_index = self.gallery_images.index(previous_filename)
+        else:
+            self.gallery_index = 0
+
+    def update_gallery_display(self):
+        """Обновляет ascii-арт и заголовок"""
+        if not self.gallery_images:
+            self.query_one("#bg-cg-gallery", Static).update("[Ничего не найдено]")
+            self.query_one(GalleryMenuMidBtns).border_title = "Пусто"
+            return
+    
+        filename = self.gallery_images[self.gallery_index]
+        path = f"TS/ASCII/ASCII-{self.gallery_size}/{self.gallery_mode}/{filename}"
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                ascii_art = f.read()
+        except Exception as e:
+            ascii_art = f"[Ошибка загрузки: {e}]"
+    
+        self.query_one("#bg-cg-gallery", Static).update(ascii_art)
+        self.query_one(GalleryMenuMidBtns).border_title = f'{os.path.splitext(filename)[0]} '
 
 
 if __name__ == "__main__":

@@ -206,7 +206,7 @@ GalleryMenu {
     GalleryMenuMidBtns {
         width: 85%;
         height: 100%;
-        border: panel #CAD06B;
+        border: outer #CAD06B;
         border-title-align: center;
         border-bottom: none;
         border-right: none;
