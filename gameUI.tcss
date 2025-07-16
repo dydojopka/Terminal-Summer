@@ -211,8 +211,15 @@ GalleryMenu {
         border-bottom: none;
         border-right: none;
 
-        #bg-cg-gallery{
-            # border: solid yellow;
+        #bg-cg-gallery {
+            overflow: scroll;
+            scrollbar-size: 1 1;
+            scrollbar-color: #888 #333;
+        }
+        #ascii-content {
+            # content-align: center middle;
+            display: block;
+            min-width: 250%;
         }
 
         #btn-back-gallery {
@@ -237,6 +244,13 @@ GalleryMenu {
         
         Button {
             height: 3;
+        }
+
+        #btn-back-gallery {
+            dock: left;
+        }
+        #btn-next-gallery {
+            dock: right;
         }
     }
     

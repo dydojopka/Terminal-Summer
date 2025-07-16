@@ -4,7 +4,7 @@ import simpleaudio as sa
 import threading
 
 from textual.app import App, ComposeResult
-from textual.containers import HorizontalGroup, VerticalScroll, Vertical
+from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
 from textual.reactive import reactive
 from textual.widgets import Button, Label, Footer, Header, Static
 from textual.widget import Widget
@@ -107,18 +107,21 @@ class GalleryMenuMidBtns(Vertical):
     BORDER_TITLE=""
     def compose(self):
         with HorizontalGroup():
-            yield Button("<\n<\n<\n<", id="btn-back-gallery")
-            yield Static("", id="bg-cg-gallery")
-            yield Button(">\n>\n>\n>", id="btn-next-gallery")
+
+            with ScrollableContainer(id="bg-cg-gallery"):
+                yield Static("", id="ascii-content")
+            
         yield GalleryMenuBottomBtns()
         
 
 class GalleryMenuBottomBtns(HorizontalGroup):
     """Виджет-контейнер для кнопок качества"""
     def compose(self):
+        yield Button("<\n<\n<\n<", id="btn-back-gallery")
         yield Button("маленький", variant="default", id="btn-small-gallery")
         yield Button("Средний", variant="warning", id="btn-medium-gallery")
         yield Button("ОГРОМНЫЙ", variant="default", id="btn-large-gallery")
+        yield Button(">\n>\n>\n>", id="btn-next-gallery")
 
 
 class PauseMenu(Static):
@@ -730,7 +733,7 @@ class TerminalSummer(App):
         except Exception as e:
             ascii_art = f"[Ошибка загрузки: {e}]"
     
-        self.query_one("#bg-cg-gallery", Static).update(ascii_art)
+        self.query_one("#ascii-content", Static).update(ascii_art)
         self.query_one(GalleryMenuMidBtns).border_title = f'{os.path.splitext(filename)[0]} '
 
 
