@@ -9,6 +9,9 @@ from textual.reactive import reactive
 from textual.widgets import Button, Label, Footer, Header, Static
 from textual.widget import Widget
 
+from script_parser import ScriptParser
+
+
 
 class AudioPlayer:
     """Класс для управления аудио"""
@@ -92,7 +95,6 @@ class GalleryMenu(HorizontalGroup):
         yield GalleryMenuLeftBtns()
         yield GalleryMenuMidBtns()
         
-
 class GalleryMenuLeftBtns(Vertical):
     """Виджет-контейнер для кнопок галереи сверху"""
     def compose(self):
@@ -113,15 +115,14 @@ class GalleryMenuMidBtns(Vertical):
             
         yield GalleryMenuBottomBtns()
         
-
 class GalleryMenuBottomBtns(HorizontalGroup):
     """Виджет-контейнер для кнопок качества"""
     def compose(self):
-        yield Button("<\n<\n<\n<", id="btn-back-gallery")
+        yield Button("<-", id="btn-back-gallery")
         yield Button("маленький", variant="default", id="btn-small-gallery")
         yield Button("Средний", variant="warning", id="btn-medium-gallery")
         yield Button("ОГРОМНЫЙ", variant="default", id="btn-large-gallery")
-        yield Button(">\n>\n>\n>", id="btn-next-gallery")
+        yield Button("->", id="btn-next-gallery")
 
 
 class PauseMenu(Static):
@@ -189,10 +190,9 @@ class NovelMenu(Static):
 
 class TextBar(Widget):
     """Виджет текст бара"""
-    BORDER_TITLE = "Райан гослинг"   # Имя персонажа
-
+    BORDER_TITLE = ""   # Имя персонажа
     def render(self):
-        return "Ты пойдёшь со мной?" # Текст
+        return "" # Текст
     
 
 class TerminalSummer(App):
@@ -208,6 +208,7 @@ class TerminalSummer(App):
             "quality": "medium",
         }
         self.audio_player = AudioPlayer()
+        self.script = ScriptParser("TS/text/day1.txt", self)
 
     current_scene = "bus_stop"             # Текущая сцена (имя файла без расширения)
     scenes_dir = "TS/ASCII/ASCII-large/bg" # Папка с ASCII-артами
@@ -456,15 +457,8 @@ class TerminalSummer(App):
 
     def action_next_scene(self) -> None:
         """Переключение на следующую сцену"""
-        scenes = self.get_scene_list()
-        novel_menu = self.query_one("#novel-menu")
-        if novel_menu.has_class("hidden"): # Если NovelMenu скрыт - ничего не делать
-            pass
-        else:
-            if scenes:
-                current_index = scenes.index(self.current_scene)
-                new_index = min(len(scenes) - 1, current_index + 1)
-                self.load_scene(scenes[new_index])
+        if not self.query_one("#novel-menu").has_class("hidden"):
+            self.script.next_line()
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
