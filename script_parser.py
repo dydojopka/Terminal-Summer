@@ -1,10 +1,8 @@
 # script_parser.py
 
-# from textual.widget import Widget
-# from main import TextBar
-
 import re
 import time
+from textual.widget import Widget
 
 class ScriptParser:
     def __init__(self, filename, app):
@@ -27,6 +25,7 @@ class ScriptParser:
         return line
 
     def parse_line(self, line):
+        self.app.sub_title = f"Line: {self.index} | Content: {self.lines[self.index - 1]}"
         if line.startswith("pause"):
             self._handle_pause(line)
         elif line.startswith("scene"):
@@ -38,31 +37,33 @@ class ScriptParser:
         elif '"' in line:
             self._handle_dialogue(line)
         elif line.startswith("time"):
-            pass  # можно добавить обработку времени суток
+            self.next_line() # Следующая строка
         else:
+            self.next_line() # Следующая строка
             print(f"Необработанная строка: {line}")
+
+        # self.next_line()
 
     def _handle_pause(self, line):
         match = re.search(r'pause\s+(hard\s+)?(\d+)', line)
         if match:
             seconds = int(match.group(2))
-            time.sleep(seconds)  # можно заменить на async версию
-            print(f"[Пауза {seconds} сек]")
+            time.sleep(seconds)
+            # print(f"[Пауза {seconds} сек]")
+        
+        self.next_line()
 
     def _handle_scene(self, line):
-        # Игнорировать 'scene color ...'
         if "scene color" in line:
+            self.next_line() # Следующая строка
             return
 
         match = re.search(r'scene\s+(cg|bg)\s+([a-zA-Z0-9_]+)', line)
         if match:
-            category = match.group(1)  # 'cg' или 'bg'
+            category = match.group(1)
             scene_name = match.group(2)
-
-            # Получение размера качества из настроек
             quality = self.app.settings.get("quality", "medium")
 
-            # Сборка пути до ASCII файла
             scene_path = f"TS/ASCII/ASCII-{quality}/{category}/{scene_name}.txt"
 
             try:
@@ -71,30 +72,26 @@ class ScriptParser:
             except FileNotFoundError:
                 art_content = f"[Файл не найден: {scene_path}]"
 
-            # Обновляем виджет ASCII-графики
             bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
             bg_cg.update(art_content)
 
-            # Сохраняем текущую сцену (по имени, для отладки)
             self.app.current_scene = scene_name
-            self.app.sub_title = f"Scene: {scene_name}"
+
+        # self.next_line()
 
     def _handle_play(self, line):
-        # if "music" in line:
-        #     sound = line.split()[-1]
-        #     self.app.audio_player.play_sound(f"audio/music/{sound}.wav", loop=True)
-        # elif "sfx" in line:
-        #     sound = line.split()[-1]
-        #     self.app.audio_player.play_sound(f"audio/sfx/{sound}.wav", loop=False)
-        pass
+        self.next_line()
+        pass  # позже
 
     def _handle_window(self, line):
-        if "show" in line:
-            self.app.query_one("#text-bar", expect_type=Widget).display = True
-        elif "hide" in line:
-            self.app.query_one("#text-bar", expect_type=Widget).display = False
+        widget = self.app.query_one("#text-bar", expect_type=Widget)
+        widget.display = "show" in line
+
+        self.next_line()
 
     def _handle_dialogue(self, line):
+        widget = self.app.query_one("#text-bar", expect_type=Widget)
+
         if re.match(r'[a-zA-Z_]+\s+".+"', line):  # character "Text"
             parts = line.split('"')
             speaker = parts[0].strip()
@@ -103,7 +100,9 @@ class ScriptParser:
             speaker = ""
             text = line.strip('"')
 
-        # Обновим текстовый бар
-        text_widget = self.app.query_one(TextBar)
-        text_widget.border_title = speaker if speaker else "..."
-        text_widget.update(text)
+        if text:  # Проверяем, что текст не пустой
+            widget.border_title = speaker if speaker else ""
+            widget.update_text(text)  # Обновляем текст только если он есть
+        else:
+            widget.update_text("")  # Убираем текст
+

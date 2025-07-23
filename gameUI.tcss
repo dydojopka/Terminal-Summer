@@ -13,7 +13,7 @@
 NovelMenu {
     layout: horizontal;
     dock: bottom;
-    margin-bottom: 0;
+    margin-bottom: 1;
     padding: 0;
 
     # Кнопки "Назад" и "Вперёд" 
@@ -267,6 +267,12 @@ GalleryMenu {
 # Нижнее окно с текстом + имя персонажа
 TextBar {
     padding: 0;
+    background: $boost;
+    min-height: 6;
+    border: round white;
+    border-title-style: b;
+    border-title-color: yellow;
+    color: $text;
 }
 
 # Имя персонажа
@@ -274,16 +280,6 @@ TextBar {
     background: $boost;
     text-style: bold;
     color: yellow;
-}
-
-# Нижнее окно с текстом
-#text-bar {  
-    background: $boost;
-    min-height: 6;
-    border: round white;
-    border-title-style: b;
-    border-title-color: yellow;
-    color: $text;
 }
 
 .hidden {

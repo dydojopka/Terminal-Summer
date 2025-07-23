@@ -191,9 +191,18 @@ class NovelMenu(Static):
 class TextBar(Widget):
     """Виджет текст бара"""
     BORDER_TITLE = ""   # Имя персонажа
-    def render(self):
-        return "" # Текст
     
+    def __init__(self, id=None):
+        super().__init__(id=id)
+        self.text = ""  # Инициализируем атрибут текста как пустую строку
+
+    def render(self):
+        return self.text  # Отображаем содержимое текста
+
+    def update_text(self, new_text):
+        self.text = new_text  # Обновляем текст
+
+
 
 class TerminalSummer(App):
     """Основное приложение новеллы"""
@@ -210,7 +219,7 @@ class TerminalSummer(App):
         self.audio_player = AudioPlayer()
         self.script = ScriptParser("TS/text/day1.txt", self)
 
-    current_scene = "bus_stop"             # Текущая сцена (имя файла без расширения)
+    current_scene = ""             # Текущая сцена (имя файла без расширения)
     scenes_dir = "TS/ASCII/ASCII-large/bg" # Папка с ASCII-артами
     scene_cache = {}                       # Кэш для предзагруженных сцен
 
@@ -458,7 +467,8 @@ class TerminalSummer(App):
     def action_next_scene(self) -> None:
         """Переключение на следующую сцену"""
         if not self.query_one("#novel-menu").has_class("hidden"):
-            self.script.next_line()
+            self.script.next_line() # Парсинг следующей строки через script_parser
+            # self.update_header(self.current_scene)  # Обновление информации в Header
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
@@ -637,7 +647,14 @@ class TerminalSummer(App):
         
         # Обновление текущей сцены
         self.current_scene = scene_name
-        self.sub_title = f"Scene: {scene_name}"
+
+    # def update_header(self, scene_name: str):
+    #     """Обновление содержимого в Header"""
+    #     current_line = self.script.lines[self.script.index - 1]  # Текущая строка в сценарии
+    #     header = self.query_one(Header)
+
+    #     # Обновляем текст в Header
+    #     header.border_title = f"Scene: {scene_name} | Line: {self.script.index} | Text: {current_line}"
 
     def get_scene_list(self) -> list:
         """Получение списка доступных сцен"""
