@@ -1,7 +1,6 @@
-# script_parser.py
-
+import asyncio
 import re
-import time
+
 from textual.widget import Widget
 
 class ScriptParser:
@@ -10,52 +9,77 @@ class ScriptParser:
         self.app = app
         self.lines = []
         self.index = 0
+        self.backward = False  # Флаг перемотки назад
+        self.last_backward = False  # Запоминаем предыдущее направление
         self.load_script()
 
+
     def load_script(self):
+        """Загрузка файла сценария"""
         with open(self.filename, 'r', encoding='utf-8') as f:
             self.lines = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
 
-    def next_line(self):
+    async def next_line(self):
+        """Шаг вперёд"""
         if self.index >= len(self.lines):
-            return None  # конец
+            return None
+        self.backward = False
         line = self.lines[self.index]
         self.index += 1
-        self.parse_line(line)
-        return line
+        await self.parse_line(line)
 
-    def parse_line(self, line):
-        self.app.sub_title = f"Line: {self.index} | Content: {self.lines[self.index - 1]}"
+    async def prev_line(self):
+        """Шаг назад"""
+        if self.index <= 0:
+            return None
+        self.backward = True
+        self.index -= 1
+        line = self.lines[self.index]
+        await self.parse_line(line)
+
+
+    async def parse_line(self, line):
+        """Считывание строки сценария (асинхронно)"""
+        self.app.sub_title = f"Line: {self.index} | Content: {line}"
+        
         if line.startswith("pause"):
-            self._handle_pause(line)
+            await self._handle_pause(line)
         elif line.startswith("scene"):
-            self._handle_scene(line)
+            await self._handle_scene(line)
         elif line.startswith("play"):
-            self._handle_play(line)
+            await self._handle_play(line)
         elif line.startswith("window"):
-            self._handle_window(line)
+            await self._handle_window(line)
         elif '"' in line:
-            self._handle_dialogue(line)
+            await self._handle_dialogue(line)
         elif line.startswith("time"):
-            self.next_line() # Следующая строка
+            if self.backward:
+                await self.prev_line()
+            else:
+                await self.next_line()
         else:
-            self.next_line() # Следующая строка
-            print(f"Необработанная строка: {line}")
+            if self.backward:
+                await self.prev_line()
+            else:
+                await self.next_line()
+                
 
-        # self.next_line()
 
-    def _handle_pause(self, line):
+    async def _handle_pause(self, line):
+        """Обработка строки pause"""
         match = re.search(r'pause\s+(hard\s+)?(\d+)', line)
         if match:
             seconds = int(match.group(2))
-            time.sleep(seconds)
-            # print(f"[Пауза {seconds} сек]")
-        
-        self.next_line()
+            if not self.backward:
+                await asyncio.sleep(seconds)
+                await self.next_line()
+            # else: ничего не делаем — просто пропускаем паузу
 
-    def _handle_scene(self, line):
+    async def _handle_scene(self, line):
+        """Обработка строки scene cg/bg/color"""
         if "scene color" in line:
-            self.next_line() # Следующая строка
+            if not self.backward:
+                await self.next_line()
             return
 
         match = re.search(r'scene\s+(cg|bg)\s+([a-zA-Z0-9_]+)', line)
@@ -65,7 +89,6 @@ class ScriptParser:
             quality = self.app.settings.get("quality", "medium")
 
             scene_path = f"TS/ASCII/ASCII-{quality}/{category}/{scene_name}.txt"
-
             try:
                 with open(scene_path, "r", encoding="utf-8") as f:
                     art_content = f.read()
@@ -74,22 +97,25 @@ class ScriptParser:
 
             bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
             bg_cg.update(art_content)
-
             self.app.current_scene = scene_name
 
-        # self.next_line()
+            if not self.backward:
+                await self.next_line()
 
-    def _handle_play(self, line):
-        self.next_line()
-        pass  # позже
+    async def _handle_play(self, line):
+        """Обработка строки play"""
+        if not self.backward:
+            await self.next_line()
 
-    def _handle_window(self, line):
+    async def _handle_window(self, line):
+        """Обработка строки window"""
         widget = self.app.query_one("#text-bar", expect_type=Widget)
         widget.display = "show" in line
+        if not self.backward:
+            await self.next_line()
 
-        self.next_line()
-
-    def _handle_dialogue(self, line):
+    async def _handle_dialogue(self, line):
+        """Обработка строки диалога"""
         widget = self.app.query_one("#text-bar", expect_type=Widget)
 
         if re.match(r'[a-zA-Z_]+\s+".+"', line):  # character "Text"
@@ -105,4 +131,3 @@ class ScriptParser:
             widget.update_text(text)  # Обновляем текст только если он есть
         else:
             widget.update_text("")  # Убираем текст
-

@@ -452,23 +452,17 @@ class TerminalSummer(App):
 
 
     # ============ Функции - action_ ============
-    def action_prev_scene(self) -> None:
+    async def action_prev_scene(self) -> None:
         """Переключение на предыдущую сцену"""
-        scenes = self.get_scene_list()
-        novel_menu = self.query_one("#novel-menu")
-        if novel_menu.has_class("hidden"): # Если NovelMenu скрыт - ничего не делать
-            pass
-        else:
-            if scenes:
-                current_index = scenes.index(self.current_scene)
-                new_index = max(0, current_index - 1)
-                self.load_scene(scenes[new_index])
+        if not self.query_one("#novel-menu").has_class("hidden"): # Если NovelMenu НЕ скрыт
+            await self.script.prev_line() # Парсинг предыдущей строки через script_parser
 
-    def action_next_scene(self) -> None:
-        """Переключение на следующую сцену"""
-        if not self.query_one("#novel-menu").has_class("hidden"):
-            self.script.next_line() # Парсинг следующей строки через script_parser
-            # self.update_header(self.current_scene)  # Обновление информации в Header
+
+    async def action_next_scene(self) -> None:
+        """Переключение на следующую сцену (асинхронно)"""
+        if not self.query_one("#novel-menu").has_class("hidden"): # Если NovelMenu НЕ скрыт
+            await self.script.next_line()  # Асинхронный вызов парсинга след. строки
+
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
@@ -647,14 +641,6 @@ class TerminalSummer(App):
         
         # Обновление текущей сцены
         self.current_scene = scene_name
-
-    # def update_header(self, scene_name: str):
-    #     """Обновление содержимого в Header"""
-    #     current_line = self.script.lines[self.script.index - 1]  # Текущая строка в сценарии
-    #     header = self.query_one(Header)
-
-    #     # Обновляем текст в Header
-    #     header.border_title = f"Scene: {scene_name} | Line: {self.script.index} | Text: {current_line}"
 
     def get_scene_list(self) -> list:
         """Получение списка доступных сцен"""
