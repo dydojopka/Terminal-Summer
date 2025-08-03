@@ -9,8 +9,6 @@ class ScriptParser:
         self.app = app
         self.lines = []
         self.index = 0
-        self.backward = False  # Флаг перемотки назад
-        self.last_backward = False  # Запоминаем предыдущее направление
         self.load_script()
 
 
@@ -28,16 +26,6 @@ class ScriptParser:
         self.index += 1
         await self.parse_line(line)
 
-    async def prev_line(self):
-        """Шаг назад"""
-        if self.index <= 0:
-            return None
-        self.backward = True
-        self.index -= 1
-        line = self.lines[self.index]
-        await self.parse_line(line)
-
-
     async def parse_line(self, line):
         """Считывание строки сценария (асинхронно)"""
         self.app.sub_title = f"Line: {self.index} | Content: {line}"
@@ -53,16 +41,9 @@ class ScriptParser:
         elif '"' in line:
             await self._handle_dialogue(line)
         elif line.startswith("time"):
-            if self.backward:
-                await self.prev_line()
-            else:
-                await self.next_line()
+            await self.next_line()
         else:
-            if self.backward:
-                await self.prev_line()
-            else:
-                await self.next_line()
-                
+            await self.next_line()             
 
 
     async def _handle_pause(self, line):

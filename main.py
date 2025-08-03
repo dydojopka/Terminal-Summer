@@ -230,9 +230,9 @@ class TerminalSummer(App):
 
 
     BINDINGS = [
-        #("space", "next_scene", "Далее"),
+        # ("space", "next_scene", "Далее"),
         ("escape", "pause_game", "Пауза"),
-        ("b", "prev_scene", "Назад"),
+        # ("b", "prev_scene", "Назад"),
         ("n", "next_scene", "Вперёд"),
     ]
 
@@ -255,8 +255,8 @@ class TerminalSummer(App):
         # Кнопки в NovelMenu:
         if   button_id == "btn-next":             # Кнопка "Вперёд"
             self.action_next_scene()
-        elif button_id == "btn-back":             # Кнопка "Назад"
-            self.action_prev_scene()
+        # elif button_id == "btn-back":             # Кнопка "Назад"
+        #     self.action_prev_scene()
 
         # Кнопки в PauseMenu:
         elif button_id == "btn-continue":         # Кнопка "Продолжить"
@@ -452,17 +452,15 @@ class TerminalSummer(App):
 
 
     # ============ Функции - action_ ============
-    async def action_prev_scene(self) -> None:
-        """Переключение на предыдущую сцену"""
-        if not self.query_one("#novel-menu").has_class("hidden"): # Если NovelMenu НЕ скрыт
-            await self.script.prev_line() # Парсинг предыдущей строки через script_parser
-
+    # async def action_prev_scene(self) -> None:
+    #     """Переключение на предыдущую сцену"""
+    #     if not self.query_one("#novel-menu").has_class("hidden"): # Если NovelMenu НЕ скрыт
+    #         await self.script.prev_line() # Парсинг предыдущей строки через script_parser
 
     async def action_next_scene(self) -> None:
         """Переключение на следующую сцену (асинхронно)"""
         if not self.query_one("#novel-menu").has_class("hidden"): # Если NovelMenu НЕ скрыт
             await self.script.next_line()  # Асинхронный вызов парсинга след. строки
-
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""

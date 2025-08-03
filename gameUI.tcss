@@ -271,15 +271,8 @@ TextBar {
     min-height: 6;
     border: round white;
     border-title-style: b;
-    border-title-color: yellow;
+    # border-title-color: yellow;
     color: $text;
-}
-
-# Имя персонажа
-#name-bar {
-    background: $boost;
-    text-style: bold;
-    color: yellow;
 }
 
 .hidden {
