@@ -1,7 +1,36 @@
-# * {
-#     background: black;
-#     color: white;
-# }
+# Цета имён персонажей
+TextBar.dreamgirl{border-title-color: rgb(192,192,192)}   # ...
+TextBar.sl{border-title-color: rgb(255,210,0)}            # Славя
+TextBar.slp{border-title-color: rgb(255,210,0)}           # Пионерка
+TextBar.slg{border-title-color: rgb(255,210,0)}           # Девушка
+TextBar.sa{border-title-color: rgb(255,210,0)}            # Саша
+TextBar.un{border-title-color: rgb(185,86,255)}           # Лена
+TextBar.unp{border-title-color: rgb(185,86,255)}          # Пионерка
+TextBar.dv{border-title-color: rgb(255,170,0)}            # Алиса
+TextBar.dvp{border-title-color: rgb(255,170,0)}           # Пионерка
+TextBar.dvg{border-title-color: rgb(255,170,0)}           # Девушка
+TextBar.el{border-title-color: rgb(255,255,0)}            # Электроник
+TextBar.elp{border-title-color: rgb(255,255,0)}           # Пионер
+TextBar.ro{border-title-color: rgb(255,255,0)}            # Роутер
+TextBar.us{border-title-color: rgb(255,50,0)}             # Ульяна
+TextBar.usp{border-title-color: rgb(255,50,0)}            # Пионерка
+TextBar.usg{border-title-color: rgb(255,50,0)}            # Девушка
+TextBar.mt{border-title-color: rgb(0,234,50)}             # Ольга Дмитриевна
+TextBar.mt-voice{border-title-color: rgb(0,234,50)}       # Голос
+TextBar.cs{border-title-color: rgb(165,165,255)}          # Виола
+TextBar.mz{border-title-color: rgb(114,160,255)}          # Женя
+TextBar.mi{border-title-color: rgb(0,252,255)}            # Мику
+TextBar.ma{border-title-color: rgb(0,252,255)}            # Маша
+TextBar.uv{border-title-color: rgb(78,255,0)}             # Юля
+TextBar.uvp{border-title-color: rgb(78,255,0)}            # Странная девочка
+TextBar.sh{border-title-color: rgb(255,242,38)}           # Шурик
+TextBar.pi{border-title-color: rgb(230,0,0)}              # Пионер
+TextBar.me{border-title-color: rgb(225,221,125)}          # Семён
+TextBar.FIXME-voice{border-title-color: rgb(192,192,192)} # Голос
+TextBar.bush{border-title-color: rgb(192,192,192)}        # Голос
+TextBar.message{border-title-color: rgb(192,192,192)}     # Сообщение
+TextBar.odn{border-title-color: rgb(192,192,192)}         # Одногруппник
+TextBar.all{border-title-color: rgb(227,58,58)}           # Пионеры
 
 # Базовые стили для ASCII-артов
 #bg-cg {

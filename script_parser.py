@@ -3,6 +3,41 @@ import re
 
 from textual.widget import Widget
 
+DISPLAY_NAMES = {
+    "dreamgirl": "...",
+    "sl": "Славя",
+    "slp": "Пионерка",
+    "slg": "Девушка",
+    "sa": "Саша",
+    "un": "Лена",
+    "unp": "Пионерка",
+    "dv": "Алиса",
+    "dvp": "Пионерка",
+    "dvg": "Девушка",
+    "el": "Электроник",
+    "elp": "Пионер",
+    "ro": "Роутер",
+    "us": "Ульяна",
+    "usp": "Пионерка",
+    "usg": "Девушка",
+    "mt": "Ольга Дмитриевна",
+    "mt_voice": "Голос",
+    "cs": "Виола",
+    "mz": "Женя",
+    "mi": "Мику",
+    "ma": "Маша",
+    "uv": "Юля",
+    "uvp": "Странная девочка",
+    "sh": "Шурик",
+    "pi": "Пионер",
+    "me": "Семён",
+    "FIXME_voice": "Голос",
+    "bush": "Голос", 
+    "message": "Сообщение", 
+    "odn": "Одногруппник", 
+    "all": "Пионеры"
+}
+
 class ScriptParser:
     def __init__(self, filename, app):
         self.filename = filename
@@ -98,17 +133,32 @@ class ScriptParser:
     async def _handle_dialogue(self, line):
         """Обработка строки диалога"""
         widget = self.app.query_one("#text-bar", expect_type=Widget)
-
-        if re.match(r'[a-zA-Z_]+\s+".+"', line):  # character "Text"
-            parts = line.split('"')
-            speaker = parts[0].strip()
-            text = parts[1].strip()
+    
+        match = re.match(r'([a-zA-Z0-9_-]+)\s+"(.+)"', line)
+        if match:
+            raw_speaker, text = match.groups()
+            raw_speaker = raw_speaker.strip()
+            text = text.strip()
+    
+            if raw_speaker == "th":
+                speaker = ""
+                text = f"~ {text} ~"
+                id_to_set = None
+            else:
+                speaker = DISPLAY_NAMES.get(raw_speaker, raw_speaker)
+                id_to_set = raw_speaker
         else:
             speaker = ""
-            text = line.strip('"')
-
-        if text:  # Проверяем, что текст не пустой
-            widget.border_title = speaker if speaker else ""
-            widget.update_text(text)  # Обновляем текст только если он есть
-        else:
-            widget.update_text("")  # Убираем текст
+            text = line.strip().strip('"')
+            id_to_set = None
+    
+        # Очистка старых ID, кроме 'text-bar'
+        widget.remove_class(*[cls for cls in widget.classes if cls != "text-bar"])
+    
+        # Установка нового ID как класс (для CSS)
+        if id_to_set:
+            widget.add_class(id_to_set)
+    
+        # Установка имени и текста
+        widget.border_title = speaker if speaker else ""
+        widget.update_text(text)
