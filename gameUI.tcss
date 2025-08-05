@@ -16,7 +16,8 @@ TextBar.us{border-title-color: rgb(255,50,0)}             # Ульяна
 TextBar.usp{border-title-color: rgb(255,50,0)}            # Пионерка
 TextBar.usg{border-title-color: rgb(255,50,0)}            # Девушка
 TextBar.mt{border-title-color: rgb(0,234,50)}             # Ольга Дмитриевна
-TextBar.mt-voice{border-title-color: rgb(0,234,50)}       # Голос
+TextBar.mtp{border-title-color: rgb(0,234,50)}            # Вожатая
+TextBar.mt_voice{border-title-color: rgb(0,234,50)}       # Голос
 TextBar.cs{border-title-color: rgb(165,165,255)}          # Виола
 TextBar.mz{border-title-color: rgb(114,160,255)}          # Женя
 TextBar.mi{border-title-color: rgb(0,252,255)}            # Мику
@@ -26,7 +27,7 @@ TextBar.uvp{border-title-color: rgb(78,255,0)}            # Странная д�
 TextBar.sh{border-title-color: rgb(255,242,38)}           # Шурик
 TextBar.pi{border-title-color: rgb(230,0,0)}              # Пионер
 TextBar.me{border-title-color: rgb(225,221,125)}          # Семён
-TextBar.FIXME-voice{border-title-color: rgb(192,192,192)} # Голос
+TextBar.FIXME_voice{border-title-color: rgb(192,192,192)} # Голос
 TextBar.bush{border-title-color: rgb(192,192,192)}        # Голос
 TextBar.message{border-title-color: rgb(192,192,192)}     # Сообщение
 TextBar.odn{border-title-color: rgb(192,192,192)}         # Одногруппник
@@ -39,6 +40,7 @@ TextBar.all{border-title-color: rgb(227,58,58)}           # Пионеры
     content-align: center middle;
 }
 
+# Режим новеллы
 NovelMenu {
     layout: horizontal;
     dock: bottom;
@@ -64,6 +66,18 @@ NovelMenu {
     }
 }
 
+# Нижнее окно с текстом + имя персонажа
+TextBar {
+    padding: 0;
+    background: $boost;
+    min-height: 6;
+    border: round white;
+    border-title-style: b;
+    # border-title-color: yellow;
+    color: $text;
+}
+
+# Пауза
 PauseMenu {
     align: center middle;
 
@@ -84,6 +98,7 @@ PauseMenu {
     }
 }
 
+# Настройки
 SettingsMenu {
     # margin: 2;
     border: round white;
@@ -140,6 +155,7 @@ SettingsMenu {
     }
 }
 
+# Главное меню
 MainMenu {
     height: 100%;
     width: 100%;
@@ -209,6 +225,7 @@ MainMenu {
     }
 }
 
+# Галерея
 GalleryMenu {
     height: 100%;
     border: round white;
@@ -291,17 +308,6 @@ GalleryMenu {
         width: 9;
         margin: 1 0 0 2;
     }
-}
-
-# Нижнее окно с текстом + имя персонажа
-TextBar {
-    padding: 0;
-    background: $boost;
-    min-height: 6;
-    border: round white;
-    border-title-style: b;
-    # border-title-color: yellow;
-    color: $text;
 }
 
 .hidden {

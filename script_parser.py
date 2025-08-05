@@ -3,6 +3,7 @@ import re
 
 from textual.widget import Widget
 
+# Словарь имён
 DISPLAY_NAMES = {
     "dreamgirl": "...",
     "sl": "Славя",
@@ -21,6 +22,7 @@ DISPLAY_NAMES = {
     "usp": "Пионерка",
     "usg": "Девушка",
     "mt": "Ольга Дмитриевна",
+    "mtp": "Вожатая",
     "mt_voice": "Голос",
     "cs": "Виола",
     "mz": "Женя",
@@ -131,9 +133,9 @@ class ScriptParser:
             await self.next_line()
 
     async def _handle_dialogue(self, line):
-        """Обработка строки диалога"""
+        """Обработка строки диалога с анимацией текста"""
         widget = self.app.query_one("#text-bar", expect_type=Widget)
-    
+        
         match = re.match(r'([a-zA-Z0-9_-]+)\s+"(.+)"', line)
         if match:
             raw_speaker, text = match.groups()
@@ -151,14 +153,15 @@ class ScriptParser:
             speaker = ""
             text = line.strip().strip('"')
             id_to_set = None
-    
+        
         # Очистка старых ID, кроме 'text-bar'
         widget.remove_class(*[cls for cls in widget.classes if cls != "text-bar"])
-    
+        
         # Установка нового ID как класс (для CSS)
         if id_to_set:
             widget.add_class(id_to_set)
-    
-        # Установка имени и текста
+        
+        # Установка имени и анимация текста
         widget.border_title = speaker if speaker else ""
-        widget.update_text(text)
+        await widget.animate_text(text)
+

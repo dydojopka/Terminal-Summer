@@ -2,6 +2,7 @@ import os
 import json
 import simpleaudio as sa
 import threading
+import asyncio
 
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
@@ -199,9 +200,21 @@ class TextBar(Widget):
     def render(self):
         return self.text  # Отображаем содержимое текста
 
-    def update_text(self, new_text):
-        self.text = new_text  # Обновляем текст
+    async def animate_text(self, new_text, speed=0.02):
+        """Анимация текста, символ за символом."""
+        self.text = ""  # Начинаем с пустого текста
+        self.refresh()  # Перерисовываем виджет
 
+        for char in new_text:
+            self.text += char  # Добавляем следующий символ
+            self.refresh()  # Перерисовываем виджет
+            await asyncio.sleep(speed)  # Задержка между символами
+        self.refresh()  # Финальный обновленный текст
+    
+    def update_text(self, new_text):
+        """Обновляем текст без анимации."""
+        self.text = new_text
+        self.refresh()  # Перерисовываем виджет
 
 
 class TerminalSummer(App):
@@ -248,15 +261,15 @@ class TerminalSummer(App):
 
 
     # ============ Функции - on_ ============
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Обработка событий при нажатии кнопок"""
         button_id = event.button.id
 
         # Кнопки в NovelMenu:
         if   button_id == "btn-next":             # Кнопка "Вперёд"
-            self.action_next_scene()
+            await self.action_next_scene()
         # elif button_id == "btn-back":             # Кнопка "Назад"
-        #     self.action_prev_scene()
+        #    await self.action_prev_scene()
 
         # Кнопки в PauseMenu:
         elif button_id == "btn-continue":         # Кнопка "Продолжить"
