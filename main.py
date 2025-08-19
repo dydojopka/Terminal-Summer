@@ -10,6 +10,8 @@ from textual.reactive import reactive
 from textual.widgets import Button, Label, Footer, Header, Static
 from textual.widget import Widget
 
+from rich.text import Text
+
 from script_parser import ScriptParser
 
 
@@ -198,10 +200,13 @@ class TextBar(Widget):
         self.text = ""  # Текущий текст
 
     def render(self):
-        return self.text  # Отображаем содержимое текста
+        return Text.from_markup(self.text)  # Отображаем содержимое текста
 
     async def animate_text(self, new_text, speed=0.02, append=False):
-        """Анимация текста, символ за символом"""
+        """Анимация текста, символ за символом
+        
+        Если append=True → добавляет текст к текущему,
+        Если append=False → начинает с нуля"""
         if not append:
             self.text = ""  # Начинаем с пустого текста, если это новый диалог
             self.refresh()
@@ -234,12 +239,12 @@ class TerminalSummer(App):
         self.audio_player = AudioPlayer()
         self.script = ScriptParser("TS/text/day1.txt", self)
 
-    current_scene = ""             # Текущая сцена (имя файла без расширения)
+    current_scene = ""                     # Текущая сцена (имя файла без расширения)
     scenes_dir = "TS/ASCII/ASCII-large/bg" # Папка с ASCII-артами
     scene_cache = {}                       # Кэш для предзагруженных сцен
 
     gallery_mode = "cg"
-    gallery_size = "medium"  # small | medium | large
+    gallery_size = "medium" # small | medium | large
     gallery_index = 0
     gallery_images = []
 
