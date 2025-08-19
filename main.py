@@ -195,26 +195,28 @@ class TextBar(Widget):
     
     def __init__(self, id=None):
         super().__init__(id=id)
-        self.text = ""  # Инициализируем атрибут текста как пустую строку
+        self.text = ""  # Текущий текст
 
     def render(self):
         return self.text  # Отображаем содержимое текста
 
-    async def animate_text(self, new_text, speed=0.02):
-        """Анимация текста, символ за символом."""
-        self.text = ""  # Начинаем с пустого текста
-        self.refresh()  # Перерисовываем виджет
+    async def animate_text(self, new_text, speed=0.02, append=False):
+        """Анимация текста, символ за символом"""
+        if not append:
+            self.text = ""  # Начинаем с пустого текста, если это новый диалог
+            self.refresh()
 
         for char in new_text:
-            self.text += char  # Добавляем следующий символ
-            self.refresh()  # Перерисовываем виджет
-            await asyncio.sleep(speed)  # Задержка между символами
-        self.refresh()  # Финальный обновленный текст
-    
+            self.text += char  # Постепенно добавляем символ
+            self.refresh()
+            await asyncio.sleep(speed)
+        self.refresh()
+
     def update_text(self, new_text):
         """Обновляем текст без анимации."""
         self.text = new_text
-        self.refresh()  # Перерисовываем виджет
+        self.refresh()
+
 
 
 class TerminalSummer(App):

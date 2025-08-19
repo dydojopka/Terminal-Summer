@@ -135,13 +135,13 @@ class ScriptParser:
     async def _handle_dialogue(self, line):
         """Обработка строки диалога с анимацией текста"""
         widget = self.app.query_one("#text-bar", expect_type=Widget)
-        
+
         match = re.match(r'([a-zA-Z0-9_-]+)\s+"(.+)"', line)
         if match:
             raw_speaker, text = match.groups()
             raw_speaker = raw_speaker.strip()
             text = text.strip()
-    
+
             if raw_speaker == "th":
                 speaker = ""
                 text = f"~ {text} ~"
@@ -153,15 +153,27 @@ class ScriptParser:
             speaker = ""
             text = line.strip().strip('"')
             id_to_set = None
-        
+
         # Очистка старых ID, кроме 'text-bar'
         widget.remove_class(*[cls for cls in widget.classes if cls != "text-bar"])
-        
+
         # Установка нового ID как класс (для CSS)
         if id_to_set:
             widget.add_class(id_to_set)
-        
+
         # Установка имени и анимация текста
         widget.border_title = speaker if speaker else ""
-        await widget.animate_text(text)
+
+        # Разбиваем текст на части, разделённые <w>
+        parts = text.split("<w>")
+
+        for i, part in enumerate(parts):
+            part = part.strip()
+            if part:
+                # Если это первая часть → обычная анимация (с очисткой)
+                # Если последующие → append=True (добавляем к уже напечатанному)
+                await widget.animate_text(part, append=(i > 0))
+
+            if i < len(parts) - 1:
+                await asyncio.sleep(1)  # Пауза
 
