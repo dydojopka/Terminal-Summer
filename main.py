@@ -7,7 +7,7 @@ import asyncio
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
 from textual.reactive import reactive
-from textual.widgets import Button, Label, Footer, Header, Static
+from textual.widgets import Button, Label, Footer, Header, Static, OptionList
 from textual.widget import Widget
 
 from rich.text import Text
@@ -187,9 +187,10 @@ class DescriptionSettingQuality(Widget):
 class NovelMenu(Static):
     """Виджет-контейнер для текст бара и кнопок"""
     def compose(self):
-        yield Button("Назад", id="btn-back")
+        #yield ChoiceBar()
+        yield Button("История", id="btn-back")
         yield TextBar(id="text-bar")
-        yield Button("Вперёд", id="btn-next")
+        yield Button("Продолжить", id="btn-next")
 
 class TextBar(Widget):
     """Виджет текст бара"""
@@ -208,19 +209,26 @@ class TextBar(Widget):
         Если append=True → добавляет текст к текущему,
         Если append=False → начинает с нуля"""
         if not append:
-            self.text = ""  # Начинаем с пустого текста, если это новый диалог
+            self.text = ""
             self.refresh()
 
         for char in new_text:
-            self.text += char  # Постепенно добавляем символ
+            self.text += char
             self.refresh()
             await asyncio.sleep(speed)
+
         self.refresh()
 
     def update_text(self, new_text):
-        """Обновляем текст без анимации."""
+        """Обновляем текст без анимации"""
         self.text = new_text
         self.refresh()
+
+
+class ChoiceBar(Widget):
+    """Окно выбора"""
+    def compose(self):
+        yield OptionList()
 
 
 
@@ -248,12 +256,10 @@ class TerminalSummer(App):
     gallery_index = 0
     gallery_images = []
 
-
     BINDINGS = [
-        # ("space", "next_scene", "Далее"),
         ("escape", "pause_game", "Пауза"),
         # ("b", "prev_scene", "Назад"),
-        ("n", "next_scene", "Вперёд"),
+        ("space", "next_scene", "Продолжить"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -261,6 +267,7 @@ class TerminalSummer(App):
         yield Footer()
         yield MainMenu(id="main-menu")
         yield Static("", id="bg-cg", classes="hidden")
+        #yield ChoiceBar()
         yield NovelMenu(id="novel-menu", classes="hidden")
         yield PauseMenu(id="pause-menu", classes="hidden")
         yield SettingsMenu(id="settings-menu", classes="hidden")
@@ -273,9 +280,9 @@ class TerminalSummer(App):
         button_id = event.button.id
 
         # Кнопки в NovelMenu:
-        if   button_id == "btn-next":             # Кнопка "Вперёд"
+        if   button_id == "btn-next":             # Кнопка "Продолжить"
             await self.action_next_scene()
-        # elif button_id == "btn-back":             # Кнопка "Назад"
+        # elif button_id == "btn-back":             # Кнопка "История"
         #    await self.action_prev_scene()
 
         # Кнопки в PauseMenu:
@@ -478,7 +485,7 @@ class TerminalSummer(App):
     #         await self.script.prev_line() # Парсинг предыдущей строки через script_parser
 
     async def action_next_scene(self) -> None:
-        """Переключение на следующую сцену (асинхронно)"""
+        """Переключение на следующую строку (асинхронно)"""
         if not self.query_one("#novel-menu").has_class("hidden"): # Если NovelMenu НЕ скрыт
             await self.script.next_line()  # Асинхронный вызов парсинга след. строки
 

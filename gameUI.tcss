@@ -64,6 +64,7 @@ NovelMenu {
         height: 4;
         width: 4;
     }
+    
 }
 
 # Нижнее окно с текстом + имя персонажа
@@ -312,4 +313,7 @@ GalleryMenu {
 
 .hidden {
     display: none;
+}
+.invisible {
+    visibility: hidden;
 }

@@ -135,6 +135,10 @@ class ScriptParser:
     async def _handle_dialogue(self, line):
         """Обработка строки диалога с анимацией текста"""
         widget = self.app.query_one("#text-bar", expect_type=Widget)
+        btn = self.app.query_one("#btn-next")
+
+        # Скрываем кнопку на время показа текста
+        btn.add_class("invisible")
 
         match = re.match(r'([a-zA-Z0-9_-]+)\s+"(.+)"', line)
         if match:
@@ -160,16 +164,21 @@ class ScriptParser:
 
         widget.border_title = speaker if speaker else ""
 
-        # Конвертируем теги <i>, <b> в rich-разметку
+        # Конвертируем <i>, <b> в rich-разметку
         text = re.sub(r'<i>(.*?)</i>', r'[italic]\1[/italic]', text)
         text = re.sub(r'<b>(.*?)</b>', r'[bold]\1[/bold]', text)
 
-        # Разбиваем текст на части по <w>
+        # Разбиваем текст на части по <w> с паузами
         parts = text.split("<w>")
         for i, part in enumerate(parts):
             part = part.strip()
             if part:
-                await widget.animate_text(part, append=(i > 0))
+                prefix = "" if i == 0 else " "
+                await widget.animate_text(prefix + part, append=(i > 0))
 
             if i < len(parts) - 1:
                 await asyncio.sleep(1)
+
+        # Показать кнопку обатно
+        btn.remove_class("invisible")
+        btn.focus()
