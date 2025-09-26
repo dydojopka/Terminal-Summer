@@ -2,6 +2,7 @@ import asyncio
 import re
 
 from textual.widget import Widget
+from textual.widgets import ListView, ListItem, Label
 
 # Словарь имён
 DISPLAY_NAMES = {
@@ -79,6 +80,9 @@ class ScriptParser:
             await self._handle_dialogue(line)
         elif line.startswith("time"):
             await self.next_line()
+        elif line.startswith("menu"):
+            await self._handle_choice(line)
+
         else:
             await self.next_line()             
 
@@ -131,6 +135,63 @@ class ScriptParser:
         widget.display = "show" in line
         if not self.backward:
             await self.next_line()
+
+    async def _handle_choice(self, line):
+        """Обработка строки menu и логика выбора"""
+
+        options = {}
+        self.index += 1  # пропускаем "menu"
+
+        while self.index < len(self.lines):
+            line = self.lines[self.index].strip()
+
+            # конец всего блока меню
+            if line == "}":
+                self.index += 1
+                break
+
+            # начало варианта
+            if line.startswith('"'):
+                choice_text = re.match(r'"(.+)"', line).group(1)
+                self.index += 1
+                block_lines = []
+
+                # собираем строки внутри { ... }
+                if self.lines[self.index] == "{":
+                    self.index += 1
+                    depth = 1
+                    while self.index < len(self.lines) and depth > 0:
+                        l = self.lines[self.index]
+                        if l == "{":
+                            depth += 1
+                        elif l == "}":
+                            depth -= 1
+                            if depth == 0:
+                                self.index += 1
+                                break
+                        if depth > 0:
+                            block_lines.append(l)
+                        self.index += 1
+
+                options[choice_text] = block_lines
+            else:
+                self.index += 1
+
+        # показать ChoiceBar
+        choice_bar = self.app.query_one("#choice-bar")
+        list_view = choice_bar.query_one(ListView)
+
+        list_view.clear()
+        for opt in options:
+            list_view.append(ListItem(Label(opt)))
+
+        # сохранить варианты в app, чтобы потом выполнить
+        self.app.pending_choices = options
+
+        # отобразить ChoiceBar и скрыть фон
+        choice_bar.remove_class("hidden")
+        self.app.query_one("#bg-cg").add_class("hidden")
+
 
     async def _handle_dialogue(self, line):
         """Обработка строки диалога с анимацией текста"""

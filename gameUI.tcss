@@ -38,6 +38,17 @@ TextBar.all{border-title-color: rgb(227,58,58)}           # Пионеры
     column-span: 1;
     # width: 100%;
     content-align: center middle;
+    # display: none;
+}
+
+# Окно выбора
+ChoiseBar{
+    column-span: 1;
+    border: round white;
+    content-align: center middle;
+
+    width: 10;
+    height: 20
 }
 
 # Режим новеллы

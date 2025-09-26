@@ -7,8 +7,9 @@ import asyncio
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
 from textual.reactive import reactive
-from textual.widgets import Button, Label, Footer, Header, Static, OptionList
+from textual.widgets import Button, Label, Footer, Header, Static, ListView, ListItem
 from textual.widget import Widget
+from textual.binding import Binding
 
 from rich.text import Text
 
@@ -187,7 +188,6 @@ class DescriptionSettingQuality(Widget):
 class NovelMenu(Static):
     """Виджет-контейнер для текст бара и кнопок"""
     def compose(self):
-        #yield ChoiceBar()
         yield Button("История", id="btn-back")
         yield TextBar(id="text-bar")
         yield Button("Продолжить", id="btn-next")
@@ -224,12 +224,20 @@ class TextBar(Widget):
         self.text = new_text
         self.refresh()
 
-
 class ChoiceBar(Widget):
     """Окно выбора"""
     def compose(self):
-        yield OptionList()
+        yield ListView(
+            ListItem(Label("киси-киси")),
+            ListItem(Label("мяу-мяу"))
+        )
 
+
+class NovelWindow(Widget):
+    """Окно новеллы(bg-cg + ChoiceBar)"""
+    def compose(self):
+        yield ChoiceBar(id="choice-bar", classes="hidden")
+        yield Static("", id="bg-cg")
 
 
 class TerminalSummer(App):
@@ -257,17 +265,17 @@ class TerminalSummer(App):
     gallery_images = []
 
     BINDINGS = [
-        ("escape", "pause_game", "Пауза"),
-        # ("b", "prev_scene", "Назад"),
-        ("space", "next_scene", "Продолжить"),
+        Binding("escape", "pause_game", "Пауза", show=True, id="bind-pause"),
+        # Binding("b", "prev_scene", "Назад", show=True),
+        Binding("space", "next_scene", "Продолжить", show=True, id="bind-next"),
+        Binding("c", "open_ChoiceBar", "Меню выбора", show=True, id="bind-choice-bar")
     ]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True, classes="hidden")
-        yield Footer()
+        yield Footer(classes="hidden")
         yield MainMenu(id="main-menu")
-        yield Static("", id="bg-cg", classes="hidden")
-        #yield ChoiceBar()
+        yield NovelWindow(id="novel-window")
         yield NovelMenu(id="novel-menu", classes="hidden")
         yield PauseMenu(id="pause-menu", classes="hidden")
         yield SettingsMenu(id="settings-menu", classes="hidden")
@@ -477,6 +485,26 @@ class TerminalSummer(App):
         self.load_settings()
         self.apply_settings()
 
+    async def on_list_view_selected(self, event: ListView.Selected) -> None:
+        """Обработка выбора из меню"""
+        choice = event.item.query_one(Label).renderable
+    
+        if hasattr(self, "pending_choices") and self.pending_choices:
+            block = self.pending_choices.get(str(choice))
+            if block:
+                # вставляем строки выбранного блока в сценарий
+                self.script.lines[self.script.index:self.script.index] = block
+    
+            # очищаем pending_choices
+            self.pending_choices = None
+    
+        # скрываем меню и возвращаем фон
+        self.query_one("#choice-bar").add_class("hidden")
+        self.query_one("#bg-cg").remove_class("hidden")
+    
+        # продолжаем сценарий
+        await self.script.next_line()
+
 
     # ============ Функции - action_ ============
     # async def action_prev_scene(self) -> None:
@@ -488,12 +516,26 @@ class TerminalSummer(App):
         """Переключение на следующую строку (асинхронно)"""
         if not self.query_one("#novel-menu").has_class("hidden"): # Если NovelMenu НЕ скрыт
             await self.script.next_line()  # Асинхронный вызов парсинга след. строки
+            # попробовать добавить переключение флага прямо здесь чтобы избежать бага с работой space
+
+    def action_open_ChoiceBar(self) -> None:
+        """Откытие меню выбора"""
+        choice_bar = self.query_one("#choice-bar")
+
+        if choice_bar.has_class("hidden"):
+            self.query_one("#bg-cg").add_class("hidden")
+
+            choice_bar.remove_class("hidden")
+        else:
+            choice_bar.add_class("hidden")
+
+            self.query_one("#bg-cg").remove_class("hidden")
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
         pause_menu = self.query_one("#pause-menu")
         novel_menu = self.query_one("#novel-menu")
-        bg_cg = self.query_one("#bg-cg")
+        novel_window = self.query_one("#novel-window")
         settings_menu = self.query_one("#settings-menu")
         main_menu = self.query_one("#main-menu")
         gallery_menu = self.query_one("#gallery-menu")
@@ -507,7 +549,7 @@ class TerminalSummer(App):
                 if pause_menu.has_class("hidden"):
                     # Cкрытие диологового окна, кнопок перемотки и задника
                     novel_menu.add_class("hidden")
-                    bg_cg.add_class("hidden")
+                    novel_window.add_class("hidden")
 
                     # Показ меню паузы
                     pause_menu.remove_class("hidden")
@@ -520,7 +562,7 @@ class TerminalSummer(App):
 
                     # Показ диологового окна, кнопок перемотки и задника
                     novel_menu.remove_class("hidden")
-                    bg_cg.remove_class("hidden")
+                    novel_window.remove_class("hidden")
 
                     # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
                     self.query_one("#btn-next", Button).focus()
@@ -530,7 +572,7 @@ class TerminalSummer(App):
 
                 # Показ диологового окна, кнопок перемотки и задника
                 novel_menu.remove_class("hidden")
-                bg_cg.remove_class("hidden")
+                novel_window.remove_class("hidden")
 
                 # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
                 self.query_one("#btn-next", Button).focus()
@@ -549,6 +591,9 @@ class TerminalSummer(App):
             elif not settings_menu.has_class("hidden"): # Из настроек
                 settings_menu.add_class("hidden")
 
+            # Скрытие footer
+            self.query_one(Footer).add_class("hidden")
+
             # Показ главного меню
             main_menu.remove_class("hidden")
 
@@ -557,6 +602,7 @@ class TerminalSummer(App):
         else:
             # Скрытие главного меню
             main_menu.add_class("hidden")
+            self.query_one(Footer).remove_class("hidden")
 
     def action_open_settings(self) -> None:
         """Открытие меню настроек"""
