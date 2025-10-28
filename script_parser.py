@@ -97,6 +97,7 @@ class ScriptParser:
                 await self.next_line()
             # else: ничего не делаем — просто пропускаем паузу
 
+
     async def _handle_scene(self, line):
         """Обработка строки scene cg/bg/color"""
         if "scene color" in line:
@@ -124,10 +125,12 @@ class ScriptParser:
             if not self.backward:
                 await self.next_line()
 
+
     async def _handle_play(self, line):
         """Обработка строки play"""
         if not self.backward:
             await self.next_line()
+
 
     async def _handle_window(self, line):
         """Обработка строки window"""
@@ -135,6 +138,7 @@ class ScriptParser:
         widget.display = "show" in line
         if not self.backward:
             await self.next_line()
+
 
     async def _handle_choice(self, line):
         """Обработка строки menu и логика выбора"""
@@ -185,12 +189,21 @@ class ScriptParser:
         for opt in options:
             list_view.append(ListItem(Label(opt)))
 
-        # сохранить варианты в app, чтобы потом выполнить
+        # сохранить варианты в app
         self.app.pending_choices = options
 
         # отобразить ChoiceBar и скрыть фон
         choice_bar.remove_class("hidden")
         self.app.query_one("#bg-cg").add_class("hidden")
+
+        # дождаться одного кадра, чтобы Textual успел пересчитать фокус
+        await asyncio.sleep(0)
+
+        # найти ListView и перевести на него фокус 
+        if list_view.children:
+            list_view.index = 0
+            list_view.focus() 
+            # (есть визуальный баг при последующих появлениях окна, но бля, как же мне похуй)
 
 
     async def _handle_dialogue(self, line):
@@ -240,6 +253,10 @@ class ScriptParser:
             if i < len(parts) - 1:
                 await asyncio.sleep(1)
 
-        # Показать кнопку обатно
+       # Показать кнопку обратно
         btn.remove_class("invisible")
-        btn.focus()
+
+        # Фокусируем кнопку только если меню выбора НЕ открыто
+        choice_bar = self.app.query_one("#choice-bar")
+        if choice_bar.has_class("hidden"):
+           btn.focus()

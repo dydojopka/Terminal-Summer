@@ -224,20 +224,18 @@ class TextBar(Widget):
         self.text = new_text
         self.refresh()
 
-class ChoiceBar(Widget):
-    """Окно выбора"""
-    def compose(self):
-        yield ListView(
-            ListItem(Label("киси-киси")),
-            ListItem(Label("мяу-мяу"))
-        )
-
 
 class NovelWindow(Widget):
     """Окно новеллы(bg-cg + ChoiceBar)"""
     def compose(self):
         yield ChoiceBar(id="choice-bar", classes="hidden")
         yield Static("", id="bg-cg")
+        
+class ChoiceBar(Widget):
+    """Окно выбора"""
+    def compose(self):
+        yield ListView(
+        )
 
 
 class TerminalSummer(App):
@@ -488,20 +486,20 @@ class TerminalSummer(App):
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
         choice = event.item.query_one(Label).renderable
-    
+
         if hasattr(self, "pending_choices") and self.pending_choices:
             block = self.pending_choices.get(str(choice))
             if block:
                 # вставляем строки выбранного блока в сценарий
                 self.script.lines[self.script.index:self.script.index] = block
-    
+
             # очищаем pending_choices
             self.pending_choices = None
-    
+
         # скрываем меню и возвращаем фон
         self.query_one("#choice-bar").add_class("hidden")
         self.query_one("#bg-cg").remove_class("hidden")
-    
+
         # продолжаем сценарий
         await self.script.next_line()
 
@@ -519,17 +517,18 @@ class TerminalSummer(App):
             # попробовать добавить переключение флага прямо здесь чтобы избежать бага с работой space
 
     def action_open_ChoiceBar(self) -> None:
-        """Откытие меню выбора"""
+        """Откытие окна выбора"""
         choice_bar = self.query_one("#choice-bar")
 
+        # Показ окна выбора и скрытие задника
         if choice_bar.has_class("hidden"):
-            self.query_one("#bg-cg").add_class("hidden")
+            self.query_one("#bg-cg").add_class("hidden") # Скрытие заднка
 
-            choice_bar.remove_class("hidden")
+            choice_bar.remove_class("hidden") # Показ окна выбора
         else:
-            choice_bar.add_class("hidden")
+            choice_bar.add_class("hidden") # Скрытие окна выбора
 
-            self.query_one("#bg-cg").remove_class("hidden")
+            self.query_one("#bg-cg").remove_class("hidden") # Показ задника
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
