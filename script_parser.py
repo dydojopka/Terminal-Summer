@@ -66,7 +66,7 @@ class ScriptParser:
 
     async def parse_line(self, line):
         """Считывание строки сценария (асинхронно)"""
-        self.app.sub_title = f"Line: {self.index} | Content: {line}"
+        self.app.sub_title = f"Content: {line}"
         
         if line.startswith("pause"):
             await self._handle_pause(line)
