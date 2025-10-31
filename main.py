@@ -272,7 +272,7 @@ class TerminalSummer(App):
         yield Header(show_clock=True, classes="hidden")
         yield Footer(classes="hidden")
         yield MainMenu(id="main-menu")
-        yield NovelWindow(id="novel-window")
+        yield NovelWindow(id="novel-window", classes="hidden")
         yield NovelMenu(id="novel-menu", classes="hidden")
         yield PauseMenu(id="pause-menu", classes="hidden")
         yield SettingsMenu(id="settings-menu", classes="hidden")
@@ -394,7 +394,7 @@ class TerminalSummer(App):
 
             # Отображение NovelMenu
             self.query_one("#novel-menu").remove_class("hidden")
-            self.query_one("#bg-cg").remove_class("hidden")
+            self.query_one("#novel-window").remove_class("hidden")
 
             # Фокус на кнопке "Вперёд" в игровом меню
             self.query_one("#btn-next", Button).focus()
