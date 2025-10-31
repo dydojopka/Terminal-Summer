@@ -52,6 +52,7 @@ NovelWindow {
         height: auto;
         margin: 2 2;
 
+        # Элементы в окне выбора
         Label {
             width: 100%;
             text-align: center;
@@ -93,11 +94,9 @@ NovelMenu {
         min-height: 6;
         border: round white;
         border-title-style: b;
-        # border-title-color: yellow;
         color: $text;
     }
 }
-
 
 # Пауза
 PauseMenu {
@@ -122,7 +121,6 @@ PauseMenu {
 
 # Настройки
 SettingsMenu {
-    # margin: 2;
     border: round white;
     border-title-align: center;
     border-title-style: b;
@@ -147,7 +145,6 @@ SettingsMenu {
         height: 7;
         margin: 1;
         border: round white;
-        # border-title-align: center;
         border-title-style: b;
 
         DescriptionSettingHeader {
@@ -158,14 +155,13 @@ SettingsMenu {
         }
     }
 
-        SettingQuality {
+    SettingQuality {
         padding: 1 0 1 1;
         align: left middle;
         width: 100;
         height: 16;
         margin: 1;
         border: round white;
-        # border-title-align: center;
         border-title-style: b;
 
         DescriptionSettingQuality {
@@ -208,7 +204,6 @@ MainMenu {
             width: 31;
             height: 30;
             border: ascii #B82D37;
-            # margin: 5;
         }
         MainMenuLoadBtn{
             width: 31;
@@ -221,7 +216,6 @@ MainMenu {
             width: 31;
             height: 30;
             border: ascii #B82D37;
-            # margin: 5;
         }
 
     }
@@ -258,7 +252,6 @@ GalleryMenu {
 
     GalleryMenuLeftBtns {
         height: 100%;
-        # border: solid blue;
         
         #container-left-btns {
             align: center middle;
@@ -285,7 +278,6 @@ GalleryMenu {
             scrollbar-color: #888 #333;
         }
         #ascii-content {
-            # content-align: center middle;
             display: block;
             min-width: 250%;
         }
@@ -305,7 +297,6 @@ GalleryMenu {
     }
 
     GalleryMenuBottomBtns {
-        # border: solid green;
         dock: bottom;
         align: center bottom;
         width: 100%;
