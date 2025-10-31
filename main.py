@@ -234,8 +234,7 @@ class NovelWindow(Widget):
 class ChoiceBar(Widget):
     """Окно выбора"""
     def compose(self):
-        yield ListView(
-        )
+        yield ListView()
 
 
 class TerminalSummer(App):

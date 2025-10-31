@@ -33,22 +33,32 @@ TextBar.message{border-title-color: rgb(192,192,192)}     # Сообщение
 TextBar.odn{border-title-color: rgb(192,192,192)}         # Одногруппник
 TextBar.all{border-title-color: rgb(227,58,58)}           # Пионеры
 
-# Базовые стили для ASCII-артов
-#bg-cg {
-    column-span: 1;
-    # width: 100%;
-    content-align: center middle;
-    # display: none;
-}
+# Окно новеллы
+NovelWindow {
+    align: center middle;
+    # Базовые стили для ASCII-артов
+    #bg-cg {
+        margin: 0;
+        padding: 0;
+        column-span: 1;
+        content-align: center middle;
+    }
 
-# Окно выбора
-ChoiseBar{
-    column-span: 1;
-    border: round white;
-    content-align: center middle;
+    # Окно выбора
+    ChoiceBar {
+        align-horizontal: center;
+        align-vertical: middle;
+        width: 100%;
+        height: auto;
+        margin: 2 2;
 
-    width: 10;
-    height: 20
+        Label {
+            width: 100%;
+            text-align: center;
+            border: hkey $boost;
+            color: $text-muted;
+        }
+    }
 }
 
 # Режим новеллы
@@ -76,18 +86,18 @@ NovelMenu {
         width: 4;
     }
     
+    # Нижнее окно с текстом + имя персонажа
+    TextBar {
+        padding: 0;
+        background: $boost;
+        min-height: 6;
+        border: round white;
+        border-title-style: b;
+        # border-title-color: yellow;
+        color: $text;
+    }
 }
 
-# Нижнее окно с текстом + имя персонажа
-TextBar {
-    padding: 0;
-    background: $boost;
-    min-height: 6;
-    border: round white;
-    border-title-style: b;
-    # border-title-color: yellow;
-    color: $text;
-}
 
 # Пауза
 PauseMenu {

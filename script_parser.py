@@ -197,7 +197,12 @@ class ScriptParser:
         self.app.query_one("#bg-cg").add_class("hidden")
 
         # дождаться одного кадра, чтобы Textual успел пересчитать фокус
-        await asyncio.sleep(0)
+        await asyncio.sleep(0.01)
+
+        # изменение высоты окна от кол-ва элементов
+        rows = len(list_view.children)
+        row_height = 3
+        list_view.styles.height = max(1, rows) * row_height
 
         # найти ListView и перевести на него фокус 
         if list_view.children:
