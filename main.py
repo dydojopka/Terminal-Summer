@@ -265,7 +265,6 @@ class TerminalSummer(App):
         Binding("escape", "pause_game", "Пауза", show=True, id="bind-pause"),
         # Binding("b", "prev_scene", "Назад", show=True),
         Binding("space", "next_scene", "Продолжить", show=True, id="bind-next"),
-        Binding("c", "open_ChoiceBar", "Меню выбора", show=True, id="bind-choice-bar")
     ]
 
     def compose(self) -> ComposeResult:
@@ -514,20 +513,6 @@ class TerminalSummer(App):
         if not self.query_one("#novel-menu").has_class("hidden"): # Если NovelMenu НЕ скрыт
             await self.script.next_line()  # Асинхронный вызов парсинга след. строки
             # попробовать добавить переключение флага прямо здесь чтобы избежать бага с работой space
-
-    def action_open_ChoiceBar(self) -> None:
-        """Откытие окна выбора"""
-        choice_bar = self.query_one("#choice-bar")
-
-        # Показ окна выбора и скрытие задника
-        if choice_bar.has_class("hidden"):
-            self.query_one("#bg-cg").add_class("hidden") # Скрытие заднка
-
-            choice_bar.remove_class("hidden") # Показ окна выбора
-        else:
-            choice_bar.add_class("hidden") # Скрытие окна выбора
-
-            self.query_one("#bg-cg").remove_class("hidden") # Показ задника
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
