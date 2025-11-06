@@ -41,6 +41,13 @@ DISPLAY_NAMES = {
     "all": "Пионеры"
 }
 
+# Переменные с поинтами
+SL = 0
+UN = 0
+DV = 0
+US = 0
+
+
 class ScriptParser:
     def __init__(self, filename, app):
         self.filename = filename
@@ -66,8 +73,16 @@ class ScriptParser:
 
     async def parse_line(self, line):
         """Считывание строки сценария (асинхронно)"""
-        self.app.sub_title = f"Content: {line}"
-        
+        global SL, UN, DV, US
+
+        # Формируем строку статуса поинтов (слева в Header)
+        lp_status = f"[SL:{SL}] [UN:{UN}] [DV:{DV}] [US:{US}]"
+
+        # Отображаем текущую строку сценария (справа)
+        # self.app.sub_title = f"Content: {line}"
+        self.app.sub_title = lp_status
+
+        # ---- Логика обработки строк ----
         if line.startswith("pause"):
             await self._handle_pause(line)
         elif line.startswith("scene"):
@@ -82,9 +97,11 @@ class ScriptParser:
             await self.next_line()
         elif line.startswith("menu"):
             await self._handle_choice(line)
-
+        elif line.startswith("$lp_"):
+            await self._handle_changeLP(line)
         else:
-            await self.next_line()             
+            await self.next_line()
+           
 
 
     async def _handle_pause(self, line):
@@ -265,3 +282,37 @@ class ScriptParser:
         choice_bar = self.app.query_one("#choice-bar")
         if choice_bar.has_class("hidden"):
            btn.focus()
+
+
+    async def _handle_changeLP(self, line):
+        """Обработка изменения поинтов (lp_)"""
+        global SL, UN, DV, US
+
+        match = re.match(r'\$lp_(sl|un|dv|us)\s*([+-]=)\s*(\d+)', line)
+
+        target, operation, value = match.groups()
+        value = int(value)
+
+        # Прямая ссылка на глобальную переменную
+        var_map = {
+            "sl": "SL",
+            "un": "UN",
+            "dv": "DV",
+            "us": "US",
+        }
+        var_name = var_map[target]
+
+        # Извлекаем текущее значение
+        current = globals()[var_name]
+
+        # Применяем операцию
+        if operation == "+=":
+            current += value
+        elif operation == "-=":
+            current -= value
+
+        # Обновляем глобальное значение
+        globals()[var_name] = current
+        
+        if not self.backward:
+            await self.next_line()
