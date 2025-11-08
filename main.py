@@ -239,11 +239,6 @@ class TextBar(Widget):
 
         self.refresh()
 
-    def update_text(self, new_text):
-        """Обновляем текст без анимации"""
-        self.text = new_text
-        self.refresh()
-
 
 class NovelWindow(Widget):
     """Окно новеллы(bg-cg + ChoiceBar)"""
