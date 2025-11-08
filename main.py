@@ -266,7 +266,7 @@ class TerminalSummer(App):
     def __init__(self):
         super().__init__()
         self.settings = {
-            "header": True,
+            "header": False,
             "quality": "medium",
             "text_speed": "0.025",
         }
