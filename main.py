@@ -190,15 +190,16 @@ class SettingTextSpeed(Widget):
     BORDER_TITLE = "Скорость текста"
     def compose(self):
         with Vertical():
-            yield Button("Медленный", variant="default", id="btn-speed-slow")
-            yield Button("Средний", variant="default", id="btn-speed-medium")
-            yield Button("Быстрый", variant="default", id="btn-speed-fast")
+            yield Button("Медленно", variant="default", id="btn-speed-slow")
+            yield Button("Средне", variant="default", id="btn-speed-medium")
+            yield Button("Быстро", variant="default", id="btn-speed-fast")
+            yield Button("Моментально", variant="default", id="btn-speed-instantly")
             yield DescriptionSettingTextSpeed()
 
 class DescriptionSettingTextSpeed(Widget):
     """Описание настройки TextSpeed"""
     def render(self):
-        return "Скорость появления текста в текстовом окне.\n\nМедленный - 0.04\nСредний   - 0.025\nБыстрый   - 0.01"
+        return "Скорость появления текста в текстовом окне.\n\nМедленный - 0.04\nСредний   - 0.025\nБыстрый   - 0.01\nМоментально - 0"
 
 
 class NovelMenu(Static):
@@ -270,12 +271,12 @@ class TerminalSummer(App):
             "text_speed": "0.025",
         }
         self.audio_player = AudioPlayer()
-        self.script = ScriptParser("TS/text/test.txt", self)
+        self.script = ScriptParser("TS/text/day1.txt", self)
 
-    current_scene = ""                     # Текущая сцена (имя файла без расширения)
-    scenes_dir = "TS/ASCII/ASCII-large/bg" # Папка с ASCII-артами
-    scene_cache = {}                       # Кэш для предзагруженных сцен
-    text_speed = "0.025"                   # Скорость текста 0.04 | 0.025 | 0.01
+    current_scene = ""                       # Текущая сцена (имя файла без расширения)
+    scenes_dir = "TS/ASCII/ASCII-large/bg"   # Папка с ASCII-артами
+    scene_cache = {}                         # Кэш для предзагруженных сцен
+    text_speed = "0.025"                     # Скорость текста 0.04 | 0.025 | 0.01 | 0
 
     gallery_mode = "cg"
     gallery_size = "medium" # small | medium | large
@@ -398,42 +399,50 @@ class TerminalSummer(App):
             self.save_settings()
 
         # TextSpeed
-        elif button_id == "btn-speed-slow":            # Кнопка "Медленный"
-            # Изменение скорости текста на slow
-            self.text_speed = "0.04"
-
-            # Меняем стили кнопок
+        elif button_id == "btn-speed-slow":       # Кнопка "Медленно"
+             # Меняем стили кнопок
             self.query_one("#btn-speed-slow", Button).variant = "error"
             self.query_one("#btn-speed-medium", Button).variant = "default"
             self.query_one("#btn-speed-fast", Button).variant = "default"
+            self.query_one("#btn-speed-instantly", Button).variant = "default"
 
-            # Сохранение в файл настроек
+            # Сохранение в файл настроек и применение
             self.settings["text_speed"] = "0.04"
             self.save_settings()
-        elif button_id == "btn-speed-medium":           # Кнопка "Средний"
-            # Изменение скорости текста на medium
-            self.text_speed = "0.025"
-            
+            self.apply_settings()
+        elif button_id == "btn-speed-medium":     # Кнопка "Средне"
             # Меняем стили кнопок
             self.query_one("#btn-speed-slow", Button).variant = "default"
             self.query_one("#btn-speed-medium", Button).variant = "warning"
             self.query_one("#btn-speed-fast", Button).variant = "default"
+            self.query_one("#btn-speed-instantly", Button).variant = "default"
 
-            # Сохранение в файл настроек
+            # Сохранение в файл настроек и применение
             self.settings["text_speed"] = "0.025"
             self.save_settings()
-        elif button_id == "btn-speed-fast": 
-            # Изменение скорости текста на fast
-            self.text_speed = "0.01"
-
+            self.apply_settings()
+        elif button_id == "btn-speed-fast":       # Кнопка "Быстро"
             # Меняем стили кнопок
             self.query_one("#btn-speed-slow", Button).variant = "default"
             self.query_one("#btn-speed-medium", Button).variant = "default"
             self.query_one("#btn-speed-fast", Button).variant = "success"
+            self.query_one("#btn-speed-instantly", Button).variant = "default"
 
-            # Сохранение в файл настроек
+            # Сохранение в файл настроек и применение
             self.settings["text_speed"] = "0.01"
-            self.save_settings() 
+            self.save_settings()
+            self.apply_settings()
+        elif button_id == "btn-speed-instantly":  # Кнопка "Моментально"
+            # Меняем стили кнопок
+            self.query_one("#btn-speed-slow", Button).variant = "default"
+            self.query_one("#btn-speed-medium", Button).variant = "default"
+            self.query_one("#btn-speed-fast", Button).variant = "default"
+            self.query_one("#btn-speed-instantly", Button).variant = "primary"
+
+            # Сохранение в файл настроек и применение
+            self.settings["text_speed"] = "0"
+            self.save_settings()
+            self.apply_settings()
 
         elif button_id == "btn-close-settings":   # Кнопка "Назад"
             # Если открыто из меню паузы
@@ -803,12 +812,15 @@ class TerminalSummer(App):
 
         # TextSpeed
         text_speed = self.settings["text_speed"]
+        self.text_speed = float(text_speed)
         if text_speed == "0.04":
             self.query_one("#btn-speed-slow", Button).variant = "error"
         elif text_speed == "0.025":
             self.query_one("#btn-speed-medium", Button).variant = "warning"
         elif text_speed == "0.01":
             self.query_one("#btn-speed-fast", Button).variant = "success"
+        elif text_speed == "0":
+            self.query_one("#btn-speed-instantly", Button).variant = "primary"
 
         self.scene_cache = {}
         self.preload_scenes()
