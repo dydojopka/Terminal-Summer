@@ -47,6 +47,9 @@ UN = 0
 DV = 0
 US = 0
 
+# Флаги
+PROLOGUE = 0
+
 
 class ScriptParser:
     def __init__(self, filename, app):
@@ -76,7 +79,7 @@ class ScriptParser:
         global SL, UN, DV, US
 
         # Формируем строку статуса поинтов (слева в Header)
-        lp_status = f"[SL:{SL}] [UN:{UN}] [DV:{DV}] [US:{US}]"
+        lp_status = f"[SL:{SL}] [UN:{UN}] [DV:{DV}] [US:{US}] [PROLOGUE:{PROLOGUE}]"
 
         # Отображаем текущую строку сценария (справа)
         # self.app.sub_title = f"Content: {line}"
@@ -97,7 +100,7 @@ class ScriptParser:
             await self.next_line()
         elif line.startswith("menu"):
             await self._handle_choice(line)
-        elif line.startswith("$lp_"):
+        elif line.startswith("$"):
             await self._handle_changeLP(line)
         else:
             await self.next_line()
@@ -285,25 +288,41 @@ class ScriptParser:
 
 
     async def _handle_changeLP(self, line):
-        """Обработка изменения поинтов (lp_)"""
-        global SL, UN, DV, US
+        """Обработка изменения поинтов и флагов"""
+        global SL, UN, DV, US  # Поинты
+        global PROLOGUE # Флаги
 
-        match = re.match(r'\$lp_(sl|un|dv|us)\s*([+-]=)\s*(\d+)', line)
-
-        target, operation, value = match.groups()
-        value = int(value)
-
-        # Прямая ссылка на глобальную переменную
-        var_map = {
+        # Словари для удобства
+        POINT_VARS = {
             "sl": "SL",
             "un": "UN",
             "dv": "DV",
             "us": "US",
         }
-        var_name = var_map[target]
+
+        FLAG_VARS = {
+            "prologue": "PROLOGUE",
+        }
+
+        # Парсим строку
+        match = re.match(r'\$(lp_)?([a-zA-Z0-9_]+)\s*([+\-]?=)\s*(\d+)', line)
+        if not match:
+            #print(f"[WARN] Неверный формат строки LP/F: {line}")
+            return
+
+        prefix, target, operation, value = match.groups()
+        value = int(value)
+
+        # Определяем тип переменной
+        if prefix == "lp_":
+            var_map = POINT_VARS
+        else:
+            var_map = FLAG_VARS
+
+        var_name = var_map.get(target)
 
         # Извлекаем текущее значение
-        current = globals()[var_name]
+        current = globals().get(var_name, 0)
 
         # Применяем операцию
         if operation == "+=":
@@ -312,9 +331,13 @@ class ScriptParser:
             current -= value
         elif operation == "=":
             current = value
+        else:
+            #print(f"[WARN] Неизвестная операция: {operation}")
+            return
 
-        # Обновляем глобальное значение
+        # Обновляем глобальную переменную
         globals()[var_name] = current
-        
+
+        # Продолжаем выполнение
         if not self.backward:
             await self.next_line()
