@@ -310,6 +310,8 @@ class ScriptParser:
             current += value
         elif operation == "-=":
             current -= value
+        elif operation == "=":
+            current = value
 
         # Обновляем глобальное значение
         globals()[var_name] = current
