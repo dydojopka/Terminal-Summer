@@ -266,7 +266,7 @@ class TerminalSummer(App):
             "text_speed": "0.025",
         }
         self.audio_player = AudioPlayer()
-        self.script = ScriptParser("TS/text/day1.txt", self)
+        #self.script = ScriptParser("TS/text/day1.txt", self)
 
     current_scene = ""                       # Текущая сцена (имя файла без расширения)
     scenes_dir = "TS/ASCII/ASCII-large/bg"   # Папка с ASCII-артами
@@ -317,6 +317,10 @@ class TerminalSummer(App):
             self.query_one("#settings-menu").add_class("open-from-pause") # Класс-флаг что настройки открыты из PauseMenu
             self.action_open_settings()
         elif button_id == "btn-menu":             # Кнопка "В главное меню"
+            # Полный сброс игрового интерфейса
+            self.reset_game_view()
+
+            # Переход в главное меню
             self.action_open_menu()
         elif button_id == "btn-exit-pause":       # Кнопка "Выход"
             self.app.exit()
@@ -453,6 +457,13 @@ class TerminalSummer(App):
         elif button_id == "btn-start-game":       # Кнопка "Начать игру"
             # Скрытие главного меню
             self.action_open_menu()
+
+            # Сброс всех глобальных переменных
+            from script_parser import reset_globals
+            reset_globals()
+
+            # Запуск новой игры (всегда пролог)
+            self.script = ScriptParser("TS/text/prologue.txt", self)
 
             # Отображение NovelMenu
             self.query_one("#novel-menu").remove_class("hidden")
@@ -861,6 +872,24 @@ class TerminalSummer(App):
     
         self.query_one("#ascii-content", Static).update(ascii_art)
         self.query_one(GalleryMenuMidBtns).border_title = f'{os.path.splitext(filename)[0]} '
+
+    def reset_game_view(self):
+        """Сбрасывает визуальное состояние игры перед выходом в меню"""
+        # Получаем элементы
+        text_bar = self.query_one("#text-bar", Widget)
+        bg_cg = self.query_one("#bg-cg", Widget)
+
+        # Очистка текста и имени персонажа
+        text_bar.text = ""
+        text_bar.border_title = ""
+        text_bar.refresh()
+
+        # Очистка ASCII-фона
+        bg_cg.update("")
+
+        # Очистка pending_choices
+        if hasattr(self, "pending_choices"):
+            self.pending_choices = None
 
 
 if __name__ == "__main__":
