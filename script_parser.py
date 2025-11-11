@@ -50,6 +50,15 @@ US = 0
 # Флаги
 PROLOGUE = 0
 
+def reset_globals():
+    """Сброс всех очков и флагов"""
+    global SL, UN, DV, US, PROLOGUE
+    SL = 0
+    UN = 0
+    DV = 0
+    US = 0
+    PROLOGUE = 0
+
 
 class ScriptParser:
     def __init__(self, filename, app):
@@ -292,14 +301,14 @@ class ScriptParser:
         global SL, UN, DV, US  # Поинты
         global PROLOGUE # Флаги
 
-        # Словари для удобства
+        # Словарь поинтов
         POINT_VARS = {
             "sl": "SL",
             "un": "UN",
             "dv": "DV",
             "us": "US",
         }
-
+        # Словарь флагов
         FLAG_VARS = {
             "prologue": "PROLOGUE",
         }
