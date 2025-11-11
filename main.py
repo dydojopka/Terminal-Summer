@@ -596,9 +596,12 @@ class TerminalSummer(App):
         settings_menu = self.query_one("#settings-menu")
         main_menu = self.query_one("#main-menu")
         gallery_menu = self.query_one("#gallery-menu")
+        choice_bar = self.query_one("#choice-bar")
+        
 
         if main_menu.has_class("hidden") and gallery_menu.has_class("hidden"): # Если НЕ открыто главное меню
-            if settings_menu.has_class("open-from-menu"):
+            # Ничего не делать если открыто из главного меню ИЛИ НЕ скрыто окно выбора
+            if settings_menu.has_class("open-from-menu") or not choice_bar.has_class("hidden"):
                 pass
 
             elif settings_menu.has_class("hidden"): # Если НЕ открыто меню настроек
