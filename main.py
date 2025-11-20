@@ -357,27 +357,30 @@ class TerminalSummer(App):
             self.query_one("#btn-medium", Button).variant = "default"
             self.query_one("#btn-large", Button).variant = "default"
 
-            # Сохранение в файл настроек
+            # Сохранение в файл настроек и обновление
             self.settings["quality"] = "50"
             self.save_settings()
+            self.update_current_scene_art()
         elif button_id == "btn-medium":           # Кнопка "Средний"
             # Меняем стили кнопок
             self.query_one("#btn-small", Button).variant = "default"
             self.query_one("#btn-medium", Button).variant = "warning"
             self.query_one("#btn-large", Button).variant = "default"
 
-            # Сохранение в файл настроек
+            # Сохранение в файл настроек и обновление
             self.settings["quality"] = "150"
             self.save_settings()
+            self.update_current_scene_art()
         elif button_id == "btn-large":            # Кнопка "ОГРОМНЫЙ"
             # Меняем стили кнопок
             self.query_one("#btn-small", Button).variant = "default"
             self.query_one("#btn-medium", Button).variant = "default"
             self.query_one("#btn-large", Button).variant = "success"
 
-            # Сохранение в файл настроек
+            # Сохранение в файл настроек и обновление
             self.settings["quality"] = "200"
             self.save_settings()
+            self.update_current_scene_art()
 
         # TextSpeed
         elif button_id == "btn-speed-slow":       # Кнопка "Медленно"
@@ -733,28 +736,6 @@ class TerminalSummer(App):
 
 
     # ============ Функции - прочие ============
-    def preload_scenes(self):
-        """Предзагрузка всех сцен в кэш"""
-        try:
-            files = [f for f in os.listdir(self.scenes_dir) if f.endswith(".txt")]
-            for file in files:
-                scene_name = file[:-4]
-                with open(os.path.join(self.scenes_dir, file), "r", encoding="utf-8") as f:
-                    self.scene_cache[scene_name] = f.read()
-        except FileNotFoundError:
-            self.scene_cache = {}
-
-    def load_scene(self, scene_name: str) -> None:
-        """Загрузка ASCII-арт из кэша"""
-        art_content = self.scene_cache.get(scene_name, f"Scene not found: {scene_name}")
-        
-        # Обновление виджета с артом
-        bg_cg = self.query_one("#bg-cg", Static)
-        bg_cg.update(art_content)
-        
-        # Обновление текущей сцены
-        self.current_scene = scene_name
-
     def get_scene_list(self) -> list:
         """Получение списка доступных сцен"""
         try:
@@ -876,6 +857,24 @@ class TerminalSummer(App):
         static.update(Text.from_ansi(ansi_art))
 
         self.query_one(GalleryMenuMidBtns).border_title = os.path.splitext(filename)[0]
+
+    def update_current_scene_art(self):
+        """Перерисовывает текущий арт при смене качества."""
+        if not hasattr(self, "current_scene") or not self.current_scene:
+            return
+        if not hasattr(self, "current_scene_category") or not self.current_scene_category:
+            return
+
+        ansi_art = self.generate_scene_ansi(
+            self.current_scene_category, 
+            self.current_scene
+        )
+
+        try:
+            self.query_one("#bg-cg").update(ansi_art)
+        except Exception:
+            pass
+
 
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
