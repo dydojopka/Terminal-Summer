@@ -4,6 +4,9 @@ import simpleaudio as sa
 import threading
 import asyncio
 
+from PIL import Image
+from pil2ansi import convert_img, Palettes
+
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
 from textual.reactive import reactive
@@ -115,7 +118,7 @@ class GalleryMenuMidBtns(Vertical):
         with HorizontalGroup():
 
             with ScrollableContainer(id="bg-cg-gallery"):
-                yield Static("", id="ascii-content")
+                yield Static("", id="ansi-content")
             
         yield GalleryMenuBottomBtns()
         
@@ -199,7 +202,7 @@ class SettingTextSpeed(Widget):
 class DescriptionSettingTextSpeed(Widget):
     """Описание настройки TextSpeed"""
     def render(self):
-        return "Скорость появления текста в текстовом окне.\n\nМедленный - 0.04\nСредний   - 0.025\nБыстрый   - 0.01\nМоментально - 0"
+        return "Скорость появления текста в текстовом окне.\n\nМедленный   - 0.04\nСредний     - 0.025\nБыстрый     - 0.01\nМоментально - 0"
 
 
 class NovelMenu(Static):
@@ -268,13 +271,10 @@ class TerminalSummer(App):
         self.audio_player = AudioPlayer()
         #self.script = ScriptParser("TS/text/day1.txt", self)
 
-    current_scene = ""                       # Текущая сцена (имя файла без расширения)
-    scenes_dir = "TS/ASCII/ASCII-large/bg"   # Папка с ASCII-артами
-    scene_cache = {}                         # Кэш для предзагруженных сцен
-    text_speed = "0.025"                     # Скорость текста 0.04 | 0.025 | 0.01 | 0
+    text_speed = "0.025" # Скорость текста 0.04 | 0.025 | 0.01 | 0
 
     gallery_mode = "cg"
-    gallery_size = "medium" # small | medium | large
+    gallery_size = "150" # small -50 | medium - 150 | large - 200
     gallery_index = 0
     gallery_images = []
 
@@ -352,49 +352,31 @@ class TerminalSummer(App):
 
         # Quality
         elif button_id == "btn-small":            # Кнопка "маленький"
-            # Изменение размера артов на small
-            self.scenes_dir = "TS/ASCII/ASCII-small/bg"
-            self.scene_cache = {} # Очистка кэша сцен
-            self.preload_scenes() # Предзагрузка всех сцен
-            self.load_scene(self.current_scene)
-
             # Меняем стили кнопок
             self.query_one("#btn-small", Button).variant = "error"
             self.query_one("#btn-medium", Button).variant = "default"
             self.query_one("#btn-large", Button).variant = "default"
 
             # Сохранение в файл настроек
-            self.settings["quality"] = "small"
+            self.settings["quality"] = "50"
             self.save_settings()
         elif button_id == "btn-medium":           # Кнопка "Средний"
-            # Изменение размера артов на medium
-            self.scenes_dir = "TS/ASCII/ASCII-medium/bg"
-            self.scene_cache = {} # Очистка кэша сцен
-            self.preload_scenes() # Предзагрузка всех сцен
-            self.load_scene(self.current_scene)
-            
             # Меняем стили кнопок
             self.query_one("#btn-small", Button).variant = "default"
             self.query_one("#btn-medium", Button).variant = "warning"
             self.query_one("#btn-large", Button).variant = "default"
 
             # Сохранение в файл настроек
-            self.settings["quality"] = "medium"
+            self.settings["quality"] = "150"
             self.save_settings()
         elif button_id == "btn-large":            # Кнопка "ОГРОМНЫЙ"
-            # Изменение размера артов на large
-            self.scenes_dir = "TS/ASCII/ASCII-large/bg"
-            self.scene_cache = {} # Очистка кэша сцен
-            self.preload_scenes() # Предзагрузка всех сцен
-            self.load_scene(self.current_scene)
-
             # Меняем стили кнопок
             self.query_one("#btn-small", Button).variant = "default"
             self.query_one("#btn-medium", Button).variant = "default"
             self.query_one("#btn-large", Button).variant = "success"
 
             # Сохранение в файл настроек
-            self.settings["quality"] = "large"
+            self.settings["quality"] = "200"
             self.save_settings()
 
         # TextSpeed
@@ -525,7 +507,7 @@ class TerminalSummer(App):
             self.query_one("#btn-medium-gallery", Button).variant = "default"
             self.query_one("#btn-large-gallery", Button).variant = "default"
 
-            self.gallery_size = "small"
+            self.gallery_size = "50"
             self.load_gallery_images()
             self.update_gallery_display()
         elif button_id == "btn-medium-gallery":   # Кнопка "Средний"
@@ -534,7 +516,7 @@ class TerminalSummer(App):
             self.query_one("#btn-medium-gallery", Button).variant = "warning"
             self.query_one("#btn-large-gallery", Button).variant = "default"
         
-            self.gallery_size = "medium"
+            self.gallery_size = "150"
             self.load_gallery_images()
             self.update_gallery_display()
         elif button_id == "btn-large-gallery":    # Кнопка "ОГРОМНЫЙ"
@@ -543,7 +525,7 @@ class TerminalSummer(App):
             self.query_one("#btn-medium-gallery", Button).variant = "default"
             self.query_one("#btn-large-gallery", Button).variant = "success"
 
-            self.gallery_size = "large"
+            self.gallery_size = "200"
             self.load_gallery_images()
             self.update_gallery_display()
 
@@ -728,7 +710,7 @@ class TerminalSummer(App):
 
             # Загружаем иллюстрации
             self.gallery_mode = "cg"
-            self.gallery_size = "medium"
+            self.gallery_size = "150"
             self.gallery_index = 0
             self.load_gallery_images()
             self.update_gallery_display()
@@ -782,6 +764,24 @@ class TerminalSummer(App):
         except FileNotFoundError:
             return []
 
+    def generate_scene_ansi(self, category: str, scene_name: str):
+        """Конвертирует JPG сцены в ANSI арт для игрового окна."""
+        img_path = f"ES/{category}/{scene_name}.jpg"
+        if not os.path.exists(img_path):
+            img_path = f"ES/{category}/{scene_name}.png"
+        if not os.path.exists(img_path):
+            return Text.from_markup(f"[Файл не найден: {img_path}]")
+
+        # Берём width прямо из настроек
+        width = int(self.settings.get("quality", 150))
+
+        try:
+            img = Image.open(img_path)
+            ansi_art = convert_img(img, width=width, alpha=True, palette=Palettes.color)
+            return Text.from_ansi(ansi_art)
+        except Exception as e:
+            return Text.from_markup(f"[Ошибка конвертации: {e}]")
+    
     def load_settings(self):
         """Загрузка настроек"""
         if os.path.exists(self.CONFIG_FILE):
@@ -810,13 +810,10 @@ class TerminalSummer(App):
         # Quality
         quality = self.settings["quality"]
         if quality == "small":
-            self.scenes_dir = "TS/ASCII/ASCII-small/bg"
             self.query_one("#btn-small", Button).variant = "error"
-        elif quality == "medium":
-            self.scenes_dir = "TS/ASCII/ASCII-medium/bg"
+        elif quality == "150":
             self.query_one("#btn-medium", Button).variant = "warning"
-        elif quality == "large":
-            self.scenes_dir = "TS/ASCII/ASCII-large/bg"
+        elif quality == "200":
             self.query_one("#btn-large", Button).variant = "success"
 
         # TextSpeed
@@ -831,13 +828,11 @@ class TerminalSummer(App):
         elif text_speed == "0":
             self.query_one("#btn-speed-instantly", Button).variant = "primary"
 
-        self.scene_cache = {}
-        self.preload_scenes()
-        self.load_scene(self.current_scene)
-
     def load_gallery_images(self):
-        """Загружает список файлов из директории по текущим настройкам"""
-        folder = f"TS/ASCII/ASCII-{self.gallery_size}/{self.gallery_mode}"
+        """Загружает список JPG/PNG файлов из папки ES/bg или ES/cg"""
+        # Папка с изображениями
+        folder = f"ES/{self.gallery_mode}"
+
         previous_filename = (
             self.gallery_images[self.gallery_index]
             if self.gallery_images and 0 <= self.gallery_index < len(self.gallery_images)
@@ -845,36 +840,42 @@ class TerminalSummer(App):
         )
 
         if os.path.exists(folder):
+            # Берём JPG/PNG
             self.gallery_images = sorted([
                 f for f in os.listdir(folder)
-                if f.endswith(".txt")
+                if f.lower().endswith((".jpg", ".jpeg", ".png"))
             ])
         else:
             self.gallery_images = []
 
-        # Сохраняем индекс, если арт с тем же именем существует
+        # Восстанавливаем индекс, если файл существует
         if previous_filename in self.gallery_images:
             self.gallery_index = self.gallery_images.index(previous_filename)
         else:
             self.gallery_index = 0
 
     def update_gallery_display(self):
-        """Обновляет ascii-арт и заголовок"""
+        """Конвертация JPG в ANSI арт и обновление отображения"""
         if not self.gallery_images:
             self.query_one("#bg-cg-gallery", Static).update("[Ничего не найдено]")
             self.query_one(GalleryMenuMidBtns).border_title = "Пусто"
             return
-    
+
         filename = self.gallery_images[self.gallery_index]
-        path = f"TS/ASCII/ASCII-{self.gallery_size}/{self.gallery_mode}/{filename}"
+        img = Image.open(f"ES/{self.gallery_mode}/{filename}")
+
+        # gallery_size = "50" / "150" / "200"
+        width = int(self.gallery_size)
+
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                ascii_art = f.read()
+            ansi_art = convert_img(img, width=width, alpha=True, palette=Palettes.color)
         except Exception as e:
-            ascii_art = f"[Ошибка загрузки: {e}]"
-    
-        self.query_one("#ascii-content", Static).update(ascii_art)
-        self.query_one(GalleryMenuMidBtns).border_title = f'{os.path.splitext(filename)[0]} '
+            ansi_art = f"[Ошибка конвертации изображения: {e}]"
+
+        static = self.query_one("#ansi-content", Static)
+        static.update(Text.from_ansi(ansi_art))
+
+        self.query_one(GalleryMenuMidBtns).border_title = os.path.splitext(filename)[0]
 
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""

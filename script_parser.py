@@ -128,31 +128,30 @@ class ScriptParser:
 
 
     async def _handle_scene(self, line):
-        """Обработка строки scene cg/bg/color"""
+        """Обработка строки scene cg/bg"""
         if "scene color" in line:
             if not self.backward:
                 await self.next_line()
             return
-
+    
         match = re.search(r'scene\s+(cg|bg)\s+([a-zA-Z0-9_]+)', line)
         if match:
             category = match.group(1)
             scene_name = match.group(2)
-            quality = self.app.settings.get("quality", "medium")
-
-            scene_path = f"TS/ASCII/ASCII-{quality}/{category}/{scene_name}.txt"
-            try:
-                with open(scene_path, "r", encoding="utf-8") as f:
-                    art_content = f.read()
-            except FileNotFoundError:
-                art_content = f"[Файл не найден: {scene_path}]"
-
+    
+            # === ТУТ НОВЫЙ АНСИ РЕНДЕР ===
+            ansi_art = self.app.generate_scene_ansi(category, scene_name)
+    
             bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
-            bg_cg.update(art_content)
+            bg_cg.update(ansi_art)
+    
+            # сохраняем имя для последующей смены качества
             self.app.current_scene = scene_name
-
+            self.app.current_scene_category = category
+    
             if not self.backward:
                 await self.next_line()
+
 
 
     async def _handle_play(self, line):
