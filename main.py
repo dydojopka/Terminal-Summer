@@ -156,6 +156,7 @@ class SettingsMenu(VerticalScroll):
     def compose(self):
         yield SettingHeader()
         yield SettingQuality()
+        yield SettingASCIIorANSI()
         yield SettingTextSpeed()
         yield Button("Назад ↩", id="btn-close-settings")
 
@@ -175,7 +176,7 @@ class DescriptionSettingHeader(Widget):
 
 class SettingQuality(Widget):
     """Виджет с настройкой размера ASCII-артов"""
-    BORDER_TITLE = "Размер ASCII артов"
+    BORDER_TITLE = "Размер ANSI/ASCII артов"
     def compose(self):
         with Vertical():
             yield Button("маленький\n(50)", variant="default", id="btn-small")
@@ -186,7 +187,21 @@ class SettingQuality(Widget):
 class DescriptionSettingQuality(Widget):
     """Описание настройки Quality"""
     def render(self):
-        return 'Размер ASCII артов необходимо подбирать по размеру окна консоли,\nс сильно большим размером - изображение может не поместиться.\n\nМожете так же попробовать уменьшить размер шрифта самой консоли (Обычно это Ctrl+"+" и Ctrl+"-")'
+        return 'Размер артов необходимо подбирать по размеру окна консоли,\nс сильно большим размером - изображение может не поместиться.\n\nМожете так же попробовать уменьшить размер шрифта самой консоли (Обычно это Ctrl+"+" и Ctrl+"-")'
+
+class SettingASCIIorANSI(Widget):
+    """Виджет с настройкой стиля артов"""
+    BORDER_TITLE = "Стиль артов"
+    def compose(self):
+        with HorizontalGroup():
+            yield Button("ANSI", variant="default", id="btn-ANSI")
+            yield Button("ASCII", variant="default", id="btn-ASCII")
+            yield DescriptionSettingASCIIorANSI()
+
+class DescriptionSettingASCIIorANSI(Widget):
+    """Описание настройки стиля артов"""
+    def render(self):
+        return 'ANSI  - изображение будет цветным\nASCII - изображение будет состоять из символов .,:+*? и другие'
 
 class SettingTextSpeed(Widget):
     """Виджет с настройкой скорости текста"""
@@ -266,6 +281,7 @@ class TerminalSummer(App):
         self.settings = {
             "header": False,
             "quality": "150",
+            "style": "ANSI",
             "text_speed": "0.025",
         }
         self.audio_player = AudioPlayer()
@@ -378,6 +394,26 @@ class TerminalSummer(App):
 
             # Сохранение в файл настроек и обновление
             self.settings["quality"] = "200"
+            self.save_settings()
+            self.update_current_scene_art()
+
+        # ASCIIorANSI
+        elif button_id == "btn-ANSI":             # Кнопка "ANSI"
+            # Меняем стили кнопок
+            self.query_one("#btn-ANSI", Button).variant = "primary"
+            self.query_one("#btn-ASCII", Button).variant = "default"
+
+            # Сохранение в файл настроек и обновляем текущую сцену
+            self.settings["style"] = "ANSI"
+            self.save_settings()
+            self.update_current_scene_art()
+        elif button_id == "btn-ASCII":            # Кнопка "ASCII"
+            # Меняем стили кнопок
+            self.query_one("#btn-ANSI", Button).variant = "default"
+            self.query_one("#btn-ASCII", Button).variant = "primary"
+
+            # Сохранение в файл настроек и обновляем текущую сцену
+            self.settings["style"] = "ASCII"
             self.save_settings()
             self.update_current_scene_art()
 
@@ -748,7 +784,10 @@ class TerminalSummer(App):
 
         try:
             img = Image.open(img_path)
-            ansi_art = convert_img(img, width=width, alpha=True, palette=Palettes.color)
+            if self.settings["style"] == "ANSI":  # Если параметр ANSI
+                ansi_art = convert_img(img, width=width, alpha=True, palette=Palettes.color)
+            elif self.settings["style"]== "ASCII": # Если параметр ASCII
+                ansi_art = convert_img(img, width=width, alpha=True, palette=Palettes.ascii)
             return Text.from_ansi(ansi_art)
         except Exception as e:
             return Text.from_markup(f"[Ошибка конвертации: {e}]")
@@ -780,12 +819,19 @@ class TerminalSummer(App):
 
         # Quality
         quality = self.settings["quality"]
-        if quality == "small":
+        if quality == "50":
             self.query_one("#btn-small", Button).variant = "error"
         elif quality == "150":
             self.query_one("#btn-medium", Button).variant = "warning"
         elif quality == "200":
             self.query_one("#btn-large", Button).variant = "success"
+
+        # ASCIIorANSI
+        style = self.settings["style"]
+        if style == "ANSI":
+            self.query_one("#btn-ANSI", Button).variant = "primary"
+        elif style == "ASCII":
+            self.query_one("#btn-ASCII", Button).variant = "primary"
 
         # TextSpeed
         text_speed = self.settings["text_speed"]
@@ -864,7 +910,6 @@ class TerminalSummer(App):
             self.query_one("#bg-cg").update(ansi_art)
         except Exception:
             pass
-
 
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
