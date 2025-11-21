@@ -289,7 +289,7 @@ class TerminalSummer(App):
     text_speed = "0.025" # Скорость текста 0.04 | 0.025 | 0.01 | 0
 
     gallery_mode = "cg"
-    gallery_size = "150" # small -50 | medium - 150 | large - 200
+    gallery_size = "150" # small - 50 | medium - 150 | large - 200
     gallery_index = 0
     gallery_images = []
 
@@ -784,10 +784,13 @@ class TerminalSummer(App):
 
         try:
             img = Image.open(img_path)
-            if self.settings["style"] == "ANSI":  # Если параметр ANSI
-                ansi_art = convert_img(img, width=width, alpha=True, palette=Palettes.color)
-            elif self.settings["style"]== "ASCII": # Если параметр ASCII
-                ansi_art = convert_img(img, width=width, alpha=True, palette=Palettes.ascii)
+            if self.settings["style"] == "ANSI":    # Если параметр ANSI
+                palette = Palettes.color
+            elif self.settings["style"] == "ASCII": # Если параметр ASCII
+                palette = Palettes.ascii
+            
+            # Конвертация изображения в ANSI/ASCII 
+            ansi_art = convert_img(img, width=width, alpha=True, palette=palette)
             return Text.from_ansi(ansi_art)
         except Exception as e:
             return Text.from_markup(f"[Ошибка конвертации: {e}]")
