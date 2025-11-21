@@ -178,9 +178,9 @@ class SettingQuality(Widget):
     BORDER_TITLE = "Размер ASCII артов"
     def compose(self):
         with Vertical():
-            yield Button("маленький\n(60x20)", variant="default", id="btn-small")
-            yield Button("Средний\n(150x51)", variant="default", id="btn-medium")
-            yield Button("ОГРОМНЫЙ\n(300x101)", variant="default", id="btn-large")
+            yield Button("маленький\n(50)", variant="default", id="btn-small")
+            yield Button("Средний\n(150)", variant="default", id="btn-medium")
+            yield Button("ОГРОМНЫЙ\n(200)", variant="default", id="btn-large")
             yield DescriptionSettingQuality()
 
 class DescriptionSettingQuality(Widget):
@@ -265,11 +265,10 @@ class TerminalSummer(App):
         super().__init__()
         self.settings = {
             "header": False,
-            "quality": "medium",
+            "quality": "150",
             "text_speed": "0.025",
         }
         self.audio_player = AudioPlayer()
-        #self.script = ScriptParser("TS/text/day1.txt", self)
 
     text_speed = "0.025" # Скорость текста 0.04 | 0.025 | 0.01 | 0
 
@@ -736,15 +735,6 @@ class TerminalSummer(App):
 
 
     # ============ Функции - прочие ============
-    def get_scene_list(self) -> list:
-        """Получение списка доступных сцен"""
-        try:
-            files = [f[:-4] for f in os.listdir(self.scenes_dir) 
-                     if f.endswith(".txt")]
-            return sorted(files)
-        except FileNotFoundError:
-            return []
-
     def generate_scene_ansi(self, category: str, scene_name: str):
         """Конвертирует JPG сцены в ANSI арт для игрового окна."""
         img_path = f"ES/{category}/{scene_name}.jpg"

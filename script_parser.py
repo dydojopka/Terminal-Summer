@@ -315,7 +315,6 @@ class ScriptParser:
         # Парсим строку
         match = re.match(r'\$(lp_)?([a-zA-Z0-9_]+)\s*([+\-]?=)\s*(\d+)', line)
         if not match:
-            #print(f"[WARN] Неверный формат строки LP/F: {line}")
             return
 
         prefix, target, operation, value = match.groups()
@@ -340,7 +339,6 @@ class ScriptParser:
         elif operation == "=":
             current = value
         else:
-            #print(f"[WARN] Неизвестная операция: {operation}")
             return
 
         # Обновляем глобальную переменную
