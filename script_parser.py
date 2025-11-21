@@ -49,15 +49,17 @@ US = 0
 
 # Флаги
 PROLOGUE = 0
+D1_KEYS = 0
 
 def reset_globals():
     """Сброс всех очков и флагов"""
-    global SL, UN, DV, US, PROLOGUE
+    global SL, UN, DV, US, PROLOGUE, D1_KEYS
     SL = 0
     UN = 0
     DV = 0
     US = 0
     PROLOGUE = 0
+    D1_KEYS = 0
 
 
 class ScriptParser:
@@ -88,7 +90,7 @@ class ScriptParser:
         global SL, UN, DV, US
 
         # Формируем строку статуса поинтов (слева в Header)
-        lp_status = f"[SL:{SL}] [UN:{UN}] [DV:{DV}] [US:{US}] [PROLOGUE:{PROLOGUE}]"
+        lp_status = f"[SL:{SL}] [UN:{UN}] [DV:{DV}] [US:{US}] [PROLOGUE:{PROLOGUE} [D1_KEYS:{D1_KEYS}]"
 
         # Отображаем текущую строку сценария (справа)
         # self.app.sub_title = f"Content: {line}"
@@ -286,7 +288,7 @@ class ScriptParser:
             if i < len(parts) - 1:
                 await asyncio.sleep(1)
 
-       # Показать кнопку обратно
+        # Показать кнопку обратно
         btn.remove_class("invisible")
 
         # Фокусируем кнопку только если меню выбора НЕ открыто
@@ -310,6 +312,7 @@ class ScriptParser:
         # Словарь флагов
         FLAG_VARS = {
             "prologue": "PROLOGUE",
+            "d1_keys" : "D1_KEYS"
         }
 
         # Парсим строку
