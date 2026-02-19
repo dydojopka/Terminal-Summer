@@ -7,16 +7,47 @@ import asyncio
 from PIL import Image
 from pil2ansi import convert_img, Palettes
 
+from textual import events, errors
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
 from textual.reactive import reactive
+from textual.screen import Screen
 from textual.widgets import Button, Label, Footer, Header, Static, ListView, ListItem
 from textual.widget import Widget
 from textual.binding import Binding
 
+from rich.style import Style
 from rich.text import Text
 
 from script_parser import ScriptParser
+
+class AnsiView(Static):
+    can_focus = False
+    can_focus_children = False
+    ALLOW_SELECT = False
+
+    def on_mount(self) -> None:
+        # ANSI-арт не интерактивен: отключаем лишнюю обработку мыши и ссылок.
+        self.auto_links = False
+        self.disable_messages(events.MouseMove, events.Enter, events.Leave)
+
+
+class PerformanceScreen(Screen):
+    """Экран с облегчённой обработкой мыши для больших ANSI-артов."""
+
+    MOUSE_STYLE_BYPASS_CLASS = "mouse-passive-art"
+
+    def get_style_at(self, x: int, y: int) -> Style:
+        try:
+            widget, _ = self.get_widget_at(x, y)
+        except errors.NoWidget:
+            return Style.null()
+
+        for node in widget.ancestors_with_self:
+            if isinstance(node, Widget) and node.has_class(self.MOUSE_STYLE_BYPASS_CLASS):
+                return Style.null()
+
+        return super().get_style_at(x, y)
 
 
 
@@ -117,8 +148,8 @@ class GalleryMenuMidBtns(Vertical):
     def compose(self):
         with HorizontalGroup():
 
-            with ScrollableContainer(id="bg-cg-gallery"):
-                yield Static("", id="ansi-content")
+            with ScrollableContainer(id="bg-cg-gallery", can_focus=False, can_focus_children=False):
+                yield AnsiView("", id="ansi-content", classes="mouse-passive-art")
             
         yield GalleryMenuBottomBtns()
         
@@ -262,7 +293,7 @@ class NovelWindow(Widget):
     """Окно новеллы(bg-cg + ChoiceBar)"""
     def compose(self):
         yield ChoiceBar(id="choice-bar", classes="hidden")
-        yield Static("", id="bg-cg")
+        yield AnsiView("", id="bg-cg", classes="mouse-passive-art")
         
 class ChoiceBar(Widget):
     """Окно выбора"""
@@ -298,6 +329,9 @@ class TerminalSummer(App):
         # Binding("b", "prev_scene", "Назад", show=True),
         Binding("space", "next_scene", "Продолжить", show=True, id="bind-next"),
     ]
+
+    def get_default_screen(self) -> Screen:
+        return PerformanceScreen(id="_default")
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True, classes="hidden")
