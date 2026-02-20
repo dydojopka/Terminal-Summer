@@ -3,6 +3,7 @@ import json
 import simpleaudio as sa
 import threading
 import asyncio
+import time
 
 from PIL import Image
 from pil2ansi import convert_img, Palettes
@@ -316,6 +317,11 @@ class TerminalSummer(App):
             "text_speed": "0.025",
         }
         self.audio_player = AudioPlayer()
+        self._next_scene_in_progress = False
+        self._space_hold_latched = False
+        self._space_last_event_at = 0.0
+        self._space_release_gap = 0.12
+        self._space_release_task = None
 
     text_speed = "0.025" # Скорость текста 0.04 | 0.025 | 0.01 | 0
 
@@ -351,7 +357,7 @@ class TerminalSummer(App):
 
         # Кнопки в NovelMenu:
         if   button_id == "btn-next":             # Кнопка "Продолжить"
-            await self.action_next_scene()
+            await self._advance_from_button()
         # elif button_id == "btn-back":             # Кнопка "История"
         #    await self.action_prev_scene()
 
@@ -627,7 +633,7 @@ class TerminalSummer(App):
         self.query_one("#bg-cg").remove_class("hidden")
 
         # продолжаем сценарий
-        await self.script.next_line()
+        await self._advance_script_line()
 
 
     # ============ Функции - action_ ============
@@ -637,10 +643,39 @@ class TerminalSummer(App):
     #         await self.script.prev_line() # Парсинг предыдущей строки через script_parser
 
     async def action_next_scene(self) -> None:
-        """Переключение на следующую строку (асинхронно)"""
-        if not self.query_one("#novel-menu").has_class("hidden"): # Если NovelMenu НЕ скрыт
-            await self.script.next_line()  # Асинхронный вызов парсинга след. строки
-            # попробовать добавить переключение флага прямо здесь чтобы избежать бага с работой space
+        """Переключение по bind(space): одно удержание = одно действие."""
+        self._touch_space_event()
+
+        # Пока клавиша "зажата" (по потоку repeat-событий), повторный шаг запрещён.
+        if self._space_hold_latched:
+            return
+
+        self._space_hold_latched = True
+        if not self.can_advance_scene():
+            return
+        await self._advance_script_line()
+
+    async def _advance_from_button(self) -> None:
+        """Переключение по кнопке (без анти-repeat логики клавиатуры)."""
+        if not self.can_advance_scene():
+            return
+        await self._advance_script_line()
+
+    def _touch_space_event(self) -> None:
+        """Обновляет активность пробела и запускает watcher "отпускания"."""
+        self._space_last_event_at = time.monotonic()
+        if self._space_release_task and not self._space_release_task.done():
+            return
+        self._space_release_task = asyncio.create_task(self._watch_space_release())
+
+    async def _watch_space_release(self) -> None:
+        """Сбрасывает latch, когда поток repeat-событий от пробела прекращается."""
+        while self._space_hold_latched:
+            await asyncio.sleep(self._space_release_gap)
+            idle_for = time.monotonic() - self._space_last_event_at
+            if idle_for >= self._space_release_gap:
+                self._space_hold_latched = False
+                break
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
@@ -966,6 +1001,42 @@ class TerminalSummer(App):
         if hasattr(self, "pending_choices"):
             self.pending_choices = None
 
+        # Сброс блокировки перехода по строкам
+        self._next_scene_in_progress = False
+        self._space_hold_latched = False
+        self._space_last_event_at = 0.0
+        if self._space_release_task and not self._space_release_task.done():
+            self._space_release_task.cancel()
+        self._space_release_task = None
+
+    def can_advance_scene(self) -> bool:
+        """Можно ли переходить к следующей строке по пользовательскому вводу."""
+        if self._next_scene_in_progress:
+            return False
+        if not hasattr(self, "script"):
+            return False
+
+        if self.query_one("#novel-menu").has_class("hidden"):
+            return False
+        if not self.query_one("#choice-bar").has_class("hidden"):
+            return False
+        if self.query_one("#btn-next", Button).has_class("invisible"):
+            return False
+
+        return True
+
+    async def _advance_script_line(self) -> None:
+        """Серийный вызов парсера без параллельных переходов."""
+        if self._next_scene_in_progress:
+            return
+        if not hasattr(self, "script"):
+            return
+
+        self._next_scene_in_progress = True
+        try:
+            await self.script.next_line()
+        finally:
+            self._next_scene_in_progress = False
 
 if __name__ == "__main__":
     app = TerminalSummer()
