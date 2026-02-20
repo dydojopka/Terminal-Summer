@@ -87,10 +87,9 @@ class ScriptParser:
 
     async def parse_line(self, line):
         """Считывание строки сценария (асинхронно)"""
-        global SL, UN, DV, US
 
         # Формируем строку статуса поинтов (слева в Header)
-        lp_status = f"[SL:{SL}] [UN:{UN}] [DV:{DV}] [US:{US}] [PROLOGUE:{PROLOGUE} [D1_KEYS:{D1_KEYS}]"
+        lp_status = f"[SL:{SL}] [UN:{UN}] [DV:{DV}] [US:{US}] [PROLOGUE:{PROLOGUE}] [D1_KEYS:{D1_KEYS}]"
 
         # Отображаем текущую строку сценария (справа)
         # self.app.sub_title = f"Content: {line}"
