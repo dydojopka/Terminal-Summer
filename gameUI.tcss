@@ -70,7 +70,7 @@ NovelMenu {
     padding: 0;
 
     # Кнопки "Назад" и "Вперёд" 
-    #btn-back {
+    #btn-log {
         dock: left;
         margin-left: 10;
         margin-top: 1;
@@ -117,6 +117,16 @@ PauseMenu {
         margin: 1;
         width: 30;
     }
+}
+
+# История (тест)
+LogMenu {
+    align: center middle;
+    background: $boost;
+    border: round white;
+    border-title-align: center;
+    border-title-style: b;
+    padding: 1 2;
 }
 
 # Настройки

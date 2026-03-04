@@ -1,6 +1,6 @@
 import os
 import json
-import simpleaudio as sa
+# import simpleaudio as sa
 import threading
 import asyncio
 import time
@@ -13,7 +13,7 @@ from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.widgets import Button, Label, Footer, Header, Static, ListView, ListItem
+from textual.widgets import Button, Label, Footer, Header, Static, ListView, ListItem, Log
 from textual.widget import Widget
 from textual.binding import Binding
 
@@ -32,7 +32,6 @@ class AnsiView(Static):
         self.auto_links = False
         self.disable_messages(events.MouseMove, events.Enter, events.Leave)
 
-
 class PerformanceScreen(Screen):
     """Экран с облегчённой обработкой мыши для больших ANSI-артов."""
 
@@ -50,39 +49,37 @@ class PerformanceScreen(Screen):
 
         return super().get_style_at(x, y)
 
-
-
-class AudioPlayer:
-    """Класс для управления аудио"""
-    def __init__(self):
-        self.current_playback = None
+# class AudioPlayer:
+#     """Класс для управления аудио"""
+#     def __init__(self):
+#         self.current_playback = None
         
-    def play_sound(self, file_path, loop=False):
-        """Воспроизведение звука в отдельном потоке"""
-        def play():
-            try:
-                wave_obj = sa.WaveObject.from_wave_file(file_path)
-                play_obj = wave_obj.play()
+#     def play_sound(self, file_path, loop=False):
+#         """Воспроизведение звука в отдельном потоке"""
+#         def play():
+#             try:
+#                 wave_obj = sa.WaveObject.from_wave_file(file_path)
+#                 play_obj = wave_obj.play()
                 
-                if loop:
-                    play_obj.wait_done()
-                    self.play_sound(file_path, loop=True)
+#                 if loop:
+#                     play_obj.wait_done()
+#                     self.play_sound(file_path, loop=True)
                     
-            except Exception as e:
-                print(f"Ошибка воспроизведения звука: {e}")
+#             except Exception as e:
+#                 print(f"Ошибка воспроизведения звука: {e}")
         
-        # Останавливаем предыдущее воспроизведение
-        if self.current_playback:
-            self.current_playback.stop()
+#         # Останавливаем предыдущее воспроизведение
+#         if self.current_playback:
+#             self.current_playback.stop()
             
-        # Запускаем в отдельном потоке
-        self.current_playback = threading.Thread(target=play, daemon=True)
-        self.current_playback.start()
+#         # Запускаем в отдельном потоке
+#         self.current_playback = threading.Thread(target=play, daemon=True)
+#         self.current_playback.start()
     
-    def stop(self):
-        """Остановка воспроизведения"""
-        if self.current_playback:
-            sa.stop_all()
+#     def stop(self):
+#         """Остановка воспроизведения"""
+#         if self.current_playback:
+#             sa.stop_all()
 
 
 
@@ -255,7 +252,7 @@ class DescriptionSettingTextSpeed(Widget):
 class NovelMenu(Static):
     """Виджет-контейнер для текст бара и кнопок"""
     def compose(self):
-        yield Button("История", id="btn-back")
+        yield Button("История", id="btn-log")
         yield TextBar(id="text-bar")
         yield Button("Продолжить", id="btn-next")
 
@@ -302,6 +299,13 @@ class ChoiceBar(Widget):
         yield ListView()
 
 
+class LogMenu(Log):
+    """Виджет окна истории"""
+    BORDER_TITLE = "История"
+    auto_scroll = True
+
+
+
 class TerminalSummer(App):
     """Основное приложение новеллы"""
     CSS_PATH = "gameUI.tcss"
@@ -316,7 +320,7 @@ class TerminalSummer(App):
             "style": "ANSI",
             "text_speed": "0.025",
         }
-        self.audio_player = AudioPlayer()
+        #self.audio_player = AudioPlayer()
         self._next_scene_in_progress = False
         self._space_hold_latched = False
         self._space_last_event_at = 0.0
@@ -331,9 +335,9 @@ class TerminalSummer(App):
     gallery_images = []
 
     BINDINGS = [
-        Binding("escape", "pause_game", "Пауза", show=True, id="bind-pause"),
-        # Binding("b", "prev_scene", "Назад", show=True),
-        Binding("space", "next_scene", "Продолжить", show=True, id="bind-next"),
+        Binding("escape", "pause_game", "Пауза",      show=True, id="bind-pause"),
+        Binding("h",      "log",        "История",    show=True, id="bind-log"),
+        Binding("space",  "next_scene", "Продолжить", show=True, id="bind-next"),
     ]
 
     def get_default_screen(self) -> Screen:
@@ -342,12 +346,15 @@ class TerminalSummer(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True, classes="hidden")
         yield Footer(classes="hidden")
-        yield MainMenu(id="main-menu")
-        yield NovelWindow(id="novel-window", classes="hidden")
-        yield NovelMenu(id="novel-menu", classes="hidden")
-        yield PauseMenu(id="pause-menu", classes="hidden")
+
+        yield MainMenu(    id="main-menu")
+        yield NovelWindow( id="novel-window",  classes="hidden")
+        yield NovelMenu(   id="novel-menu",    classes="hidden")
+        yield LogMenu(     id="log-menu",      classes="hidden")
+        yield PauseMenu(   id="pause-menu",    classes="hidden")
         yield SettingsMenu(id="settings-menu", classes="hidden")
-        yield GalleryMenu(id="gallery-menu", classes="hidden")
+        yield GalleryMenu( id="gallery-menu",  classes="hidden")
+
 
 
     # ============ Функции - on_ ============
@@ -358,8 +365,9 @@ class TerminalSummer(App):
         # Кнопки в NovelMenu:
         if   button_id == "btn-next":             # Кнопка "Продолжить"
             await self._advance_from_button()
-        # elif button_id == "btn-back":             # Кнопка "История"
-        #    await self.action_prev_scene()
+        # FIXME: Краш при нажатии кнопки "История"
+        elif button_id == "btn-log":              # Кнопка "История"
+            await self.action_log()
 
         # Кнопки в PauseMenu:
         elif button_id == "btn-continue":         # Кнопка "Продолжить"
@@ -637,11 +645,6 @@ class TerminalSummer(App):
 
 
     # ============ Функции - action_ ============
-    # async def action_prev_scene(self) -> None:
-    #     """Переключение на предыдущую сцену"""
-    #     if not self.query_one("#novel-menu").has_class("hidden"): # Если NovelMenu НЕ скрыт
-    #         await self.script.prev_line() # Парсинг предыдущей строки через script_parser
-
     async def action_next_scene(self) -> None:
         """Переключение по bind(space): одно удержание = одно действие."""
         self._touch_space_event()
@@ -655,27 +658,33 @@ class TerminalSummer(App):
             return
         await self._advance_script_line()
 
-    async def _advance_from_button(self) -> None:
-        """Переключение по кнопке (без анти-repeat логики клавиатуры)."""
-        if not self.can_advance_scene():
-            return
-        await self._advance_script_line()
+    def action_log(self) -> None:
+        """Открытие меню истории"""
+        log_menu = self.query_one("#log-menu")
+        novel_menu = self.query_one("#novel-menu")
+        novel_window = self.query_one("#novel-window")
+        main_menu = self.query_one("#main-menu")
+        gallery_menu = self.query_one("#gallery-menu")
+        pause_menu = self.query_one("#pause-menu")
+        
+        # Если НЕ открыто главное меню, галлерея или пауза
+        if main_menu.has_class("hidden") and gallery_menu.has_class("hidden") and pause_menu.has_class("hidden"):
+            # Открыть лог если меню новеллы НЕ скрыто
+            if not novel_menu.has_class("hidden"):
+                # Скрыть bc, cg, text и кнопки
+                novel_menu.add_class("hidden")
+                novel_window.add_class("hidden")
 
-    def _touch_space_event(self) -> None:
-        """Обновляет активность пробела и запускает watcher "отпускания"."""
-        self._space_last_event_at = time.monotonic()
-        if self._space_release_task and not self._space_release_task.done():
-            return
-        self._space_release_task = asyncio.create_task(self._watch_space_release())
+                # Показ меню истории
+                log_menu.remove_class("hidden")
+            # Иначе закрыть лог
+            else:                                  
+                # Cкрытие меню истории
+                log_menu.add_class("hidden")
 
-    async def _watch_space_release(self) -> None:
-        """Сбрасывает latch, когда поток repeat-событий от пробела прекращается."""
-        while self._space_hold_latched:
-            await asyncio.sleep(self._space_release_gap)
-            idle_for = time.monotonic() - self._space_last_event_at
-            if idle_for >= self._space_release_gap:
-                self._space_hold_latched = False
-                break
+                # Показ bc, cg, text и кнопок
+                novel_menu.remove_class("hidden")
+                novel_window.remove_class("hidden")
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
@@ -686,12 +695,13 @@ class TerminalSummer(App):
         main_menu = self.query_one("#main-menu")
         gallery_menu = self.query_one("#gallery-menu")
         choice_bar = self.query_one("#choice-bar")
+        log_menu = self.query_one("#log-menu")
         
 
         if main_menu.has_class("hidden") and gallery_menu.has_class("hidden"): # Если НЕ открыто главное меню
-            # Ничего не делать если открыто из главного меню ИЛИ НЕ скрыто окно выбора
-            if settings_menu.has_class("open-from-menu") or not choice_bar.has_class("hidden"):
-                pass
+            # Если открыто из главного меню ИЛИ НЕ скрыто окно выбора И окно истории
+            if settings_menu.has_class("open-from-menu") or not (choice_bar.has_class("hidden") and log_menu.has_class("hidden")):
+                pass # Пропуск
 
             elif settings_menu.has_class("hidden"): # Если НЕ открыто меню настроек
                 # Переключение видимости элементов
@@ -833,10 +843,6 @@ class TerminalSummer(App):
             # Показываем главное меню
             self.action_open_menu()
             #main_menu.remove_class("hidden")
-
-    # def action_toggle_dark(self) -> None:
-    #     """Смена тёмного/светлого режима"""
-    #     self.theme = "textual-dark" if self.theme == "textual-light" else "textual-light"
 
 
     # ============ Функции - прочие ============
@@ -1024,6 +1030,28 @@ class TerminalSummer(App):
             return False
 
         return True
+    
+    async def _advance_from_button(self) -> None:
+        """Переключение по кнопке (без анти-repeat логики клавиатуры)."""
+        if not self.can_advance_scene():
+            return
+        await self._advance_script_line()
+
+    def _touch_space_event(self) -> None:
+        """Обновляет активность пробела и запускает watcher "отпускания"."""
+        self._space_last_event_at = time.monotonic()
+        if self._space_release_task and not self._space_release_task.done():
+            return
+        self._space_release_task = asyncio.create_task(self._watch_space_release())
+
+    async def _watch_space_release(self) -> None:
+        """Сбрасывает latch, когда поток repeat-событий от пробела прекращается."""
+        while self._space_hold_latched:
+            await asyncio.sleep(self._space_release_gap)
+            idle_for = time.monotonic() - self._space_last_event_at
+            if idle_for >= self._space_release_gap:
+                self._space_hold_latched = False
+                break
 
     async def _advance_script_line(self) -> None:
         """Серийный вызов парсера без параллельных переходов."""
