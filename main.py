@@ -365,9 +365,9 @@ class TerminalSummer(App):
         # Кнопки в NovelMenu:
         if   button_id == "btn-next":             # Кнопка "Продолжить"
             await self._advance_from_button()
-        # FIXME: Краш при нажатии кнопки "История"
+        # TODO: Добавить закрытие через escape
         elif button_id == "btn-log":              # Кнопка "История"
-            await self.action_log()
+            self.action_log()
 
         # Кнопки в PauseMenu:
         elif button_id == "btn-continue":         # Кнопка "Продолжить"
