@@ -3,6 +3,7 @@ import re
 
 from textual.widget import Widget
 from textual.widgets import ListView, ListItem, Label
+from textual import _time
 
 # Словарь имён
 DISPLAY_NAMES = {
@@ -123,7 +124,15 @@ class ScriptParser:
         if match:
             seconds = int(match.group(2))
             if not self.backward:
-                await asyncio.sleep(seconds)
+                self.app._input_blocked = True
+                self.app._input_blocked_since = _time.get_time()
+                self.app._input_blocked_until = self.app._input_blocked_since
+                self.app._space_require_idle = True
+                try:
+                    await asyncio.sleep(seconds)
+                finally:
+                    self.app._input_blocked = False
+                    self.app._input_blocked_until = _time.get_time()
                 await self.next_line()
             # else: ничего не делаем — просто пропускаем паузу
 
@@ -140,7 +149,7 @@ class ScriptParser:
             category = match.group(1)
             scene_name = match.group(2)
     
-            # === ТУТ НОВЫЙ АНСИ РЕНДЕР ===
+
             ansi_art = self.app.generate_scene_ansi(category, scene_name)
     
             bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
@@ -247,53 +256,61 @@ class ScriptParser:
 
         # Скрываем кнопку на время показа текста
         btn.add_class("invisible")
+        self.app._text_animating = True
+        self.app._text_animating_since = _time.get_time()
+        self.app._text_animating_until = self.app._text_animating_since
+        self.app._space_require_idle = True
 
-        match = re.match(r'([a-zA-Z0-9_-]+)\s+"(.+)"', line)
-        if match:
-            raw_speaker, text = match.groups()
-            raw_speaker = raw_speaker.strip()
-            text = text.strip()
+        try:
+            match = re.match(r'([a-zA-Z0-9_-]+)\s+"(.+)"', line)
+            if match:
+                raw_speaker, text = match.groups()
+                raw_speaker = raw_speaker.strip()
+                text = text.strip()
 
-            if raw_speaker == "th":
-                speaker = ""
-                text = f"~ {text} ~"
-                id_to_set = None
+                if raw_speaker == "th":
+                    speaker = ""
+                    text = f"~ {text} ~"
+                    id_to_set = None
+                else:
+                    speaker = DISPLAY_NAMES.get(raw_speaker, raw_speaker)
+                    id_to_set = raw_speaker
             else:
-                speaker = DISPLAY_NAMES.get(raw_speaker, raw_speaker)
-                id_to_set = raw_speaker
-        else:
-            speaker = ""
-            text = line.strip().strip('"')
-            id_to_set = None
+                speaker = ""
+                text = line.strip().strip('"')
+                id_to_set = None
 
-        widget.remove_class(*[cls for cls in widget.classes if cls != "text-bar"])
-        if id_to_set:
-            widget.add_class(id_to_set)
+            widget.remove_class(*[cls for cls in widget.classes if cls != "text-bar"])
+            if id_to_set:
+                widget.add_class(id_to_set)
 
-        widget.border_title = speaker if speaker else ""
+            widget.border_title = speaker if speaker else ""
 
-        # Конвертируем <i>, <b> в rich-разметку
-        text = re.sub(r'<i>(.*?)</i>', r'[italic]\1[/italic]', text)
-        text = re.sub(r'<b>(.*?)</b>', r'[bold]\1[/bold]', text)
+            # Конвертируем <i>, <b> в rich-разметку
+            text = re.sub(r'<i>(.*?)</i>', r'[italic]\1[/italic]', text)
+            text = re.sub(r'<b>(.*?)</b>', r'[bold]\1[/bold]', text)
 
-        # Разбиваем текст на части по <w> с паузами
-        parts = text.split("<w>")
-        for i, part in enumerate(parts):
-            part = part.strip()
-            if part:
-                prefix = "" if i == 0 else " "
-                await widget.animate_text(prefix + part, append=(i > 0))
+            # Разбиваем текст на части по <w> с паузами
+            parts = text.split("<w>")
+            for i, part in enumerate(parts):
+                part = part.strip()
+                if part:
+                    prefix = "" if i == 0 else " "
+                    await widget.animate_text(prefix + part, append=(i > 0))
 
-            if i < len(parts) - 1:
-                await asyncio.sleep(1)
+                if i < len(parts) - 1:
+                    await asyncio.sleep(1)
+        finally:
+            self.app._text_animating = False
+            self.app._text_animating_until = _time.get_time()
 
-        # Показать кнопку обратно
-        btn.remove_class("invisible")
+            # Показать кнопку обратно
+            btn.remove_class("invisible")
 
-        # Фокусируем кнопку только если меню выбора НЕ открыто
-        choice_bar = self.app.query_one("#choice-bar")
-        if choice_bar.has_class("hidden"):
-           btn.focus()
+            # Фокусируем кнопку только если меню выбора НЕ открыто
+            choice_bar = self.app.query_one("#choice-bar")
+            if choice_bar.has_class("hidden"):
+                btn.focus()
 
 
     async def _handle_changeLP(self, line):

@@ -3,12 +3,11 @@ import json
 # import simpleaudio as sa
 import threading
 import asyncio
-import time
 
 from PIL import Image
 from pil2ansi import convert_img, Palettes
 
-from textual import events, errors
+from textual import events, errors, _time
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
 from textual.reactive import reactive
@@ -322,10 +321,15 @@ class TerminalSummer(App):
         }
         #self.audio_player = AudioPlayer()
         self._next_scene_in_progress = False
-        self._space_hold_latched = False
+        self._text_animating = False
+        self._text_animating_since = None
+        self._text_animating_until = 0.0
+        self._input_blocked = False
+        self._input_blocked_since = None
+        self._input_blocked_until = 0.0
         self._space_last_event_at = 0.0
-        self._space_release_gap = 0.12
-        self._space_release_task = None
+        self._space_idle_gap = 0.12
+        self._space_require_idle = False
 
     text_speed = "0.025" # Скорость текста 0.04 | 0.025 | 0.01 | 0
 
@@ -337,7 +341,6 @@ class TerminalSummer(App):
     BINDINGS = [
         Binding("escape", "pause_game", "Пауза",      show=True, id="bind-pause"),
         Binding("h",      "log",        "История",    show=True, id="bind-log"),
-        Binding("space",  "next_scene", "Продолжить", show=True, id="bind-next"),
     ]
 
     def get_default_screen(self) -> Screen:
@@ -625,7 +628,7 @@ class TerminalSummer(App):
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
-        choice = event.item.query_one(Label).renderable
+        choice = event.item.query_one(Label)
 
         if hasattr(self, "pending_choices") and self.pending_choices:
             block = self.pending_choices.get(str(choice))
@@ -643,17 +646,25 @@ class TerminalSummer(App):
         # продолжаем сценарий
         await self._advance_script_line()
 
+    async def key_space(self, event: events.Key) -> None:
+        """Обработка пробела как перехода с фильтрацией ввода во время анимации."""
+        now = getattr(event, "time", None) or _time.get_time()
+        idle_for = now - self._space_last_event_at
+        self._space_last_event_at = now
+
+        if self._space_require_idle:
+            if idle_for < self._space_idle_gap:
+                return
+            self._space_require_idle = False
+
+        if self._is_space_event_during_animation(event):
+            return
+        await self.action_next_scene()
+
 
     # ============ Функции - action_ ============
     async def action_next_scene(self) -> None:
-        """Переключение по bind(space): одно удержание = одно действие."""
-        self._touch_space_event()
-
-        # Пока клавиша "зажата" (по потоку repeat-событий), повторный шаг запрещён.
-        if self._space_hold_latched:
-            return
-
-        self._space_hold_latched = True
+        """Переключение по bind(space)."""
         if not self.can_advance_scene():
             return
         await self._advance_script_line()
@@ -1009,15 +1020,20 @@ class TerminalSummer(App):
 
         # Сброс блокировки перехода по строкам
         self._next_scene_in_progress = False
-        self._space_hold_latched = False
+        self._text_animating = False
+        self._text_animating_since = None
+        self._text_animating_until = 0.0
+        self._input_blocked = False
+        self._input_blocked_since = None
+        self._input_blocked_until = 0.0
         self._space_last_event_at = 0.0
-        if self._space_release_task and not self._space_release_task.done():
-            self._space_release_task.cancel()
-        self._space_release_task = None
+        self._space_require_idle = False
 
     def can_advance_scene(self) -> bool:
         """Можно ли переходить к следующей строке по пользовательскому вводу."""
         if self._next_scene_in_progress:
+            return False
+        if self._text_animating:
             return False
         if not hasattr(self, "script"):
             return False
@@ -1037,21 +1053,28 @@ class TerminalSummer(App):
             return
         await self._advance_script_line()
 
-    def _touch_space_event(self) -> None:
-        """Обновляет активность пробела и запускает watcher "отпускания"."""
-        self._space_last_event_at = time.monotonic()
-        if self._space_release_task and not self._space_release_task.done():
-            return
-        self._space_release_task = asyncio.create_task(self._watch_space_release())
+    def _is_space_event_during_animation(self, event: events.Key) -> bool:
+        """True если событие пробела было сгенерировано во время блокировки ввода."""
+        if self._text_animating or self._input_blocked:
+            return True
 
-    async def _watch_space_release(self) -> None:
-        """Сбрасывает latch, когда поток repeat-событий от пробела прекращается."""
-        while self._space_hold_latched:
-            await asyncio.sleep(self._space_release_gap)
-            idle_for = time.monotonic() - self._space_last_event_at
-            if idle_for >= self._space_release_gap:
-                self._space_hold_latched = False
-                break
+        event_time = getattr(event, "time", None)
+        if event_time is None:
+            return False
+
+        if (
+            self._text_animating_since is not None
+            and self._text_animating_since <= event_time <= self._text_animating_until
+        ):
+            return True
+
+        if (
+            self._input_blocked_since is not None
+            and self._input_blocked_since <= event_time <= self._input_blocked_until
+        ):
+            return True
+
+        return False
 
     async def _advance_script_line(self) -> None:
         """Серийный вызов парсера без параллельных переходов."""
