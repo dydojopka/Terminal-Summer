@@ -674,28 +674,25 @@ class TerminalSummer(App):
         log_menu = self.query_one("#log-menu")
         novel_menu = self.query_one("#novel-menu")
         novel_window = self.query_one("#novel-window")
-        main_menu = self.query_one("#main-menu")
-        gallery_menu = self.query_one("#gallery-menu")
-        pause_menu = self.query_one("#pause-menu")
-        
-        # Если НЕ открыто главное меню, галлерея или пауза
-        if main_menu.has_class("hidden") and gallery_menu.has_class("hidden") and pause_menu.has_class("hidden"):
-            # Открыть лог если меню новеллы НЕ скрыто
-            if not novel_menu.has_class("hidden"):
-                # Скрыть bc, cg, text и кнопки
-                novel_menu.add_class("hidden")
-                novel_window.add_class("hidden")
 
-                # Показ меню истории
-                log_menu.remove_class("hidden")
-            # Иначе закрыть лог
-            else:                                  
-                # Cкрытие меню истории
-                log_menu.add_class("hidden")
+        # Открываем историю только из novel_menu, закрытие доступно всегда
+        if log_menu.has_class("hidden"):
+            if novel_menu.has_class("hidden"):
+                return
 
-                # Показ bc, cg, text и кнопок
-                novel_menu.remove_class("hidden")
-                novel_window.remove_class("hidden")
+            # Скрыть bc, cg, text и кнопки
+            novel_menu.add_class("hidden")
+            novel_window.add_class("hidden")
+
+            # Показ меню истории
+            log_menu.remove_class("hidden")
+        else:
+            # Cкрытие меню истории
+            log_menu.add_class("hidden")
+
+            # Показ bc, cg, text и кнопок
+            novel_menu.remove_class("hidden")
+            novel_window.remove_class("hidden")
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
