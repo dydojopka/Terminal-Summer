@@ -337,7 +337,7 @@ class ChoiceBar(Widget):
 
 class LogMenu(Log):
     """Виджет окна истории"""
-    BORDER_TITLE = "История"
+    # BORDER_TITLE = "История"
     auto_scroll = True
 
     def __init__(self, *args, **kwargs):

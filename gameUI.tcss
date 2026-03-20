@@ -33,6 +33,11 @@ TextBar.message{border-title-color: rgb(192,192,192)}     # Сообщение
 TextBar.odn{border-title-color: rgb(192,192,192)}         # Одногруппник
 TextBar.all{border-title-color: rgb(227,58,58)}           # Пионеры
 
+# Центрирование всего и вся
+Screen {
+    align: center middle;
+}
+
 # Окно новеллы
 NovelWindow {
     align: center middle;
@@ -119,15 +124,18 @@ PauseMenu {
     }
 }
 
-# История (тест)
+# История
 LogMenu {
-    align: center middle;
     background: $boost;
-    border: round white;
+    border: dashed gray;
     border-title-align: center;
     border-title-style: b;
     padding: 1 2;
+
+    width: 95%;
+    height: 95%;
 }
+
 
 # Настройки
 SettingsMenu {
