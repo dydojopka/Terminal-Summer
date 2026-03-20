@@ -716,10 +716,11 @@ class TerminalSummer(App):
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
-        choice = event.item.query_one(Label)
+        choice_label = event.item.query_one(Label)
+        choice_text = str(choice_label.content).strip()
 
         if hasattr(self, "pending_choices") and self.pending_choices:
-            block = self.pending_choices.get(str(choice))
+            block = self.pending_choices.get(choice_text)
             if block:
                 # вставляем строки выбранного блока в сценарий
                 self.script.lines[self.script.index:self.script.index] = block
