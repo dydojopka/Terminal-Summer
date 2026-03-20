@@ -249,6 +249,14 @@ class ScriptParser:
             # (есть визуальный баг при последующих появлениях окна, но бля, как же мне похуй)
 
 
+    @staticmethod
+    def _normalize_log_text(text: str) -> str:
+        """Подготовка текста для окна истории."""
+        text = " ".join(part.strip() for part in text.split("<w>") if part.strip())
+        text = re.sub(r"</?(i|b)>", "", text)
+        return text.strip()
+
+
     async def _handle_dialogue(self, line):
         """Обработка строки диалога с анимацией текста"""
         widget = self.app.query_one("#text-bar", expect_type=Widget)
@@ -279,6 +287,12 @@ class ScriptParser:
                 speaker = ""
                 text = line.strip().strip('"')
                 id_to_set = None
+
+            self.app.add_log_entry(
+                text=self._normalize_log_text(text),
+                speaker=speaker,
+                speaker_id=id_to_set,
+            )
 
             widget.remove_class(*[cls for cls in widget.classes if cls != "text-bar"])
             if id_to_set:

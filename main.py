@@ -17,9 +17,46 @@ from textual.widget import Widget
 from textual.binding import Binding
 
 from rich.style import Style
+from rich.segment import Segment
 from rich.text import Text
 
 from script_parser import ScriptParser
+
+SPEAKER_NAME_COLORS = {
+    "dreamgirl": "rgb(192,192,192)",
+    "sl": "rgb(255,210,0)",
+    "slp": "rgb(255,210,0)",
+    "slg": "rgb(255,210,0)",
+    "sa": "rgb(255,210,0)",
+    "un": "rgb(185,86,255)",
+    "unp": "rgb(185,86,255)",
+    "dv": "rgb(255,170,0)",
+    "dvp": "rgb(255,170,0)",
+    "dvg": "rgb(255,170,0)",
+    "el": "rgb(255,255,0)",
+    "elp": "rgb(255,255,0)",
+    "ro": "rgb(255,255,0)",
+    "us": "rgb(255,50,0)",
+    "usp": "rgb(255,50,0)",
+    "usg": "rgb(255,50,0)",
+    "mt": "rgb(0,234,50)",
+    "mtp": "rgb(0,234,50)",
+    "mt_voice": "rgb(0,234,50)",
+    "cs": "rgb(165,165,255)",
+    "mz": "rgb(114,160,255)",
+    "mi": "rgb(0,252,255)",
+    "ma": "rgb(0,252,255)",
+    "uv": "rgb(78,255,0)",
+    "uvp": "rgb(78,255,0)",
+    "sh": "rgb(255,242,38)",
+    "pi": "rgb(230,0,0)",
+    "me": "rgb(225,221,125)",
+    "FIXME_voice": "rgb(192,192,192)",
+    "bush": "rgb(192,192,192)",
+    "message": "rgb(192,192,192)",
+    "odn": "rgb(192,192,192)",
+    "all": "rgb(227,58,58)",
+}
 
 class AnsiView(Static):
     can_focus = False
@@ -303,6 +340,39 @@ class LogMenu(Log):
     BORDER_TITLE = "История"
     auto_scroll = True
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._speaker_line_styles: dict[int, Style] = {}
+
+    def add_dialogue_entry(
+        self,
+        text: str,
+        speaker: str = "",
+        speaker_id: str | None = None,
+    ) -> None:
+        if speaker:
+            self.write_line(speaker)
+            line_index = self.line_count - 1
+            color = SPEAKER_NAME_COLORS.get(speaker_id or "")
+            if color:
+                self._speaker_line_styles[line_index] = Style.parse(color)
+
+        self.write_line(f" {text}")
+
+    def clear(self):
+        self._speaker_line_styles.clear()
+        return super().clear()
+
+    def _render_line(self, y: int, scroll_x: int, width: int):
+        strip = super()._render_line(y, scroll_x, width)
+        style = self._speaker_line_styles.get(y)
+        if style is not None:
+            return strip.__class__(
+                Segment.apply_style(strip._segments, post_style=style),
+                strip.cell_length,
+            )
+        return strip
+
 
 
 class TerminalSummer(App):
@@ -528,13 +598,14 @@ class TerminalSummer(App):
         elif button_id == "btn-start-game":       # Кнопка "Начать игру"
             # Скрытие главного меню
             self.action_open_menu()
+            self.clear_log()
 
             # Сброс всех глобальных переменных
             from script_parser import reset_globals
             reset_globals()
 
             # Запуск новой игры (всегда пролог)
-            self.script = ScriptParser("TS/text/prologue.txt", self)
+            self.script = ScriptParser("TS/text/tmp.txt", self)
 
             # Отображение NovelMenu
             self.query_one("#novel-menu").remove_class("hidden")
@@ -625,6 +696,23 @@ class TerminalSummer(App):
         """Загрузка настроек при запуске"""
         self.load_settings()
         self.apply_settings()
+
+    def add_log_entry(
+        self,
+        text: str,
+        speaker: str = "",
+        speaker_id: str | None = None,
+    ) -> None:
+        if not text:
+            return
+        self.query_one("#log-menu", LogMenu).add_dialogue_entry(
+            text=text,
+            speaker=speaker,
+            speaker_id=speaker_id,
+        )
+
+    def clear_log(self) -> None:
+        self.query_one("#log-menu", LogMenu).clear()
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
@@ -1014,6 +1102,9 @@ class TerminalSummer(App):
         # Очистка pending_choices
         if hasattr(self, "pending_choices"):
             self.pending_choices = None
+
+        # Очистка истории диалогов
+        self.clear_log()
 
         # Сброс блокировки перехода по строкам
         self._next_scene_in_progress = False
