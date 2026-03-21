@@ -1,6 +1,5 @@
 import os
 import json
-# import simpleaudio as sa
 import threading
 import asyncio
 
@@ -22,40 +21,42 @@ from rich.text import Text
 
 from script_parser import ScriptParser
 
+
+# Цвета персонажей в истории
 SPEAKER_NAME_COLORS = {
-    "dreamgirl": "rgb(192,192,192)",
-    "sl": "rgb(255,210,0)",
-    "slp": "rgb(255,210,0)",
-    "slg": "rgb(255,210,0)",
-    "sa": "rgb(255,210,0)",
-    "un": "rgb(185,86,255)",
-    "unp": "rgb(185,86,255)",
-    "dv": "rgb(255,170,0)",
-    "dvp": "rgb(255,170,0)",
-    "dvg": "rgb(255,170,0)",
-    "el": "rgb(255,255,0)",
-    "elp": "rgb(255,255,0)",
-    "ro": "rgb(255,255,0)",
-    "us": "rgb(255,50,0)",
-    "usp": "rgb(255,50,0)",
-    "usg": "rgb(255,50,0)",
-    "mt": "rgb(0,234,50)",
-    "mtp": "rgb(0,234,50)",
-    "mt_voice": "rgb(0,234,50)",
-    "cs": "rgb(165,165,255)",
-    "mz": "rgb(114,160,255)",
-    "mi": "rgb(0,252,255)",
-    "ma": "rgb(0,252,255)",
-    "uv": "rgb(78,255,0)",
-    "uvp": "rgb(78,255,0)",
-    "sh": "rgb(255,242,38)",
-    "pi": "rgb(230,0,0)",
-    "me": "rgb(225,221,125)",
+    "dreamgirl":   "rgb(192,192,192)",
+    "sl":          "rgb(255,210,0)",
+    "slp":         "rgb(255,210,0)",
+    "slg":         "rgb(255,210,0)",
+    "sa":          "rgb(255,210,0)",
+    "un":          "rgb(185,86,255)",
+    "unp":         "rgb(185,86,255)",
+    "dv":          "rgb(255,170,0)",
+    "dvp":         "rgb(255,170,0)",
+    "dvg":         "rgb(255,170,0)",
+    "el":          "rgb(255,255,0)",
+    "elp":         "rgb(255,255,0)",
+    "ro":          "rgb(255,255,0)",
+    "us":          "rgb(255,50,0)",
+    "usp":         "rgb(255,50,0)",
+    "usg":         "rgb(255,50,0)",
+    "mt":          "rgb(0,234,50)",
+    "mtp":         "rgb(0,234,50)",
+    "mt_voice":    "rgb(0,234,50)",
+    "cs":          "rgb(165,165,255)",
+    "mz":          "rgb(114,160,255)",
+    "mi":          "rgb(0,252,255)",
+    "ma":          "rgb(0,252,255)",
+    "uv":          "rgb(78,255,0)",
+    "uvp":         "rgb(78,255,0)",
+    "sh":          "rgb(255,242,38)",
+    "pi":          "rgb(230,0,0)",
+    "me":          "rgb(225,221,125)",
     "FIXME_voice": "rgb(192,192,192)",
-    "bush": "rgb(192,192,192)",
-    "message": "rgb(192,192,192)",
-    "odn": "rgb(192,192,192)",
-    "all": "rgb(227,58,58)",
+    "bush":        "rgb(192,192,192)",
+    "message":     "rgb(192,192,192)",
+    "odn":         "rgb(192,192,192)",
+    "all":         "rgb(227,58,58)",
 }
 
 class AnsiView(Static):
@@ -84,39 +85,6 @@ class PerformanceScreen(Screen):
                 return Style.null()
 
         return super().get_style_at(x, y)
-
-# class AudioPlayer:
-#     """Класс для управления аудио"""
-#     def __init__(self):
-#         self.current_playback = None
-        
-#     def play_sound(self, file_path, loop=False):
-#         """Воспроизведение звука в отдельном потоке"""
-#         def play():
-#             try:
-#                 wave_obj = sa.WaveObject.from_wave_file(file_path)
-#                 play_obj = wave_obj.play()
-                
-#                 if loop:
-#                     play_obj.wait_done()
-#                     self.play_sound(file_path, loop=True)
-                    
-#             except Exception as e:
-#                 print(f"Ошибка воспроизведения звука: {e}")
-        
-#         # Останавливаем предыдущее воспроизведение
-#         if self.current_playback:
-#             self.current_playback.stop()
-            
-#         # Запускаем в отдельном потоке
-#         self.current_playback = threading.Thread(target=play, daemon=True)
-#         self.current_playback.start()
-    
-#     def stop(self):
-#         """Остановка воспроизведения"""
-#         if self.current_playback:
-#             sa.stop_all()
-
 
 
 class MainMenu(Static):
@@ -306,8 +274,8 @@ class TextBar(Widget):
     async def animate_text(self, new_text, speed=None, append=False):
         """Анимация текста, символ за символом
 
-        Если append=True → добавляет текст к текущему,
-        Если append=False → начинает с нуля"""
+        Если append=True  - добавляет текст к текущему,
+        Если append=False - начинает с нуля"""
 
         speed = float(self.app.text_speed)
         
@@ -696,23 +664,6 @@ class TerminalSummer(App):
         """Загрузка настроек при запуске"""
         self.load_settings()
         self.apply_settings()
-
-    def add_log_entry(
-        self,
-        text: str,
-        speaker: str = "",
-        speaker_id: str | None = None,
-    ) -> None:
-        if not text:
-            return
-        self.query_one("#log-menu", LogMenu).add_dialogue_entry(
-            text=text,
-            speaker=speaker,
-            speaker_id=speaker_id,
-        )
-
-    def clear_log(self) -> None:
-        self.query_one("#log-menu", LogMenu).clear()
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
@@ -1177,6 +1128,24 @@ class TerminalSummer(App):
             await self.script.next_line()
         finally:
             self._next_scene_in_progress = False
+
+    def add_log_entry(
+        self,
+        text: str,
+        speaker: str = "",
+        speaker_id: str | None = None,
+    ) -> None:
+        if not text:
+            return
+        self.query_one("#log-menu", LogMenu).add_dialogue_entry(
+            text=text,
+            speaker=speaker,
+            speaker_id=speaker_id,
+        )
+
+    def clear_log(self) -> None:
+        self.query_one("#log-menu", LogMenu).clear()
+
 
 if __name__ == "__main__":
     app = TerminalSummer()
