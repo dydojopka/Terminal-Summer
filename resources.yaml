@@ -1,0 +1,2548 @@
+characters:
+    owl_1: 
+      poses: 
+        mid: 
+          ~body:
+            default: owl
+            parts:
+              owl: sprites/owl_1.png
+
+    prologue_filter:
+      poses: 
+        mid: 
+          ~body:
+            default: prologue_3
+            parts:
+              prologue_3: anim/prologue_3.png
+
+    ach:
+      poses:
+        main_good:
+          body: ach/main_good.png
+        main_bad:
+          body: ach/main_bad.png
+        dv_good:
+          body: ach/dv_good.png
+        dv_bad:
+          body: ach/dv_bad.png
+        sl_good:
+          body: ach/sl_good.png
+        sl_bad:
+          body: ach/sl_bad.png
+        un_good:
+          body: ach/un_good.png
+        un_bad:
+          body: ach/un_bad.png
+        us_good:
+          body: ach/us_good.png
+        us_bad:
+          body: ach/us_bad.png
+        uv_city:
+          body: ach/uv_city.png
+        uv_good:
+          body: ach/uv_good.png
+        void:
+          body: ach/void.png
+        mi:
+          mi: ach/mi.png
+    zapiska:
+      poses: 
+        mid: 
+          ~body:
+            default: zapiska1
+            parts:
+              zapiska1: anim/zapiska.png
+
+    op_dv:
+      poses: 
+        mid: 
+          ~body:
+            default: dv
+            parts:
+              dv: op/dv.png
+
+    op_mi:
+      poses: 
+        mid: 
+          ~body:
+            default: mi
+            parts:
+              mi: op/mi.png
+
+    op_un:
+      poses: 
+        mid: 
+          ~body:
+            default: un
+            parts:
+              un: op/un.png
+
+    op_us:
+      poses: 
+        mid: 
+          ~body:
+            default: us
+            parts:
+              us: op/us.png
+
+    op_uv:
+      poses: 
+        mid: 
+          ~body:
+            default: uv1
+            parts:
+              uv1: op/uv1.png
+
+    op_sl:
+      poses: 
+        mid: 
+          ~body:
+            default: sl
+            parts:
+              sl: op/sl.png
+
+    logo_day:
+      poses: 
+        mid: 
+          ~body:
+            default: logoday
+            parts:
+              logoday: op/logo_day.png
+    mt:
+      shortnames:
+      
+        # MIDDLE
+        
+        normal_pioneer: mid body1 normal pioneer1 nopanama
+        normal_pioneer_panama: mid body1 normal pioneer1 panama1
+        normal_dress: mid body1 normal dress1 nopanama
+        normal_dress_panama: mid body1 normal dress1 panama1
+        normal_swim: mid body1 normal swim1 nopanama
+        normal_swim_panama: mid body1 normal swim1 panama1
+        sad_pioneer: mid body1 sad pioneer1 nopanama
+        sad_pioneer_panama: mid body1 sad pioneer1 panama1
+        sad_dress: mid body1 sad dress1 nopanama
+        sad_dress_panama: mid body1 sad dress1 panama1
+        sad_swim: mid body1 sad swim1 nopanama
+        sad_swim_panama: mid body1 sad swim1 panama1
+        smile_pioneer: mid body1 smile pioneer1 nopanama
+        smile_pioneer_panama: mid body1 smile pioneer1 panama1
+        smile_dress: mid body1 smile dress1 nopanama
+        smile_dress_panama: mid body1 smile dress1 panama1
+        smile_swim: mid body1 smile swim1 nopanama
+        surprise_pioneer: mid body1 surprise pioneer1 nopanama
+        surprise_pioneer_panama: mid body1 surprise pioneer1 panama1
+        surprise_dress: mid body1 surprise dress1 nopanama
+        surprise_dress_panama: mid body1 surprise dress1 panama1
+        surprise_swim: mid body1 surprise swim1 nopanama
+        surprise_swim_panama: mid body1 surprise swim1 panama1
+        angry_pioneer: mid body2 angry pioneer2 nopanama
+        angry_pioneer_panama: mid body2 angry pioneer2 panama2
+        angry_dress: mid body2 angry dress2 nopanama
+        angry_dress_panama: mid body2 angry dress2 panama2
+        angry_swim: mid body2 angry swim2 nopanama
+        angry_swim_panama: mid body2 angry swim2 panama2
+        rage_pioneer: mid body2 rage pioneer2 nopanama
+        rage_pioneer_panama: mid body2 rage pioneer2 panama2
+        rage_dress: mid body2 rage dress2 nopanama
+        rage_dress_panama: mid body2 rage dress2 panama2
+        rage_swim: mid body2 rage swim2 nopanama
+        rage_swim_panama: mid body2 rage swim2 panama2
+        shocked_pioneer: mid body2 shocked pioneer2 nopanama
+        shocked_pioneer_panama: mid body2 shocked pioneer2 panama2
+        shocked_dress: mid body2 shocked dress2 nopanama
+        shocked_dress_panama: mid body2 shocked dress2 panama2
+        shocked_swim: mid body2 shocked swim2 nopanama
+        shocked_swim_panama: mid body2 shocked swim2 panama2
+        grin_pioneer: mid body3 grin pioneer3 nopanama
+        grin_pioneer_panama: mid body3 grin pioneer3 panama3
+        laugh_pioneer: mid body3 laugh pioneer3 nopanama
+        laugh_pioneer_panama: mid body3 laugh pioneer3 panama3
+        scared_pioneer: mid body3 scared pioneer3 nopanama
+        scared_pioneer_panama: mid body3 scared pioneer3 panama3
+        
+        #CLOSE
+        
+        normal_pioneer_close: close body1 normal pioneer1 nopanama
+        normal_pioneer_panama_close: close body1 normal pioneer1 panama1
+        normal_dress_close: close body1 normal dress1 nopanama
+        normal_dress_panama_close: close body1 normal dress1 panama1
+        normal_swim_close: close body1 normal swim1 nopanama
+        normal_swim_panama_close: close body1 normal swim1 panama1
+        sad_pioneer_close: close body1 sad pioneer1 nopanama
+        sad_pioneer_panama_close: close body1 sad pioneer1 panama1
+        sad_dress_close: close body1 sad dress1 nopanama
+        sad_dress_panama_close: close body1 sad dress1 panama1
+        sad_swim_close: close body1 sad swim1 nopanama
+        sad_swim_panama_close: close body1 sad swim1 panama1
+        smile_pioneer_close: close body1 smile pioneer1 nopanama
+        smile_pioneer_panama_close: close body1 smile pioneer1 panama1
+        smile_dress_close: close body1 smile dress1 nopanama
+        smile_dress_panama_close: close body1 smile dress1 panama1
+        smile_swim_close: close body1 smile swim1 nopanama
+        smile_swim_panama_close: close body1 smile swim1 panama1
+        surprise_pioneer_close: close body1 surprise pioneer1 nopanama
+        surprise_pioneer_panama_close: close body1 surprise pioneer1 panama1
+        surprise_dress_close: close body1 surprise dress1 nopanama
+        surprise_dress_panama_close: close body1 surprise dress1 panama1
+        surprise_swim_close: close body1 surprise swim1 nopanama
+        surprise_swim_panama_close: close body1 surprise swim1 panama1
+        angry_pioneer_close: close body2 angry pioneer2 nopanama
+        angry_pioneer_panama_close: close body2 angry pioneer2 panama2
+        angry_dress_close: close body2 angry dress2 nopanama
+        angry_dress_panama_close: close body2 angry dress2 panama2
+        angry_swim_close: close body2 angry swim2 nopanama
+        angry_swim_panama_close: close body2 angry swim2 panama2
+        rage_pioneer_close: close body2 rage pioneer2 nopanama
+        rage_pioneer_panama_close: close body2 rage pioneer2 panama2
+        rage_dress_close: close body2 rage dress2 nopanama
+        rage_dress_panama_close: close body2 rage dress2 panama2
+        rage_swim_close: close body2 rage swim2 nopanama
+        rage_swim_panama_close: close body2 rage swim2 panama2
+        shocked_pioneer_close: close body2 shocked pioneer2 nopanama
+        shocked_pioneer_panama_close: close body2 shocked pioneer2 panama2
+        shocked_dress_close: close body2 shocked dress2 nopanama
+        shocked_dress_panama_close: close body2 shocked dress2 panama2
+        shocked_swim_close: close body2 shocked swim2 nopanama
+        shocked_swim_panama_close: close body2 shocked swim2 panama2
+        grin_pioneer_close: close body3 grin pioneer3 nopanama
+        grin_pioneer_panama_close: close body3 grin pioneer3 panama3
+        laugh_pioneer_close: close body3 laugh pioneer3 nopanama
+        laugh_pioneer_panama_close: close body3 laugh pioneer3 panama3
+        scared_pioneer_close: close body3 scared pioneer3 nopanama
+        scared_pioneer_panama_close: close body3 scared pioneer3 panama3
+        
+        # FAR
+        
+        normal_pioneer_far: far body1 normal pioneer1 nopanama
+        normal_pioneer_panama_far: far body1 normal pioneer1 panama1
+        normal_dress_far: far body1 normal dress1 nopanama
+        normal_dress_panama_far: far body1 normal dress1 panama1
+        normal_swim_far: far body1 normal swim1 nopanama
+        normal_swim_panama_far: far body1 normal swim1 panama1
+        sad_pioneer_far: far body1 sad pioneer1 nopanama
+        sad_pioneer_panama_far: far body1 sad pioneer1 panama1
+        sad_dress_far: far body1 sad dress1 nopanama
+        sad_dress_panama_far: far body1 sad dress1 panama1
+        sad_swim_far: far body1 sad swim1 nopanama
+        sad_swim_panama_far: far body1 sad swim1 panama1
+        smile_pioneer_far: far body1 smile pioneer1 nopanama
+        smile_pioneer_panama_far: far body1 smile pioneer1 panama1
+        smile_dress_far: far body1 smile dress1 nopanama
+        smile_dress_panama_far: far body1 smile dress1 panama1
+        smile_swim_far: far body1 smile swim1 nopanama
+        smile_swim_panama_far: far body1 smile swim1 panama1
+        surprise_pioneer_far: far body1 surprise pioneer1 nopanama
+        surprise_pioneer_panama_far: far body1 surprise pioneer1 panama1
+        surprise_dress_far: far body1 surprise dress1 nopanama
+        surprise_dress_panama_far: far body1 surprise dress1 panama1
+        surprise_swim_far: far body1 surprise swim1 nopanama
+        surprise_swim_panama_far: far body1 surprise swim1 panama1
+        angry_pioneer_far: far body2 angry pioneer2 nopanama
+        angry_pioneer_panama_far: far body2 angry pioneer2 panama2
+        angry_dress_far: far body2 angry dress2 nopanama
+        angry_dress_panama_far: far body2 angry dress2 panama2
+        angry_swim_far: far body2 angry swim2 nopanama
+        angry_swim_panama_far: far body2 angry swim2 panama2
+        rage_pioneer_far: far body2 rage pioneer2 nopanama
+        rage_pioneer_panama_far: far body2 rage pioneer2 panama2
+        rage_dress_far: far body2 rage dress2 nopanama
+        rage_dress_panama_far: far body2 rage dress2 panama2
+        rage_swim_far: far body2 rage swim2 nopanama
+        rage_swim_panama_far: far body2 rage swim2 panama2
+        shocked_pioneer_far: far body2 shocked pioneer2 nopanama
+        shocked_pioneer_panama_far: far body2 shocked pioneer2 panama2
+        shocked_dress_far: far body2 shocked dress2 nopanama
+        shocked_dress_panama_far: far body2 shocked dress2 panama2
+        shocked_swim_far: far body2 shocked swim2 nopanama
+        shocked_swim_panama_far: far body2 shocked swim2 panama2
+        grin_pioneer_far: far body3 grin pioneer3 nopanama
+        grin_pioneer_panama_far: far body3 grin pioneer3 panama3
+        laugh_pioneer_far: far body3 laugh pioneer3 nopanama
+        laugh_pioneer_panama_far: far body3 laugh pioneer3 panama3
+        scared_pioneer_far: far body3 scared pioneer3 nopanama
+        scared_pioneer_panama_far: far body3 scared pioneer3 panama3
+
+      poses:
+        mid:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/normal/mt/mt_1_body.png
+              body2: sprites/normal/mt/mt_2_body.png
+              body3: sprites/normal/mt/mt_3_body.png
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/normal/mt/mt_1_normal.png
+              sad: sprites/normal/mt/mt_1_sad.png
+              smile: sprites/normal/mt/mt_1_smile.png
+              surprise: sprites/normal/mt/mt_1_surprise.png
+              angry: sprites/normal/mt/mt_2_angry.png
+              rage: sprites/normal/mt/mt_2_rage.png
+              shocked: sprites/normal/mt/mt_2_shocked.png
+              grin: sprites/normal/mt/mt_3_grin.png
+              laugh: sprites/normal/mt/mt_3_laugh.png
+              scared: sprites/normal/mt/mt_3_scared.png
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/normal/mt/mt_1_pioneer.png
+              pioneer2: sprites/normal/mt/mt_2_pioneer.png
+              pioneer3: sprites/normal/mt/mt_3_pioneer.png
+              dress1: sprites/normal/mt/mt_1_dress.png
+              dress2: sprites/normal/mt/mt_2_dress.png
+              swim1: sprites/normal/mt/mt_1_swim.png
+              swim2: sprites/normal/mt/mt_2_swim.png
+          ~panama:
+            default: nopanama
+            parts:
+              nopanama: sprites/normal/mt/mt_nopanama.png
+              panama1: sprites/normal/mt/mt_1_panama.png
+              panama2: sprites/normal/mt/mt_2_panama.png
+              panama3: sprites/normal/mt/mt_3_panama.png
+        close:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/close/mt/mt_1_body.png
+              body2: sprites/close/mt/mt_2_body.png
+              body3: sprites/close/mt/mt_3_body.png
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/close/mt/mt_1_normal.png
+              sad: sprites/close/mt/mt_1_sad.png
+              smile: sprites/close/mt/mt_1_smile.png
+              surprise: sprites/close/mt/mt_1_surprise.png
+              angry: sprites/close/mt/mt_2_angry.png
+              rage: sprites/close/mt/mt_2_rage.png
+              shocked: sprites/close/mt/mt_2_shocked.png
+              grin: sprites/close/mt/mt_3_grin.png
+              laugh: sprites/close/mt/mt_3_laugh.png
+              scared: sprites/close/mt/mt_3_scared.png
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/close/mt/mt_1_pioneer.png
+              pioneer2: sprites/close/mt/mt_2_pioneer.png
+              pioneer3: sprites/close/mt/mt_3_pioneer.png
+              dress1: sprites/close/mt/mt_1_dress.png
+              dress2: sprites/close/mt/mt_2_dress.png
+              swim1: sprites/close/mt/mt_1_swim.png
+              swim2: sprites/close/mt/mt_2_swim.png
+          ~panama:
+            default: nopanama
+            parts:
+              nopanama: sprites/close/mt/mt_nopanama.png
+              panama1: sprites/close/mt/mt_1_panama.png
+              panama2: sprites/close/mt/mt_2_panama.png
+              panama3: sprites/close/mt/mt_3_panama.png
+        far:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/far/mt/mt_1_body.png
+              body2: sprites/far/mt/mt_2_body.png
+              body3: sprites/far/mt/mt_3_body.png
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/far/mt/mt_1_normal.png
+              sad: sprites/far/mt/mt_1_sad.png
+              smile: sprites/far/mt/mt_1_smile.png
+              surprise: sprites/far/mt/mt_1_surprise.png
+              angry: sprites/far/mt/mt_2_angry.png
+              rage: sprites/far/mt/mt_2_rage.png
+              shocked: sprites/far/mt/mt_2_shocked.png
+              grin: sprites/far/mt/mt_3_grin.png
+              laugh: sprites/far/mt/mt_3_laugh.png
+              scared: sprites/far/mt/mt_3_scared.png
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/far/mt/mt_1_pioneer.png
+              pioneer2: sprites/far/mt/mt_2_pioneer.png
+              pioneer3: sprites/far/mt/mt_3_pioneer.png
+              dress1: sprites/far/mt/mt_1_dress.png
+              dress2: sprites/far/mt/mt_2_dress.png
+              swim1: sprites/far/mt/mt_1_swim.png
+              swim2: sprites/far/mt/mt_2_swim.png
+          ~panama:
+            default: nopanama
+            parts:
+              nopanama: sprites/far/mt/mt_nopanama.png
+              panama1: sprites/far/mt/mt_1_panama.png
+              panama2: sprites/far/mt/mt_2_panama.png
+              panama3: sprites/far/mt/mt_3_panama.png 
+              
+    sl:
+    #MID
+      shortnames:
+        normal_dress: mid body1 normal dress1
+        normal_pioneer: mid body1 normal pioneer1
+        normal_sport: mid body1 normal sport1
+        normal_swim: mid body1 normal swim1
+        serious_dress: mid body1 serious dress1
+        serious_pioneer: mid body1 serious pioneer1
+        serious_sport: mid body1 serious sport1
+        serious_swim: mid body1 serious swim1
+        smile_dress: mid body1 smile dress1
+        smile_pioneer: mid body1 smile pioneer1
+        smile_sport: mid body1 smile sport1
+        smile_swim: mid body1 smile swim1
+        happy_dress: mid body2 happy dress2
+        happy_pioneer: mid body2 happy pioneer2
+        happy_sport: mid body2 happy sport2
+        happy_swim: mid body2 happy swim2
+        laugh_dress: mid body2 laugh dress2
+        laugh_pioneer: mid body2 laugh pioneer2
+        laugh_sport: mid body2 laugh sport2
+        laugh_swim: mid body2 laugh swim2
+        shy_dress: mid body2 shy dress2
+        shy_pioneer: mid body2 shy pioneer2
+        shy_sport: mid body2 shy sport2
+        shy_swim: mid body2 shy swim2
+        smile2_dress: mid body2 smile2 dress2
+        smile2_pioneer: mid body2 smile2 pioneer2
+        smile2_sport: mid body2 smile2 sport2
+        smile2_swim: mid body2 smile2 swim2
+        angry_dress: mid body3 angry dress3
+        angry_pioneer: mid body3 angry pioneer3
+        angry_sport: mid body3 angry sport3
+        angry_swim: mid body3 angry swim3
+        sad_dress: mid body3 sad dress3
+        sad_pioneer: mid body3 sad pioneer3
+        sad_sport: mid body3 sad sport3
+        sad_swim: mid body3 sad swim3
+        surprise_dress: mid body3 surprise dress3
+        surprise_pioneer: mid body3 surprise pioneer3
+        surprise_sport: mid body3 surprise sport3
+        surprise_swim: mid body3 surprise swim3
+        scared_dress: mid body4 scared dress4
+        scared_pioneer: mid body4 scared pioneer4
+        scared_sport: mid body4 scared sport4
+        scared_swim: mid body4 scared swim4
+        tender_dress: mid body4 tender dress4
+        tender_pioneer: mid body4 tender pioneer4
+        tender_sport: mid body4 tender sport4
+        tender_swim: mid body4 tender swim4
+    #CLOSE
+        normal_dress_close: close body1 normal dress1
+        normal_pioneer_close: close body1 normal pioneer1
+        normal_sport_close: close body1 normal sport1
+        normal_swim_close: close body1 normal swim1
+        serious_dress_close: close body1 serious dress1
+        serious_pioneer_close: close body1 serious pioneer1
+        serious_sport_close: close body1 serious sport1
+        serious_swim_close: close body1 serious swim1
+        smile_dress_close: close body1 smile dress1
+        smile_pioneer_close: close body1 smile pioneer1
+        smile_sport_close: close body1 smile sport1
+        smile_swim_close: close body1 smile swim1
+        happy_dress_close: close body2 happy dress2
+        happy_pioneer_close: close body2 happy pioneer2
+        happy_sport_close: close body2 happy sport2
+        happy_swim_close: close body2 happy swim2
+        laugh_dress_close: close body2 laugh dress2
+        laugh_pioneer_close: close body2 laugh pioneer2
+        laugh_sport_close: close body2 laugh sport2
+        laugh_swim_close: close body2 laugh swim2
+        shy_dress_close: close body2 shy dress2
+        shy_pioneer_close: close body2 shy pioneer2
+        shy_sport_close: close body2 shy sport2
+        shy_swim_close: close body2 shy swim2
+        smile2_dress_close: close body2 smile2 dress2
+        smile2_pioneer_close: close body2 smile2 pioneer2
+        smile2_sport_close: close body2 smile2 sport2
+        smile2_swim_close: close body2 smile2 swim2
+        angry_dress_close: close body3 angry dress3
+        angry_pioneer_close: close body3 angry pioneer3
+        angry_sport_close: close body3 angry sport3
+        angry_swim_close: close body3 angry swim3
+        sad_dress_close: close body3 sad dress3
+        sad_pioneer_close: close body3 sad pioneer3
+        sad_sport_close: close body3 sad sport3
+        sad_swim_close: close body3 sad swim3
+        surprise_dress_close: close body3 surprise dress3
+        surprise_pioneer_close: close body3 surprise pioneer3
+        surprise_sport_close: close body3 surprise sport3
+        surprise_swim_close: close body3 surprise swim3
+        scared_dress_close: close body4 scared dress4
+        scared_pioneer_close: close body4 scared pioneer4
+        scared_sport_close: close body4 scared sport4
+        scared_swim_close: close body4 scared swim4
+        tender_dress_close: close body4 tender dress4
+        tender_pioneer_close: close body4 tender pioneer4
+        tender_sport_close: close body4 tender sport4
+        tender_swim_close: close body4 tender swim4
+    
+    #FAR
+      
+        normal_dress_far: far body1 normal dress1
+        normal_pioneer_far: far body1 normal pioneer1
+        normal_sport_far: far body1 normal sport1
+        normal_swim_far: far body1 normal swim1
+        serious_dress_far: far body1 serious dress1
+        serious_pioneer_far: far body1 serious pioneer1
+        serious_sport_far: far body1 serious sport1
+        serious_swim_far: far body1 serious swim1
+        smile_dress_far: far body1 smile dress1
+        smile_pioneer_far: far body1 smile pioneer1
+        smile_sport_far: far body1 smile sport1
+        smile_swim_far: far body1 smile swim1
+        happy_dress_far: far body2 happy dress2
+        happy_pioneer_far: far body2 happy pioneer2
+        happy_sport_far: far body2 happy sport2
+        happy_swim_far: far body2 happy swim2
+        laugh_dress_far: far body2 laugh dress2
+        laugh_pioneer_far: far body2 laugh pioneer2
+        laugh_sport_far: far body2 laugh sport2
+        laugh_swim_far: far body2 laugh swim2
+        shy_dress_far: far body2 shy dress2
+        shy_pioneer_far: far body2 shy pioneer2
+        shy_sport_far: far body2 shy sport2
+        shy_swim_far: far body2 shy swim2
+        smile2_dress_far: far body2 smile2 dress2
+        smile2_pioneer_far: far body2 smile2 pioneer2
+        smile2_sport_far: far body2 smile2 sport2
+        smile2_swim_far: far body2 smile2 swim2
+        angry_dress_far: far body3 angry dress3
+        angry_pioneer_far: far body3 angry pioneer3
+        angry_sport_far: far body3 angry sport3
+        angry_swim_far: far body3 angry swim3
+        sad_dress_far: far body3 sad dress3
+        sad_pioneer_far: far body3 sad pioneer3
+        sad_sport_far: far body3 sad sport3
+        sad_swim_far: far body3 sad swim3
+        surprise_dress_far: far body3 surprise dress3
+        surprise_pioneer_far: far body3 surprise pioneer3
+        surprise_sport_far: far body3 surprise sport3
+        surprise_swim_far: far body3 surprise swim3
+        scared_dress_far: far body4 scared dress4
+        scared_pioneer_far: far body4 scared pioneer4
+        scared_sport_far: far body4 scared sport4
+        scared_swim_far: far body4 scared swim4
+        tender_dress_far: far body4 tender dress4
+        tender_pioneer_far: far body4 tender pioneer4
+        tender_sport_far: far body4 tender sport4
+        tender_swim_far: far body4 tender swim4
+        
+      poses:
+        mid:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/normal/sl/sl_1_body.png
+              body2: sprites/normal/sl/sl_2_body.png
+              body3: sprites/normal/sl/sl_3_body.png
+              body4: sprites/normal/sl/sl_4_body.png
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/normal/sl/sl_1_normal.png
+              smile: sprites/normal/sl/sl_1_smile.png
+              serious: sprites/normal/sl/sl_1_serious.png
+              happy: sprites/normal/sl/sl_2_happy.png
+              laugh: sprites/normal/sl/sl_2_laugh.png
+              shy: sprites/normal/sl/sl_2_shy.png
+              smile2: sprites/normal/sl/sl_2_smile2.png
+              angry: sprites/normal/sl/sl_3_angry.png
+              sad: sprites/normal/sl/sl_3_sad.png
+              surprise: sprites/normal/sl/sl_3_surprise.png
+              scared: sprites/normal/sl/sl_4_scared.png
+              tender: sprites/normal/sl/sl_4_tender.png
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/normal/sl/sl_1_pioneer.png
+              pioneer2: sprites/normal/sl/sl_2_pioneer.png
+              pioneer3: sprites/normal/sl/sl_3_pioneer.png
+              pioneer4: sprites/normal/sl/sl_4_pioneer.png
+              dress1: sprites/normal/sl/sl_1_dress.png
+              dress2: sprites/normal/sl/sl_2_dress.png
+              dress3: sprites/normal/sl/sl_3_dress.png
+              dress4: sprites/normal/sl/sl_4_dress.png
+              swim1: sprites/normal/sl/sl_1_swim.png
+              swim2: sprites/normal/sl/sl_2_swim.png
+              swim3: sprites/normal/sl/sl_3_swim.png
+              swim4: sprites/normal/sl/sl_4_swim.png
+              sport1: sprites/normal/sl/sl_1_sport.png
+              sport2: sprites/normal/sl/sl_2_sport.png
+              sport3: sprites/normal/sl/sl_3_sport.png 
+              sport4: sprites/normal/sl/sl_4_sport.png
+              
+        close:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/close/sl/sl_1_body.png
+              body2: sprites/close/sl/sl_2_body.png
+              body3: sprites/close/sl/sl_3_body.png
+              body4: sprites/close/sl/sl_4_body.png
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/close/sl/sl_1_normal.png
+              smile: sprites/close/sl/sl_1_smile.png
+              serious: sprites/close/sl/sl_1_serious.png
+              happy: sprites/close/sl/sl_2_happy.png
+              laugh: sprites/close/sl/sl_2_laugh.png
+              shy: sprites/close/sl/sl_2_shy.png
+              smile2: sprites/close/sl/sl_2_smile2.png
+              angry: sprites/close/sl/sl_3_angry.png
+              sad: sprites/close/sl/sl_3_sad.png
+              surprise: sprites/close/sl/sl_3_surprise.png
+              scared: sprites/close/sl/sl_4_scared.png
+              tender: sprites/close/sl/sl_4_tender.png
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/close/sl/sl_1_pioneer.png
+              pioneer2: sprites/close/sl/sl_2_pioneer.png
+              pioneer3: sprites/close/sl/sl_3_pioneer.png
+              pioneer4: sprites/close/sl/sl_4_pioneer.png
+              dress1: sprites/close/sl/sl_1_dress.png
+              dress2: sprites/close/sl/sl_2_dress.png
+              dress3: sprites/close/sl/sl_3_dress.png
+              dress4: sprites/close/sl/sl_4_dress.png
+              swim1: sprites/close/sl/sl_1_swim.png
+              swim2: sprites/close/sl/sl_2_swim.png
+              swim3: sprites/close/sl/sl_3_swim.png
+              swim4: sprites/close/sl/sl_4_swim.png
+              sport1: sprites/close/sl/sl_1_sport.png
+              sport2: sprites/close/sl/sl_2_sport.png
+              sport3: sprites/close/sl/sl_3_sport.png 
+              sport4: sprites/close/sl/sl_4_sport.png
+              
+        far:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/far/sl/sl_1_body.png
+              body2: sprites/far/sl/sl_2_body.png
+              body3: sprites/far/sl/sl_3_body.png
+              body4: sprites/far/sl/sl_4_body.png
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/far/sl/sl_1_normal.png
+              smile: sprites/far/sl/sl_1_smile.png
+              serious: sprites/far/sl/sl_1_serious.png
+              happy: sprites/far/sl/sl_2_happy.png
+              laugh: sprites/far/sl/sl_2_laugh.png
+              shy: sprites/far/sl/sl_2_shy.png
+              smile2: sprites/far/sl/sl_2_smile2.png
+              angry: sprites/far/sl/sl_3_angry.png
+              sad: sprites/far/sl/sl_3_sad.png
+              surprise: sprites/far/sl/sl_3_surprise.png
+              scared: sprites/far/sl/sl_4_scared.png
+              tender: sprites/far/sl/sl_4_tender.png
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/far/sl/sl_1_pioneer.png
+              pioneer2: sprites/far/sl/sl_2_pioneer.png
+              pioneer3: sprites/far/sl/sl_3_pioneer.png
+              pioneer4: sprites/far/sl/sl_4_pioneer.png
+              dress1: sprites/far/sl/sl_1_dress.png
+              dress2: sprites/far/sl/sl_2_dress.png
+              dress3: sprites/far/sl/sl_3_dress.png
+              dress4: sprites/far/sl/sl_4_dress.png
+              swim1: sprites/far/sl/sl_1_swim.png
+              swim2: sprites/far/sl/sl_2_swim.png
+              swim3: sprites/far/sl/sl_3_swim.png
+              swim4: sprites/far/sl/sl_4_swim.png
+              sport1: sprites/far/sl/sl_1_sport.png
+              sport2: sprites/far/sl/sl_2_sport.png
+              sport3: sprites/far/sl/sl_3_sport.png 
+              sport4: sprites/far/sl/sl_4_sport.png
+
+    un: 
+      shortnames:
+    #MID
+        angry_dress: mid body1 angry dress1
+        angry_pioneer: mid body1 angry pioneer1
+        angry_sport: mid body1 angry sport1
+        angry_swim: mid body1 angry swim1
+        evil_smile_dress: mid body1 evil_smile dress1
+        evil_smile_pioneer: mid body1 evil_smile pioneer1
+        evil_smile_sport: mid body1 evil_smile sport1
+        evil_smile_swim: mid body1 evil_smile swim1
+        normal_dress: mid body1 normal dress1
+        normal_pioneer: mid body1 normal pioneer1
+        normal_sport: mid body1 normal sport1
+        normal_swim: mid body1 normal swim1
+        shy_dress: mid body1 shy dress1
+        shy_pioneer: mid body1 shy pioneer1
+        shy_sport: mid body1 shy sport1
+        shy_swim: mid body1 shy swim1
+        smile2_dress: mid body1 smile2 dress1
+        smile2_pioneer: mid body1 smile2 pioneer1
+        smile2_sport: mid body1 smile2 sport1
+        smile2_swim: mid body1 smile2 swim1
+        smile_dress: mid body1 smile dress1
+        smile_pioneer: mid body1 smile pioneer1
+        smile_sport: mid body1 smile sport1
+        smile_swim: mid body1 smile swim1
+        cry_dress: mid body2 cry dress2
+        cry_pioneer: mid body2 cry pioneer2
+        cry_sport: mid body2 cry sport2
+        cry_swim: mid body2 cry swim2
+        cry_smile_dress: mid body2 cry_smile dress2
+        cry_smile_pioneer: mid body2 cry_smile pioneer2
+        cry_smile_sport: mid body2 cry_smile sport2
+        cry_smile_swim: mid body2 cry_smile swim2
+        sad_dress: mid body2 sad dress2
+        sad_pioneer: mid body2 sad pioneer2
+        sad_sport: mid body2 sad sport2
+        sad_swim: mid body2 sad swim2
+        scared_dress: mid body2 scared dress2
+        scared_pioneer: mid body2 scared pioneer2
+        scared_sport: mid body2 scared sport2
+        scared_swim: mid body2 scared swim2
+        shocked_dress: mid body2 shocked dress2
+        shocked_pioneer: mid body2 shocked pioneer2
+        shocked_sport: mid body2 shocked sport2
+        shocked_swim: mid body2 shocked swim2
+        surprise_dress: mid body2 surprise dress2
+        surprise_pioneer: mid body2 surprise pioneer2
+        surprise_sport: mid body2 surprise sport2
+        surprise_swim: mid body2 surprise swim2
+        angry2_dress: mid body3 angry2 dress3
+        angry2_pioneer: mid body3 angry2 pioneer3
+        angry2_sport: mid body3 angry2 sport3
+        grin_dress: mid body3 grin dress3
+        grin_pioneer: mid body3 grin pioneer3
+        grin_sport: mid body3 grin sport3
+        laugh_dress: mid body3 laugh dress3
+        laugh_pioneer: mid body3 laugh pioneer3
+        laugh_sport: mid body3 laugh sport3
+        rage_dress: mid body3 rage dress3
+        rage_pioneer: mid body3 rage pioneer3
+        rage_sport: mid body3 rage sport3
+        serious_dress: mid body3 serious dress3
+        serious_pioneer: mid body3 serious pioneer3
+        serious_sport: mid body3 serious sport3
+        smile3_dress: mid body3 smile3 dress3
+        smile3_pioneer: mid body3 smile3 pioneer3
+        smile3_sport: mid body3 smile3 sport3
+
+    #CLOSE
+        angry_dress_close: close body1 angry dress1
+        angry_pioneer_close: close body1 angry pioneer1
+        angry_sport_close: close body1 angry sport1
+        angry_swim_close: close body1 angry swim1
+        evil_smile_dress_close: close body1 evil_smile dress1
+        evil_smile_pioneer_close: close body1 evil_smile pioneer1
+        evil_smile_sport_close: close body1 evil_smile sport1
+        evil_smile_swim_close: close body1 evil_smile swim1
+        normal_dress_close: close body1 normal dress1
+        normal_pioneer_close: close body1 normal pioneer1
+        normal_sport_close: close body1 normal sport1
+        normal_swim_close: close body1 normal swim1
+        shy_dress_close: close body1 shy dress1
+        shy_pioneer_close: close body1 shy pioneer1
+        shy_sport_close: close body1 shy sport1
+        shy_swim_close: close body1 shy swim1
+        smile2_dress_close: close body1 smile2 dress1
+        smile2_pioneer_close: close body1 smile2 pioneer1
+        smile2_sport_close: close body1 smile2 sport1
+        smile2_swim_close: close body1 smile2 swim1
+        smile_dress_close: close body1 smile dress1
+        smile_pioneer_close: close body1 smile pioneer1
+        smile_sport_close: close body1 smile sport1
+        smile_swim_close: close body1 smile swim1
+        cry_dress_close: close body2 cry dress2
+        cry_pioneer_close: close body2 cry pioneer2
+        cry_sport_close: close body2 cry sport2
+        cry_swim_close: close body2 cry swim2
+        cry_smile_dress_close: close body2 cry_smile dress2
+        cry_smile_pioneer_close: close body2 cry_smile pioneer2
+        cry_smile_sport_close: close body2 cry_smile sport2
+        cry_smile_swim_close: close body2 cry_smile swim2
+        sad_dress_close: close body2 sad dress2
+        sad_pioneer_close: close body2 sad pioneer2
+        sad_sport_close: close body2 sad sport2
+        sad_swim_close: close body2 sad swim2
+        scared_dress_close: close body2 scared dress2
+        scared_pioneer_close: close body2 scared pioneer2
+        scared_sport_close: close body2 scared sport2
+        scared_swim_close: close body2 scared swim2
+        shocked_dress_close: close body2 shocked dress2
+        shocked_pioneer_close: close body2 shocked pioneer2
+        shocked_sport_close: close body2 shocked sport2
+        shocked_swim_close: close body2 shocked swim2
+        surprise_dress_close: close body2 surprise dress2
+        surprise_pioneer_close: close body2 surprise pioneer2
+        surprise_sport_close: close body2 surprise sport2
+        surprise_swim_close: close body2 surprise swim2
+        angry2_dress_close: close body3 angry2 dress3
+        angry2_pioneer_close: close body3 angry2 pioneer3
+        angry2_sport_close: close body3 angry2 sport3
+        grin_dress_close: close body3 grin dress3
+        grin_pioneer_close: close body3 grin pioneer3
+        grin_sport_close: close body3 grin sport3
+        laugh_dress_close: close body3 laugh dress3
+        laugh_pioneer_close: close body3 laugh pioneer3
+        laugh_sport_close: close body3 laugh sport3
+        rage_dress_close: close body3 rage dress3
+        rage_pioneer_close: close body3 rage pioneer3
+        rage_sport_close: close body3 rage sport3
+        serious_dress_close: close body3 serious dress3
+        serious_pioneer_close: close body3 serious pioneer3
+        serious_sport_close: close body3 serious sport3
+        smile3_dress_close: close body3 smile3 dress3
+        smile3_pioneer_close: close body3 smile3 pioneer3
+        smile3_sport_close: close body3 smile3 sport3
+    
+
+    
+    #FAR
+        angry_dress_far: far body1 angry dress1
+        angry_pioneer_far: far body1 angry pioneer1
+        angry_sport_far: far body1 angry sport1
+        angry_swim_far: far body1 angry swim1
+        evil_smile_dress_far: far body1 evil_smile dress1
+        evil_smile_pioneer_far: far body1 evil_smile pioneer1
+        evil_smile_sport_far: far body1 evil_smile sport1
+        evil_smile_swim_far: far body1 evil_smile swim1
+        normal_dress_far: far body1 normal dress1
+        normal_pioneer_far: far body1 normal pioneer1
+        normal_sport_far: far body1 normal sport1
+        normal_swim_far: far body1 normal swim1
+        shy_dress_far: far body1 shy dress1
+        shy_pioneer_far: far body1 shy pioneer1
+        shy_sport_far: far body1 shy sport1
+        shy_swim_far: far body1 shy swim1
+        smile2_dress_far: far body1 smile2 dress1
+        smile2_pioneer_far: far body1 smile2 pioneer1
+        smile2_sport_far: far body1 smile2 sport1
+        smile2_swim_far: far body1 smile2 swim1
+        smile_dress_far: far body1 smile dress1
+        smile_pioneer_far: far body1 smile pioneer1
+        smile_sport_far: far body1 smile sport1
+        smile_swim_far: far body1 smile swim1
+        cry_dress_far: far body2 cry dress2
+        cry_pioneer_far: far body2 cry pioneer2
+        cry_sport_far: far body2 cry sport2
+        cry_swim_far: far body2 cry swim2
+        cry_smile_dress_far: far body2 cry_smile dress2
+        cry_smile_pioneer_far: far body2 cry_smile pioneer2
+        cry_smile_sport_far: far body2 cry_smile sport2
+        cry_smile_swim_far: far body2 cry_smile swim2
+        sad_dress_far: far body2 sad dress2
+        sad_pioneer_far: far body2 sad pioneer2
+        sad_sport_far: far body2 sad sport2
+        sad_swim_far: far body2 sad swim2
+        scared_dress_far: far body2 scared dress2
+        scared_pioneer_far: far body2 scared pioneer2
+        scared_sport_far: far body2 scared sport2
+        scared_swim_far: far body2 scared swim2
+        shocked_dress_far: far body2 shocked dress2
+        shocked_pioneer_far: far body2 shocked pioneer2
+        shocked_sport_far: far body2 shocked sport2
+        shocked_swim_far: far body2 shocked swim2
+        surprise_dress_far: far body2 surprise dress2
+        surprise_pioneer_far: far body2 surprise pioneer2
+        surprise_sport_far: far body2 surprise sport2
+        surprise_swim_far: far body2 surprise swim2
+        angry2_dress_far: far body3 angry2 dress3
+        angry2_pioneer_far: far body3 angry2 pioneer3
+        angry2_sport_far: far body3 angry2 sport3
+        grin_dress_far: far body3 grin dress3
+        grin_pioneer_far: far body3 grin pioneer3
+        grin_sport_far: far body3 grin sport3
+        laugh_dress_far: far body3 laugh dress3
+        laugh_pioneer_far: far body3 laugh pioneer3
+        laugh_sport_far: far body3 laugh sport3
+        rage_dress_far: far body3 rage dress3
+        rage_pioneer_far: far body3 rage pioneer3
+        rage_sport_far: far body3 rage sport3
+        serious_dress_far: far body3 serious dress3
+        serious_pioneer_far: far body3 serious pioneer3
+        serious_sport_far: far body3 serious sport3
+        smile3_dress_far: far body3 smile3 dress3
+        smile3_pioneer_far: far body3 smile3 pioneer3
+        smile3_sport_far: far body3 smile3 sport3      
+
+        
+      poses:
+        mid:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/normal/un/un_1_body.png
+              body2: sprites/normal/un/un_2_body.png
+              body3: sprites/normal/un/un_3_body.png
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/normal/un/un_1_normal.png 
+              smile: sprites/normal/un/un_1_smile.png
+              evil_smile: sprites/normal/un/un_1_evil_smile.png
+              smile2: sprites/normal/un/un_1_smile2.png 
+              smile3: sprites/normal/un/un_3_smile3.png 
+              cry: sprites/normal/un/un_2_cry.png
+              cry_smile: sprites/normal/un/un_2_cry_smile.png
+              serious: sprites/normal/un/un_3_serious.png
+              rage: sprites/normal/un/un_3_rage.png
+              laugh: sprites/normal/un/un_3_laugh.png
+              grin: sprites/normal/un/un_3_grin.png
+              shy: sprites/normal/un/un_1_shy.png
+              angry: sprites/normal/un/un_1_angry.png
+              angry2: sprites/normal/un/un_3_angry2.png
+              sad: sprites/normal/un/un_2_sad.png
+              surprise: sprites/normal/un/un_2_surprise.png
+              scared: sprites/normal/un/un_2_scared.png
+              shocked: sprites/normal/un/un_2_shocked.png
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/normal/un/un_1_pioneer.png
+              pioneer2: sprites/normal/un/un_2_pioneer.png
+              pioneer3: sprites/normal/un/un_3_pioneer.png
+              dress1: sprites/normal/un/un_1_dress.png
+              dress2: sprites/normal/un/un_2_dress.png
+              dress3: sprites/normal/un/un_3_dress.png
+              swim1: sprites/normal/un/un_1_swim.png
+              swim2: sprites/normal/un/un_2_swim.png
+              sport1: sprites/normal/un/un_1_sport.png
+              sport2: sprites/normal/un/un_2_sport.png
+              sport3: sprites/normal/un/un_3_sport.png 
+              
+        close:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/close/un/un_1_body.png
+              body2: sprites/close/un/un_2_body.png
+              body3: sprites/close/un/un_3_body.png
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/close/un/un_1_normal.png 
+              smile: sprites/close/un/un_1_smile.png
+              evil_smile: sprites/close/un/un_1_evil_smile.png
+              smile2: sprites/close/un/un_1_smile2.png 
+              smile3: sprites/close/un/un_3_smile3.png 
+              cry: sprites/close/un/un_2_cry.png
+              cry_smile: sprites/close/un/un_2_cry_smile.png
+              serious: sprites/close/un/un_3_serious.png
+              rage: sprites/close/un/un_3_rage.png
+              laugh: sprites/close/un/un_3_laugh.png
+              grin: sprites/close/un/un_3_grin.png
+              shy: sprites/close/un/un_1_shy.png
+              angry: sprites/close/un/un_1_angry.png
+              angry2: sprites/close/un/un_3_angry2.png
+              sad: sprites/close/un/un_2_sad.png
+              surprise: sprites/close/un/un_2_surprise.png
+              scared: sprites/close/un/un_2_scared.png
+              shocked: sprites/close/un/un_2_shocked.png
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/close/un/un_1_pioneer.png
+              pioneer2: sprites/close/un/un_2_pioneer.png
+              pioneer3: sprites/close/un/un_3_pioneer.png
+              dress1: sprites/close/un/un_1_dress.png
+              dress2: sprites/close/un/un_2_dress.png
+              dress3: sprites/close/un/un_3_dress.png
+              swim1: sprites/close/un/un_1_swim.png
+              swim2: sprites/close/un/un_2_swim.png
+              sport1: sprites/close/un/un_1_sport.png
+              sport2: sprites/close/un/un_2_sport.png
+              sport3: sprites/close/un/un_3_sport.png 
+              
+        far:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/far/un/un_1_body.png
+              body2: sprites/far/un/un_2_body.png
+              body3: sprites/far/un/un_3_body.png
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/far/un/un_1_normal.png 
+              smile: sprites/far/un/un_1_smile.png
+              evil_smile: sprites/far/un/un_1_evil_smile.png
+              smile2: sprites/far/un/un_1_smile2.png 
+              smile3: sprites/far/un/un_3_smile3.png 
+              cry: sprites/far/un/un_2_cry.png
+              cry_smile: sprites/far/un/un_2_cry_smile.png
+              serious: sprites/far/un/un_3_serious.png
+              rage: sprites/far/un/un_3_rage.png
+              laugh: sprites/far/un/un_3_laugh.png
+              grin: sprites/far/un/un_3_grin.png
+              shy: sprites/far/un/un_1_shy.png
+              angry: sprites/far/un/un_1_angry.png
+              angry2: sprites/far/un/un_3_angry2.png
+              sad: sprites/far/un/un_2_sad.png
+              surprise: sprites/far/un/un_2_surprise.png
+              scared: sprites/far/un/un_2_scared.png
+              shocked: sprites/far/un/un_2_shocked.png
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/far/un/un_1_pioneer.png
+              pioneer2: sprites/far/un/un_2_pioneer.png
+              pioneer3: sprites/far/un/un_3_pioneer.png
+              dress1: sprites/far/un/un_1_dress.png
+              dress2: sprites/far/un/un_2_dress.png
+              dress3: sprites/far/un/un_3_dress.png
+              swim1: sprites/far/un/un_1_swim.png
+              swim2: sprites/far/un/un_2_swim.png
+              sport1: sprites/far/un/un_1_sport.png
+              sport2: sprites/far/un/un_2_sport.png
+              sport3: sprites/far/un/un_3_sport.png 
+              
+    dv: 
+      shortnames:
+    #MID
+        cry_coat: mid body1 cry coat1
+        cry_pioneer2: mid body1 cry pioneer21
+        cry_pioneer: mid body1 cry pioneer1
+        cry_swim: mid body1 cry swim1
+        scared_coat: mid body1 scared coat1
+        scared_pioneer2: mid body1 scared pioneer21
+        scared_pioneer: mid body1 scared pioneer1
+        scared_swim: mid body1 scared swim1
+        shocked_coat: mid body1 shocked coat1
+        shocked_pioneer2: mid body1 shocked pioneer21
+        shocked_pioneer: mid body1 shocked pioneer1
+        shocked_swim: mid body1 shocked swim1
+        surprise_coat: mid body1 surprise coat1
+        surprise_pioneer2: mid body1 surprise pioneer21
+        surprise_pioneer: mid body1 surprise pioneer1
+        surprise_swim: mid body1 surprise swim1
+        grin_pioneer2: mid body2 grin pioneer22
+        grin_pioneer: mid body2 grin pioneer2
+        grin_swim: mid body2 grin swim2
+        guilty_coat: mid body3 guilty coat3
+        guilty_pioneer2: mid body3 guilty pioneer23
+        guilty_pioneer: mid body3 guilty pioneer3
+        sad_coat: mid body3 sad coat3
+        sad_pioneer2: mid body3 sad pioneer23
+        sad_pioneer: mid body3 sad pioneer3
+        shy_coat: mid body3 shy coat3
+        shy_pioneer2: mid body3 shy pioneer23
+        shy_pioneer: mid body3 shy pioneer3
+        laugh_coat: mid body4 laugh coat4
+        laugh_pioneer2: mid body4 laugh pioneer24
+        laugh_pioneer: mid body4 laugh pioneer4
+        laugh_swim: mid body4 laugh swim4
+        normal_coat: mid body4 normal coat4
+        normal_pioneer2: mid body4 normal pioneer24
+        normal_pioneer: mid body4 normal pioneer4
+        normal_swim: mid body4 normal swim4
+        smile_coat: mid body4 smile coat4
+        smile_pioneer2: mid body4 smile pioneer24
+        smile_pioneer: mid body4 smile pioneer4
+        smile_swim: mid body4 smile swim4
+        angry_coat: mid body5 angry coat5
+        angry_pioneer2: mid body5 angry pioneer25
+        angry_pioneer: mid body5 angry pioneer5
+        rage_coat: mid body5 rage coat5
+        rage_pioneer2: mid body5 rage pioneer25
+        rage_pioneer: mid body5 rage pioneer5
+
+    #CLOSE
+        cry_coat_close: close body1 cry coat1
+        cry_pioneer2_close: close body1 cry pioneer21
+        cry_pioneer_close: close body1 cry pioneer1
+        cry_swim_close: close body1 cry swim1
+        scared_coat_close: close body1 scared coat1
+        scared_pioneer2_close: close body1 scared pioneer21
+        scared_pioneer_close: close body1 scared pioneer1
+        scared_swim_close: close body1 scared swim1
+        shocked_coat_close: close body1 shocked coat1
+        shocked_pioneer2_close: close body1 shocked pioneer21
+        shocked_pioneer_close: close body1 shocked pioneer1
+        shocked_swim_close: close body1 shocked swim1
+        surprise_coat_close: close body1 surprise coat1
+        surprise_pioneer2_close: close body1 surprise pioneer21
+        surprise_pioneer_close: close body1 surprise pioneer1
+        surprise_swim_close: close body1 surprise swim1
+        grin_pioneer2_close: close body2 grin pioneer22
+        grin_pioneer_close: close body2 grin pioneer2
+        grin_swim_close: close body2 grin swim2
+        guilty_pioneer2_close: close body3 guilty pioneer23
+        guilty_pioneer_close: close body3 guilty pioneer3
+        sad_pioneer2_close: close body3 sad pioneer23
+        sad_pioneer_close: close body3 sad pioneer3
+        shy_pioneer2_close: close body3 shy pioneer23
+        shy_pioneer_close: close body3 shy pioneer3
+        laugh_coat_close: close body4 laugh coat4
+        laugh_pioneer2_close: close body4 laugh pioneer24
+        laugh_pioneer_close: close body4 laugh pioneer4
+        laugh_swim_close: close body4 laugh swim4
+        normal_coat_close: close body4 normal coat4
+        normal_pioneer2_close: close body4 normal pioneer24
+        normal_pioneer_close: close body4 normal pioneer4
+        normal_swim_close: close body4 normal swim4
+        smile_coat_close: close body4 smile coat4
+        smile_pioneer2_close: close body4 smile pioneer24
+        smile_pioneer_close: close body4 smile pioneer4
+        smile_swim_close: close body4 smile swim4
+        angry_pioneer2_close: close body5 angry pioneer25
+        angry_pioneer_close: close body5 angry pioneer5
+        rage_pioneer2_close: close body5 rage pioneer25
+        rage_pioneer_close: close body5 rage pioneer5
+    
+    #FAR
+        cry_pioneer2_far: far body1 cry pioneer21
+        cry_pioneer_far: far body1 cry pioneer1
+        cry_swim_far: far body1 cry swim1
+        scared_pioneer2_far: far body1 scared pioneer21
+        scared_pioneer_far: far body1 scared pioneer1
+        scared_swim_far: far body1 scared swim1
+        shocked_pioneer2_far: far body1 shocked pioneer21
+        shocked_pioneer_far: far body1 shocked pioneer1
+        shocked_swim_far: far body1 shocked swim1
+        surprise_pioneer2_far: far body1 surprise pioneer21
+        surprise_pioneer_far: far body1 surprise pioneer1
+        surprise_swim_far: far body1 surprise swim1
+        grin_pioneer2_far: far body2 grin pioneer22
+        grin_pioneer_far: far body2 grin pioneer2
+        grin_swim_far: far body2 grin swim2
+        guilty_pioneer2_far: far body3 guilty pioneer23
+        guilty_pioneer_far: far body3 guilty pioneer3
+        sad_pioneer2_far: far body3 sad pioneer23
+        sad_pioneer_far: far body3 sad pioneer3
+        shy_pioneer2_far: far body3 shy pioneer23
+        shy_pioneer_far: far body3 shy pioneer3
+        laugh_pioneer2_far: far body4 laugh pioneer24
+        laugh_pioneer_far: far body4 laugh pioneer4
+        laugh_swim_far: far body4 laugh swim4
+        normal_pioneer2_far: far body4 normal pioneer24
+        normal_pioneer_far: far body4 normal pioneer4
+        normal_swim_far: far body4 normal swim4
+        smile_pioneer2_far: far body4 smile pioneer24
+        smile_pioneer_far: far body4 smile pioneer4
+        smile_swim_far: far body4 smile swim4
+        angry_pioneer2_far: far body5 angry pioneer25
+        angry_pioneer_far: far body5 angry pioneer5
+        rage_pioneer2_far: far body5 rage pioneer25
+        rage_pioneer_far: far body5 rage pioneer5
+
+        
+      poses:
+        mid:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/normal/dv/dv_1_body.png
+              body2: sprites/normal/dv/dv_2_body.png
+              body3: sprites/normal/dv/dv_3_body.png
+              body4: sprites/normal/dv/dv_4_body.png
+              body5: sprites/normal/dv/dv_5_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              cry: sprites/normal/dv/dv_1_cry.png
+              scared: sprites/normal/dv/dv_1_scared.png
+              shocked: sprites/normal/dv/dv_1_shocked.png
+              surprise: sprites/normal/dv/dv_1_surprise.png
+              grin: sprites/normal/dv/dv_2_grin.png
+              guilty: sprites/normal/dv/dv_3_guilty.png
+              sad: sprites/normal/dv/dv_3_sad.png
+              shy: sprites/normal/dv/dv_3_shy.png
+              laugh: sprites/normal/dv/dv_4_laugh.png
+              normal: sprites/normal/dv/dv_4_normal.png
+              smile: sprites/normal/dv/dv_4_smile.png
+              angry: sprites/normal/dv/dv_5_angry.png
+              rage: sprites/normal/dv/dv_5_rage.png
+
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer21: sprites/normal/dv/dv_1_pioneer2.png
+              pioneer1: sprites/normal/dv/dv_1_pioneer.png
+              pioneer22: sprites/normal/dv/dv_2_pioneer2.png
+              pioneer2: sprites/normal/dv/dv_2_pioneer.png
+              pioneer23: sprites/normal/dv/dv_3_pioneer2.png
+              pioneer3: sprites/normal/dv/dv_3_pioneer.png
+              pioneer24: sprites/normal/dv/dv_4_pioneer2.png
+              pioneer4: sprites/normal/dv/dv_4_pioneer.png
+              pioneer25: sprites/normal/dv/dv_5_pioneer2.png
+              pioneer5: sprites/normal/dv/dv_5_pioneer.png
+              swim1: sprites/normal/dv/dv_1_swim.png
+              swim2: sprites/normal/dv/dv_2_swim.png
+              swim4: sprites/normal/dv/dv_4_swim.png
+              coat1: sprites/normal/dv/dv_1_coat.png
+              coat3: sprites/normal/dv/dv_3_coat.png
+              coat4: sprites/normal/dv/dv_4_coat.png
+              coat5: sprites/normal/dv/dv_5_coat.png
+
+
+              
+        close:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/close/dv/dv_1_body.png
+              body2: sprites/close/dv/dv_2_body.png
+              body3: sprites/close/dv/dv_3_body.png
+              body4: sprites/close/dv/dv_4_body.png
+              body5: sprites/close/dv/dv_5_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              cry: sprites/close/dv/dv_1_cry.png
+              scared: sprites/close/dv/dv_1_scared.png
+              shocked: sprites/close/dv/dv_1_shocked.png
+              surprise: sprites/close/dv/dv_1_surprise.png
+              grin: sprites/close/dv/dv_2_grin.png
+              guilty: sprites/close/dv/dv_3_guilty.png
+              sad: sprites/close/dv/dv_3_sad.png
+              shy: sprites/close/dv/dv_3_shy.png
+              laugh: sprites/close/dv/dv_4_laugh.png
+              normal: sprites/close/dv/dv_4_normal.png
+              smile: sprites/close/dv/dv_4_smile.png
+              angry: sprites/close/dv/dv_5_angry.png
+              rage: sprites/close/dv/dv_5_rage.png
+
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer21: sprites/close/dv/dv_1_pioneer2.png
+              pioneer1: sprites/close/dv/dv_1_pioneer.png
+              pioneer22: sprites/close/dv/dv_2_pioneer2.png
+              pioneer2: sprites/close/dv/dv_2_pioneer.png
+              pioneer23: sprites/close/dv/dv_3_pioneer2.png
+              pioneer3: sprites/close/dv/dv_3_pioneer.png
+              pioneer24: sprites/close/dv/dv_4_pioneer2.png
+              pioneer4: sprites/close/dv/dv_4_pioneer.png
+              pioneer25: sprites/close/dv/dv_5_pioneer2.png
+              pioneer5: sprites/close/dv/dv_5_pioneer.png
+              swim1: sprites/close/dv/dv_1_swim.png
+              swim2: sprites/close/dv/dv_2_swim.png
+              swim4: sprites/close/dv/dv_4_swim.png
+              coat1: sprites/close/dv/dv_1_coat.png
+              coat4: sprites/close/dv/dv_4_coat.png
+              
+        far:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/far/dv/dv_1_body.png
+              body2: sprites/far/dv/dv_2_body.png
+              body3: sprites/far/dv/dv_3_body.png
+              body4: sprites/far/dv/dv_4_body.png
+              body5: sprites/far/dv/dv_5_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              cry: sprites/far/dv/dv_1_cry.png
+              scared: sprites/far/dv/dv_1_scared.png
+              shocked: sprites/far/dv/dv_1_shocked.png
+              surprise: sprites/far/dv/dv_1_surprise.png
+              grin: sprites/far/dv/dv_2_grin.png
+              guilty: sprites/far/dv/dv_3_guilty.png
+              sad: sprites/far/dv/dv_3_sad.png
+              shy: sprites/far/dv/dv_3_shy.png
+              laugh: sprites/far/dv/dv_4_laugh.png
+              normal: sprites/far/dv/dv_4_normal.png
+              smile: sprites/far/dv/dv_4_smile.png
+              angry: sprites/far/dv/dv_5_angry.png
+              rage: sprites/far/dv/dv_5_rage.png
+
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer21: sprites/far/dv/dv_1_pioneer2.png
+              pioneer1: sprites/far/dv/dv_1_pioneer.png
+              pioneer22: sprites/far/dv/dv_2_pioneer2.png
+              pioneer2: sprites/far/dv/dv_2_pioneer.png
+              pioneer23: sprites/far/dv/dv_3_pioneer2.png
+              pioneer3: sprites/far/dv/dv_3_pioneer.png
+              pioneer24: sprites/far/dv/dv_4_pioneer2.png
+              pioneer4: sprites/far/dv/dv_4_pioneer.png
+              pioneer25: sprites/far/dv/dv_5_pioneer2.png
+              pioneer5: sprites/far/dv/dv_5_pioneer.png
+              swim1: sprites/far/dv/dv_1_swim.png
+              swim2: sprites/far/dv/dv_2_swim.png
+              swim4: sprites/far/dv/dv_4_swim.png
+              
+    us: 
+      shortnames:
+    #MONKE
+        smile_pioneer_monke: monke smile
+        laugh_pioneer_monke: monke laugh
+        laugh2_pioneer_monke: monke laugh2
+        grin_pioneer_monke: monke grin
+
+    #MID
+        grin_dress: mid body1 grin dress1
+        grin_pioneer: mid body1 grin pioneer1
+        grin_sport: mid body1 grin sport1
+        grin_swim: mid body1 grin swim1
+        laugh2_dress: mid body1 laugh2 dress1
+        laugh2_pioneer: mid body1 laugh2 pioneer1
+        laugh2_sport: mid body1 laugh2 sport1
+        laugh2_swim: mid body1 laugh2 swim1
+        laugh_dress: mid body1 laugh dress1
+        laugh_pioneer: mid body1 laugh pioneer1
+        laugh_sport: mid body1 laugh sport1
+        laugh_swim: mid body1 laugh swim1
+        normal_dress: mid body1 normal dress1
+        normal_pioneer: mid body1 normal pioneer1
+        normal_sport: mid body1 normal sport1
+        normal_swim: mid body1 normal swim1
+        sad_dress: mid body1 sad dress1
+        sad_pioneer: mid body1 sad pioneer1
+        sad_sport: mid body1 sad sport1
+        sad_swim: mid body1 sad swim1
+        smile_dress: mid body1 smile dress1
+        smile_pioneer: mid body1 smile pioneer1
+        smile_sport: mid body1 smile sport1
+        smile_swim: mid body1 smile swim1
+        angry_dress: mid body2 angry dress2
+        angry_pioneer: mid body2 angry pioneer2
+        angry_sport: mid body2 angry sport2
+        angry_swim: mid body2 angry swim2
+        calml_dress: mid body2 calml dress2
+        calml_pioneer: mid body2 calml pioneer2
+        calml_sport: mid body2 calml sport2
+        calml_swim: mid body2 calml swim2
+        dontlike_dress: mid body2 dontlike dress2
+        dontlike_pioneer: mid body2 dontlike pioneer2
+        dontlike_sport: mid body2 dontlike sport2
+        dontlike_swim: mid body2 dontlike swim2
+        fear_dress: mid body2 fear dress2
+        fear_pioneer: mid body2 fear pioneer2
+        fear_sport: mid body2 fear sport2
+        fear_swim: mid body2 fear swim2
+        upset_dress: mid body2 upset dress2
+        upset_pioneer: mid body2 upset pioneer2
+        upset_sport: mid body2 upset sport2
+        upset_swim: mid body2 upset swim2
+        cry2_dress: mid body3 cry2 dress3
+        cry2_pioneer: mid body3 cry2 pioneer3
+        cry2_sport: mid body3 cry2 sport3
+        cry2_swim: mid body3 cry2 swim3
+        cry_dress: mid body3 cry dress3
+        cry_pioneer: mid body3 cry pioneer3
+        cry_sport: mid body3 cry sport3
+        cry_swim: mid body3 cry swim3
+        shy2_dress: mid body3 shy2 dress3
+        shy2_pioneer: mid body3 shy2 pioneer3
+        shy2_sport: mid body3 shy2 sport3
+        shy2_swim: mid body3 shy2 swim3
+        shy_dress: mid body3 shy dress3
+        shy_pioneer: mid body3 shy pioneer3
+        shy_sport: mid body3 shy sport3
+        shy_swim: mid body3 shy swim3
+        surp1_dress: mid body3 surp1 dress3
+        surp1_pioneer: mid body3 surp1 pioneer3
+        surp1_sport: mid body3 surp1 sport3
+        surp1_swim: mid body3 surp1 swim3
+        surp2_dress: mid body3 surp2 dress3
+        surp2_pioneer: mid body3 surp2 pioneer3
+        surp2_sport: mid body3 surp2 sport3
+        surp2_swim: mid body3 surp2 swim3
+        surp3_dress: mid body3 surp3 dress3
+        surp3_pioneer: mid body3 surp3 pioneer3
+        surp3_sport: mid body3 surp3 sport3
+        surp3_swim: mid body3 surp3 swim3
+
+    #CLOSE
+        grin_dress_close: close body1 grin dress1
+        grin_pioneer_close: close body1 grin pioneer1
+        grin_sport_close: close body1 grin sport1
+        grin_swim_close: close body1 grin swim1
+        laugh2_dress_close: close body1 laugh2 dress1
+        laugh2_pioneer_close: close body1 laugh2 pioneer1
+        laugh2_sport_close: close body1 laugh2 sport1
+        laugh2_swim_close: close body1 laugh2 swim1
+        laugh_dress_close: close body1 laugh dress1
+        laugh_pioneer_close: close body1 laugh pioneer1
+        laugh_sport_close: close body1 laugh sport1
+        laugh_swim_close: close body1 laugh swim1
+        normal_dress_close: close body1 normal dress1
+        normal_pioneer_close: close body1 normal pioneer1
+        normal_sport_close: close body1 normal sport1
+        normal_swim_close: close body1 normal swim1
+        sad_dress_close: close body1 sad dress1
+        sad_pioneer_close: close body1 sad pioneer1
+        sad_sport_close: close body1 sad sport1
+        sad_swim_close: close body1 sad swim1
+        smile_dress_close: close body1 smile dress1
+        smile_pioneer_close: close body1 smile pioneer1
+        smile_sport_close: close body1 smile sport1
+        smile_swim_close: close body1 smile swim1
+        angry_dress_close: close body2 angry dress2
+        angry_pioneer_close: close body2 angry pioneer2
+        angry_sport_close: close body2 angry sport2
+        angry_swim_close: close body2 angry swim2
+        calml_dress_close: close body2 calml dress2
+        calml_pioneer_close: close body2 calml pioneer2
+        calml_sport_close: close body2 calml sport2
+        calml_swim_close: close body2 calml swim2
+        dontlike_dress_close: close body2 dontlike dress2
+        dontlike_pioneer_close: close body2 dontlike pioneer2
+        dontlike_sport_close: close body2 dontlike sport2
+        dontlike_swim_close: close body2 dontlike swim2
+        fear_dress_close: close body2 fear dress2
+        fear_pioneer_close: close body2 fear pioneer2
+        fear_sport_close: close body2 fear sport2
+        fear_swim_close: close body2 fear swim2
+        upset_dress_close: close body2 upset dress2
+        upset_pioneer_close: close body2 upset pioneer2
+        upset_sport_close: close body2 upset sport2
+        upset_swim_close: close body2 upset swim2
+        cry2_dress_close: close body3 cry2 dress3
+        cry2_pioneer_close: close body3 cry2 pioneer3
+        cry2_sport_close: close body3 cry2 sport3
+        cry2_swim_close: close body3 cry2 swim3
+        cry_dress_close: close body3 cry dress3
+        cry_pioneer_close: close body3 cry pioneer3
+        cry_sport_close: close body3 cry sport3
+        cry_swim_close: close body3 cry swim3
+        shy2_dress_close: close body3 shy2 dress3
+        shy2_pioneer_close: close body3 shy2 pioneer3
+        shy2_sport_close: close body3 shy2 sport3
+        shy2_swim_close: close body3 shy2 swim3
+        shy_dress_close: close body3 shy dress3
+        shy_pioneer_close: close body3 shy pioneer3
+        shy_sport_close: close body3 shy sport3
+        shy_swim_close: close body3 shy swim3
+        surp1_dress_close: close body3 surp1 dress3
+        surp1_pioneer_close: close body3 surp1 pioneer3
+        surp1_sport_close: close body3 surp1 sport3
+        surp1_swim_close: close body3 surp1 swim3
+        surp2_dress_close: close body3 surp2 dress3
+        surp2_pioneer_close: close body3 surp2 pioneer3
+        surp2_sport_close: close body3 surp2 sport3
+        surp2_swim_close: close body3 surp2 swim3
+        surp3_dress_close: close body3 surp3 dress3
+        surp3_pioneer_close: close body3 surp3 pioneer3
+        surp3_sport_close: close body3 surp3 sport3
+        surp3_swim_close: close body3 surp3 swim3
+    
+    #FAR
+        grin_dress_far: far body1 grin dress1
+        grin_pioneer_far: far body1 grin pioneer1
+        grin_sport_far: far body1 grin sport1
+        grin_swim_far: far body1 grin swim1
+        laugh2_dress_far: far body1 laugh2 dress1
+        laugh2_pioneer_far: far body1 laugh2 pioneer1
+        laugh2_sport_far: far body1 laugh2 sport1
+        laugh2_swim_far: far body1 laugh2 swim1
+        laugh_dress_far: far body1 laugh dress1
+        laugh_pioneer_far: far body1 laugh pioneer1
+        laugh_sport_far: far body1 laugh sport1
+        laugh_swim_far: far body1 laugh swim1
+        normal_dress_far: far body1 normal dress1
+        normal_pioneer_far: far body1 normal pioneer1
+        normal_sport_far: far body1 normal sport1
+        normal_swim_far: far body1 normal swim1
+        sad_dress_far: far body1 sad dress1
+        sad_pioneer_far: far body1 sad pioneer1
+        sad_sport_far: far body1 sad sport1
+        sad_swim_far: far body1 sad swim1
+        smile_dress_far: far body1 smile dress1
+        smile_pioneer_far: far body1 smile pioneer1
+        smile_sport_far: far body1 smile sport1
+        smile_swim_far: far body1 smile swim1
+        angry_dress_far: far body2 angry dress2
+        angry_pioneer_far: far body2 angry pioneer2
+        angry_sport_far: far body2 angry sport2
+        angry_swim_far: far body2 angry swim2
+        calml_dress_far: far body2 calml dress2
+        calml_pioneer_far: far body2 calml pioneer2
+        calml_sport_far: far body2 calml sport2
+        calml_swim_far: far body2 calml swim2
+        dontlike_dress_far: far body2 dontlike dress2
+        dontlike_pioneer_far: far body2 dontlike pioneer2
+        dontlike_sport_far: far body2 dontlike sport2
+        dontlike_swim_far: far body2 dontlike swim2
+        fear_dress_far: far body2 fear dress2
+        fear_pioneer_far: far body2 fear pioneer2
+        fear_sport_far: far body2 fear sport2
+        fear_swim_far: far body2 fear swim2
+        upset_dress_far: far body2 upset dress2
+        upset_pioneer_far: far body2 upset pioneer2
+        upset_sport_far: far body2 upset sport2
+        upset_swim_far: far body2 upset swim2
+        cry2_dress_far: far body3 cry2 dress3
+        cry2_pioneer_far: far body3 cry2 pioneer3
+        cry2_sport_far: far body3 cry2 sport3
+        cry2_swim_far: far body3 cry2 swim3
+        cry_dress_far: far body3 cry dress3
+        cry_pioneer_far: far body3 cry pioneer3
+        cry_sport_far: far body3 cry sport3
+        cry_swim_far: far body3 cry swim3
+        shy2_dress_far: far body3 shy2 dress3
+        shy2_pioneer_far: far body3 shy2 pioneer3
+        shy2_sport_far: far body3 shy2 sport3
+        shy2_swim_far: far body3 shy2 swim3
+        shy_dress_far: far body3 shy dress3
+        shy_pioneer_far: far body3 shy pioneer3
+        shy_sport_far: far body3 shy sport3
+        shy_swim_far: far body3 shy swim3
+        surp1_dress_far: far body3 surp1 dress3
+        surp1_pioneer_far: far body3 surp1 pioneer3
+        surp1_sport_far: far body3 surp1 sport3
+        surp1_swim_far: far body3 surp1 swim3
+        surp2_dress_far: far body3 surp2 dress3
+        surp2_pioneer_far: far body3 surp2 pioneer3
+        surp2_sport_far: far body3 surp2 sport3
+        surp2_swim_far: far body3 surp2 swim3
+        surp3_dress_far: far body3 surp3 dress3
+        surp3_pioneer_far: far body3 surp3 pioneer3
+        surp3_sport_far: far body3 surp3 sport3
+        surp3_swim_far: far body3 surp3 swim3
+        
+      poses:
+        mid:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/normal/us/us_1_body.png
+              body2: sprites/normal/us/us_2_body.png
+              body3: sprites/normal/us/us_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              grin: sprites/normal/us/us_1_grin.png
+              laugh2: sprites/normal/us/us_1_laugh2.png
+              laugh: sprites/normal/us/us_1_laugh.png
+              normal: sprites/normal/us/us_1_normal.png
+              sad: sprites/normal/us/us_1_sad.png
+              smile: sprites/normal/us/us_1_smile.png
+              angry: sprites/normal/us/us_2_angry.png
+              calml: sprites/normal/us/us_2_calml.png
+              dontlike: sprites/normal/us/us_2_dontlike.png
+              fear: sprites/normal/us/us_2_fear.png
+              upset: sprites/normal/us/us_2_upset.png
+              cry2: sprites/normal/us/us_3_cry2.png
+              cry: sprites/normal/us/us_3_cry.png
+              shy2: sprites/normal/us/us_3_shy2.png
+              shy: sprites/normal/us/us_3_shy.png
+              surp1: sprites/normal/us/us_3_surp1.png
+              surp2: sprites/normal/us/us_3_surp2.png
+              surp3: sprites/normal/us/us_3_surp3.png
+
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/normal/us/us_1_pioneer.png
+              pioneer2: sprites/normal/us/us_2_pioneer.png
+              pioneer3: sprites/normal/us/us_3_pioneer.png
+              swim1: sprites/normal/us/us_1_swim.png
+              swim2: sprites/normal/us/us_2_swim.png
+              swim3: sprites/normal/us/us_3_swim.png
+              sport1: sprites/normal/us/us_1_sport.png
+              sport2: sprites/normal/us/us_2_sport.png
+              sport3: sprites/normal/us/us_3_sport.png
+              dress1: sprites/normal/us/us_1_dress.png
+              dress2: sprites/normal/us/us_2_dress.png
+              dress3: sprites/normal/us/us_3_dress.png
+              
+        close:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/close/us/us_1_body.png
+              body2: sprites/close/us/us_2_body.png
+              body3: sprites/close/us/us_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              grin: sprites/close/us/us_1_grin.png
+              laugh2: sprites/close/us/us_1_laugh2.png
+              laugh: sprites/close/us/us_1_laugh.png
+              normal: sprites/close/us/us_1_normal.png
+              sad: sprites/close/us/us_1_sad.png
+              smile: sprites/close/us/us_1_smile.png
+              angry: sprites/close/us/us_2_angry.png
+              calml: sprites/close/us/us_2_calml.png
+              dontlike: sprites/close/us/us_2_dontlike.png
+              fear: sprites/close/us/us_2_fear.png
+              upset: sprites/close/us/us_2_upset.png
+              cry2: sprites/close/us/us_3_cry2.png
+              cry: sprites/close/us/us_3_cry.png
+              shy2: sprites/close/us/us_3_shy2.png
+              shy: sprites/close/us/us_3_shy.png
+              surp1: sprites/close/us/us_3_surp1.png
+              surp2: sprites/close/us/us_3_surp2.png
+              surp3: sprites/close/us/us_3_surp3.png
+
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/close/us/us_1_pioneer.png
+              pioneer2: sprites/close/us/us_2_pioneer.png
+              pioneer3: sprites/close/us/us_3_pioneer.png
+              swim1: sprites/close/us/us_1_swim.png
+              swim2: sprites/close/us/us_2_swim.png
+              swim3: sprites/close/us/us_3_swim.png
+              sport1: sprites/close/us/us_1_sport.png
+              sport2: sprites/close/us/us_2_sport.png
+              sport3: sprites/close/us/us_3_sport.png
+              dress1: sprites/close/us/us_1_dress.png
+              dress2: sprites/close/us/us_2_dress.png
+              dress3: sprites/close/us/us_3_dress.png
+              
+        far:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/far/us/us_1_body.png
+              body2: sprites/far/us/us_2_body.png
+              body3: sprites/far/us/us_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              grin: sprites/far/us/us_1_grin.png
+              laugh2: sprites/far/us/us_1_laugh2.png
+              laugh: sprites/far/us/us_1_laugh.png
+              normal: sprites/far/us/us_1_normal.png
+              sad: sprites/far/us/us_1_sad.png
+              smile: sprites/far/us/us_1_smile.png
+              angry: sprites/far/us/us_2_angry.png
+              calml: sprites/far/us/us_2_calml.png
+              dontlike: sprites/far/us/us_2_dontlike.png
+              fear: sprites/far/us/us_2_fear.png
+              upset: sprites/far/us/us_2_upset.png
+              cry2: sprites/far/us/us_3_cry2.png
+              cry: sprites/far/us/us_3_cry.png
+              shy2: sprites/far/us/us_3_shy2.png
+              shy: sprites/far/us/us_3_shy.png
+              surp1: sprites/far/us/us_3_surp1.png
+              surp2: sprites/far/us/us_3_surp2.png
+              surp3: sprites/far/us/us_3_surp3.png
+
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/far/us/us_1_pioneer.png
+              pioneer2: sprites/far/us/us_2_pioneer.png
+              pioneer3: sprites/far/us/us_3_pioneer.png
+              swim1: sprites/far/us/us_1_swim.png
+              swim2: sprites/far/us/us_2_swim.png
+              swim3: sprites/far/us/us_3_swim.png
+              sport1: sprites/far/us/us_1_sport.png
+              sport2: sprites/far/us/us_2_sport.png
+              sport3: sprites/far/us/us_3_sport.png
+              dress1: sprites/far/us/us_1_dress.png
+              dress2: sprites/far/us/us_2_dress.png
+              dress3: sprites/far/us/us_3_dress.png
+        
+        monke:
+          body: sprites/normal/us_monke/us_1_body.png
+          ~emotions:
+            parts:
+              smile: sprites/normal/us_monke/us_1_smile.png
+              laugh: sprites/normal/us_monke/us_1_laugh.png
+              laugh2: sprites/normal/us_monke/us_1_laugh2.png
+              grin: sprites/normal/us_monke/us_1_grin.png
+          uniform: sprites/normal/us_monke/us_1_pioneer.png
+                
+
+              
+    el: 
+      shortnames:
+    #MID
+        grin_pioneer: mid body1 grin pioneer1
+        normal_pioneer: mid body1 normal pioneer1
+        smile_pioneer: mid body1 smile pioneer1
+        fingal_pioneer: mid body2 fingal pioneer2
+        sad_pioneer: mid body2 sad pioneer2
+        scared_pioneer: mid body2 scared pioneer2
+        shocked_pioneer: mid body2 shocked pioneer2
+        surprise_pioneer: mid body2 surprise pioneer2
+        upset_pioneer: mid body2 upset pioneer2
+        angry_pioneer: mid body3 angry pioneer3
+        laugh_pioneer: mid body3 laugh pioneer3
+        serious_pioneer: mid body3 serious pioneer3
+
+    #CLOSE
+        grin_pioneer_close: close body1 grin pioneer1
+        normal_pioneer_close: close body1 normal pioneer1
+        smile_pioneer_close: close body1 smile pioneer1
+        fingal_pioneer_close: close body2 fingal pioneer2
+        sad_pioneer_close: close body2 sad pioneer2
+        scared_pioneer_close: close body2 scared pioneer2
+        shocked_pioneer_close: close body2 shocked pioneer2
+        surprise_pioneer_close: close body2 surprise pioneer2
+        upset_pioneer_close: close body2 upset pioneer2
+        angry_pioneer_close: close body3 angry pioneer3
+        laugh_pioneer_close: close body3 laugh pioneer3
+        serious_pioneer_close: close body3 serious pioneer3
+    
+    #FAR
+    
+        grin_pioneer_far: far body1 grin pioneer1
+        normal_pioneer_far: far body1 normal pioneer1
+        smile_pioneer_far: far body1 smile pioneer1
+        fingal_pioneer_far: far body2 fingal pioneer2
+        sad_pioneer_far: far body2 sad pioneer2
+        scared_pioneer_far: far body2 scared pioneer2
+        shocked_pioneer_far: far body2 shocked pioneer2
+        surprise_pioneer_far: far body2 surprise pioneer2
+        upset_pioneer_far: far body2 upset pioneer2
+        angry_pioneer_far: far body3 angry pioneer3
+        laugh_pioneer_far: far body3 laugh pioneer3
+        serious_pioneer_far: far body3 serious pioneer3
+        
+      poses:
+        mid:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/normal/el/el_1_body.png
+              body2: sprites/normal/el/el_2_body.png
+              body3: sprites/normal/el/el_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              grin: sprites/normal/el/el_1_grin.png
+              normal: sprites/normal/el/el_1_normal.png
+              smile: sprites/normal/el/el_1_smile.png
+              fingal: sprites/normal/el/el_2_fingal.png
+              sad: sprites/normal/el/el_2_sad.png
+              scared: sprites/normal/el/el_2_scared.png
+              shocked: sprites/normal/el/el_2_shocked.png
+              surprise: sprites/normal/el/el_2_surprise.png
+              upset: sprites/normal/el/el_2_upset.png
+              angry: sprites/normal/el/el_3_angry.png
+              laugh: sprites/normal/el/el_3_laugh.png
+              serious: sprites/normal/el/el_3_serious.png
+
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/normal/el/el_1_pioneer.png
+              pioneer2: sprites/normal/el/el_2_pioneer.png
+              pioneer3: sprites/normal/el/el_3_pioneer.png
+              
+        close:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/close/el/el_1_body.png
+              body2: sprites/close/el/el_2_body.png
+              body3: sprites/close/el/el_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              grin: sprites/close/el/el_1_grin.png
+              normal: sprites/close/el/el_1_normal.png
+              smile: sprites/close/el/el_1_smile.png
+              fingal: sprites/close/el/el_2_fingal.png
+              sad: sprites/close/el/el_2_sad.png
+              scared: sprites/close/el/el_2_scared.png
+              shocked: sprites/close/el/el_2_shocked.png
+              surprise: sprites/close/el/el_2_surprise.png
+              upset: sprites/close/el/el_2_upset.png
+              angry: sprites/close/el/el_3_angry.png
+              laugh: sprites/close/el/el_3_laugh.png
+              serious: sprites/close/el/el_3_serious.png
+
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/close/el/el_1_pioneer.png
+              pioneer2: sprites/close/el/el_2_pioneer.png
+              pioneer3: sprites/close/el/el_3_pioneer.png
+              
+        far:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/far/el/el_1_body.png
+              body2: sprites/far/el/el_2_body.png
+              body3: sprites/far/el/el_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              grin: sprites/far/el/el_1_grin.png
+              normal: sprites/far/el/el_1_normal.png
+              smile: sprites/far/el/el_1_smile.png
+              fingal: sprites/far/el/el_2_fingal.png
+              sad: sprites/far/el/el_2_sad.png
+              scared: sprites/far/el/el_2_scared.png
+              shocked: sprites/far/el/el_2_shocked.png
+              surprise: sprites/far/el/el_2_surprise.png
+              upset: sprites/far/el/el_2_upset.png
+              angry: sprites/far/el/el_3_angry.png
+              laugh: sprites/far/el/el_3_laugh.png
+              serious: sprites/far/el/el_3_serious.png
+
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/far/el/el_1_pioneer.png
+              pioneer2: sprites/far/el/el_2_pioneer.png
+              pioneer3: sprites/far/el/el_3_pioneer.png
+    
+    sh: 
+      shortnames:
+    #MID
+        laugh_pioneer: mid body1 laugh
+        scared_pioneer: mid body1 scared
+        smile_pioneer: mid body1 smile
+        upset_pioneer: mid body1 upset
+        cry_pioneer: mid body2 cry
+        normal_smile_pioneer: mid body2 normal_smile
+        rage_pioneer: mid body2 rage
+        normal_pioneer: mid body3 normal
+        serious_pioneer: mid body3 serious
+        surprise_pioneer: mid body3 surprise
+
+    #CLOSE
+        laugh_pioneer_close: close body1 laugh
+        scared_pioneer_close: close body1 scared
+        smile_pioneer_close: close body1 smile
+        upset_pioneer_close: close body1 upset
+        cry_pioneer_close: close body2 cry
+        normal_smile_pioneer_close: close body2 normal_smile
+        rage_pioneer_close: close body2 rage
+        normal_pioneer_close: close body3 normal
+        serious_pioneer_close: close body3 serious
+        surprise_pioneer_close: close body3 surprise
+    
+    #FAR
+        laugh_pioneer_far: far body1 laugh
+        scared_pioneer_far: far body1 scared
+        smile_pioneer_far: far body1 smile
+        upset_pioneer_far: far body1 upset
+        cry_pioneer_far: far body2 cry
+        normal_smile_pioneer_far: far body2 normal_smile
+        rage_pioneer_far: far body2 rage
+        normal_pioneer_far: far body3 normal
+        serious_pioneer_far: far body3 serious
+        surprise_pioneer_far: far body3 surprise
+        
+      poses:
+        mid:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/normal/sh/sh_1_body.png
+              body2: sprites/normal/sh/sh_2_body.png
+              body3: sprites/normal/sh/sh_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              laugh: sprites/normal/sh/sh_1_laugh.png
+              scared: sprites/normal/sh/sh_1_scared.png
+              smile: sprites/normal/sh/sh_1_smile.png
+              upset: sprites/normal/sh/sh_1_upset.png
+              cry: sprites/normal/sh/sh_2_cry.png
+              normal_smile: sprites/normal/sh/sh_2_normal_smile.png
+              rage: sprites/normal/sh/sh_2_rage.png
+              normal: sprites/normal/sh/sh_3_normal.png
+              serious: sprites/normal/sh/sh_3_serious.png
+              surprise: sprites/normal/sh/sh_3_surprise.png
+              
+        close:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/close/sh/sh_1_body.png
+              body2: sprites/close/sh/sh_2_body.png
+              body3: sprites/close/sh/sh_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              laugh: sprites/close/sh/sh_1_laugh.png
+              scared: sprites/close/sh/sh_1_scared.png
+              smile: sprites/close/sh/sh_1_smile.png
+              upset: sprites/close/sh/sh_1_upset.png
+              cry: sprites/close/sh/sh_2_cry.png
+              normal_smile: sprites/close/sh/sh_2_normal_smile.png
+              rage: sprites/close/sh/sh_2_rage.png
+              normal: sprites/close/sh/sh_3_normal.png
+              serious: sprites/close/sh/sh_3_serious.png
+              surprise: sprites/close/sh/sh_3_surprise.png
+              
+        far:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/far/sh/sh_1_body.png
+              body2: sprites/far/sh/sh_2_body.png
+              body3: sprites/far/sh/sh_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              laugh: sprites/far/sh/sh_1_laugh.png
+              scared: sprites/far/sh/sh_1_scared.png
+              smile: sprites/far/sh/sh_1_smile.png
+              upset: sprites/far/sh/sh_1_upset.png
+              cry: sprites/far/sh/sh_2_cry.png
+              normal_smile: sprites/far/sh/sh_2_normal_smile.png
+              rage: sprites/far/sh/sh_2_rage.png
+              normal: sprites/far/sh/sh_3_normal.png
+              serious: sprites/far/sh/sh_3_serious.png
+              surprise: sprites/far/sh/sh_3_surprise.png
+    cs: 
+      shortnames:
+    #MID
+        normal_glasses: mid body1 normal glasses
+        normal_stethoscope: mid body1 normal stethoscope
+        normal_: mid body1 normal nouni
+        shy_glasses: mid body1 shy glasses
+        shy_stethoscope: mid body1 shy stethoscope
+        shy_: mid body1 shy nouni
+        smile_glasses: mid body1 smile glasses
+        smile_stethoscope: mid body1 smile stethoscope
+        smile_: mid body1 smile nouni
+
+    #CLOSE
+        normal_glasses_close: close body1 normal glasses
+        normal_stethoscope_close: close body1 normal stethoscope
+        normal_close: close body1 normal nouni
+        shy_glasses_close: close body1 shy glasses
+        shy_stethoscope_close: close body1 shy stethoscope
+        shy_close: close body1 shy nouni
+        smile_glasses_close: close body1 smile glasses
+        smile_stethoscope_close: close body1 smile stethoscope
+        smile_close: close body1 smile nouni
+    
+    #FAR
+        normal_glasses_far: far body1 normal glasses
+        normal_stethoscope_far: far body1 normal stethoscope
+        normal_far: far body1 normal nouni
+        shy_glasses_far: far body1 shy glasses
+        shy_stethoscope_far: far body1 shy stethoscope
+        shy_far: far body1 shy nouni
+        smile_glasses_far: far body1 smile glasses
+        smile_stethoscope_far: far body1 smile stethoscope
+        smile_far: far body1 smile nouni
+
+        
+      poses:
+        mid:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/normal/cs/cs_1_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/normal/cs/cs_1_normal.png
+              shy: sprites/normal/cs/cs_1_shy.png
+              smile: sprites/normal/cs/cs_1_smile.png
+
+          ~uniform:
+            default: nouni
+            parts:
+              glasses: sprites/normal/cs/cs_1_glasses.png
+              stethoscope: sprites/normal/cs/cs_1_stethoscope.png
+              nouni: sprites/normal/cs/cs_1_nouni.png
+        close:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/close/cs/cs_1_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/close/cs/cs_1_normal.png
+              shy: sprites/close/cs/cs_1_shy.png
+              smile: sprites/close/cs/cs_1_smile.png
+
+          ~uniform:
+            default: nouni
+            parts:
+              glasses: sprites/close/cs/cs_1_glasses.png
+              stethoscope: sprites/close/cs/cs_1_stethoscope.png
+              nouni: sprites/close/cs/cs_1_nouni.png
+              
+        far:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/far/cs/cs_1_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              normal: sprites/far/cs/cs_1_normal.png
+              shy: sprites/far/cs/cs_1_shy.png
+              smile: sprites/far/cs/cs_1_smile.png
+
+          ~uniform:
+            default: nouni
+            parts:
+              glasses: sprites/far/cs/cs_1_glasses.png
+              stethoscope: sprites/far/cs/cs_1_stethoscope.png
+              nouni: sprites/far/cs/cs_1_nouni.png
+    mz: 
+      shortnames:
+    #MID
+        bukal_glasses_pioneer: mid body1 bukal glasses1 pioneer1
+        bukal_pioneer: mid body1 bukal noglasses pioneer1
+        laugh_glasses_pioneer: mid body1 laugh glasses1 pioneer1
+        laugh_pioneer: mid body1 laugh noglasses pioneer1
+        normal_glasses_pioneer: mid body1 normal glasses1 pioneer1
+        normal_pioneer: mid body1 normal noglasses pioneer1
+        angry_glasses_pioneer: mid body2 angry glasses2 pioneer2
+        angry_pioneer: mid body2 angry noglasses pioneer2
+        rage_glasses_pioneer: mid body2 rage glasses2 pioneer2
+        rage_pioneer: mid body2 rage noglasses pioneer2
+        shy_glasses_pioneer: mid body3 shy glasses3 pioneer3
+        shy_pioneer: mid body3 shy noglasses pioneer3
+        smile_glasses_pioneer: mid body3 smile glasses3 pioneer3
+        smile_pioneer: mid body3 smile noglasses pioneer3
+
+    #CLOSE
+        bukal_glasses_pioneer_close: close body1 bukal glasses1 pioneer1
+        bukal_pioneer_close: close body1 bukal noglasses pioneer1
+        laugh_glasses_pioneer_close: close body1 laugh glasses1 pioneer1
+        laugh_pioneer_close: close body1 laugh noglasses pioneer1
+        normal_glasses_pioneer_close: close body1 normal glasses1 pioneer1
+        normal_pioneer_close: close body1 normal noglasses pioneer1
+        angry_glasses_pioneer_close: close body2 angry glasses2 pioneer2
+        angry_pioneer_close: close body2 angry noglasses pioneer2
+        rage_glasses_pioneer_close: close body2 rage glasses2 pioneer2
+        rage_pioneer_close: close body2 rage noglasses pioneer2
+        shy_glasses_pioneer_close: close body3 shy glasses3 pioneer3
+        shy_pioneer_close: close body3 shy noglasses pioneer3
+        smile_glasses_pioneer_close: close body3 smile glasses3 pioneer3
+        smile_pioneer_close: close body3 smile noglasses pioneer3
+    
+    #FAR
+        bukal_glasses_pioneer_far: far body1 bukal glasses1 pioneer1
+        bukal_pioneer_far: far body1 bukal noglasses pioneer1
+        laugh_glasses_pioneer_far: far body1 laugh glasses1 pioneer1
+        laugh_pioneer_far: far body1 laugh noglasses pioneer1
+        normal_glasses_pioneer_far: far body1 normal glasses1 pioneer1
+        normal_pioneer_far: far body1 normal noglasses pioneer1
+        angry_glasses_pioneer_far: far body2 angry glasses2 pioneer2
+        angry_pioneer_far: far body2 angry noglasses pioneer2
+        rage_glasses_pioneer_far: far body2 rage glasses2 pioneer2
+        rage_pioneer_far: far body2 rage noglasses pioneer2
+        shy_glasses_pioneer_far: far body3 shy glasses3 pioneer3
+        shy_pioneer_far: far body3 shy noglasses pioneer3
+        smile_glasses_pioneer_far: far body3 smile glasses3 pioneer3
+        smile_pioneer_far: far body3 smile noglasses pioneer3
+
+        
+      poses:
+        mid:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/normal/mz/mz_1_body.png
+              body2: sprites/normal/mz/mz_2_body.png
+              body3: sprites/normal/mz/mz_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              bukal: sprites/normal/mz/mz_1_bukal.png
+              glasses: sprites/normal/mz/mz_1_glasses.png
+              laugh: sprites/normal/mz/mz_1_laugh.png
+              normal: sprites/normal/mz/mz_1_normal.png
+              angry: sprites/normal/mz/mz_2_angry.png
+              rage: sprites/normal/mz/mz_2_rage.png
+              shy: sprites/normal/mz/mz_3_shy.png
+              smile: sprites/normal/mz/mz_3_smile.png
+              
+          ~glasses:
+            default: noglasses
+            parts:
+              glasses1: sprites/normal/mz/mz_1_glasses.png
+              glasses2: sprites/normal/mz/mz_2_glasses.png
+              glasses3: sprites/normal/mz/mz_3_glasses.png
+              noglasses: sprites/normal/mz/mz_noglasses.png
+              
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/normal/mz/mz_1_pioneer.png
+              pioneer2: sprites/normal/mz/mz_2_pioneer.png
+              pioneer3: sprites/normal/mz/mz_3_pioneer.png
+              
+        close:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/close/mz/mz_1_body.png
+              body2: sprites/close/mz/mz_2_body.png
+              body3: sprites/close/mz/mz_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              bukal: sprites/close/mz/mz_1_bukal.png
+              glasses: sprites/close/mz/mz_1_glasses.png
+              laugh: sprites/close/mz/mz_1_laugh.png
+              normal: sprites/close/mz/mz_1_normal.png
+              angry: sprites/close/mz/mz_2_angry.png
+              rage: sprites/close/mz/mz_2_rage.png
+              shy: sprites/close/mz/mz_3_shy.png
+              smile: sprites/close/mz/mz_3_smile.png
+              
+          ~glasses:
+            default: noglasses
+            parts:
+              glasses1: sprites/close/mz/mz_1_glasses.png
+              glasses2: sprites/close/mz/mz_2_glasses.png
+              glasses3: sprites/close/mz/mz_3_glasses.png
+              noglasses: sprites/close/mz/mz_noglasses.png
+              
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/close/mz/mz_1_pioneer.png
+              pioneer2: sprites/close/mz/mz_2_pioneer.png
+              pioneer3: sprites/close/mz/mz_3_pioneer.png
+              
+        far:
+          ~body:
+            default: body1
+            parts:
+              body1: sprites/far/mz/mz_1_body.png
+              body2: sprites/far/mz/mz_2_body.png
+              body3: sprites/far/mz/mz_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              bukal: sprites/far/mz/mz_1_bukal.png
+              glasses: sprites/far/mz/mz_1_glasses.png
+              laugh: sprites/far/mz/mz_1_laugh.png
+              normal: sprites/far/mz/mz_1_normal.png
+              angry: sprites/far/mz/mz_2_angry.png
+              rage: sprites/far/mz/mz_2_rage.png
+              shy: sprites/far/mz/mz_3_shy.png
+              smile: sprites/far/mz/mz_3_smile.png
+              
+          ~glasses:
+            default: noglasses
+            parts:
+              glasses1: sprites/far/mz/mz_1_glasses.png
+              glasses2: sprites/far/mz/mz_2_glasses.png
+              glasses3: sprites/far/mz/mz_3_glasses.png
+              noglasses: sprites/far/mz/mz_noglasses.png
+              
+          ~uniform:
+            default: pioneer1
+            parts:
+              pioneer1: sprites/far/mz/mz_1_pioneer.png
+              pioneer2: sprites/far/mz/mz_2_pioneer.png
+              pioneer3: sprites/far/mz/mz_3_pioneer.png
+    mi: 
+      shortnames:
+    #MID
+        cry_pioneer: mid body1 cry pioneer1
+        cry_swim: mid body1 cry swim1
+        dontlike_pioneer: mid body1 dontlike pioneer1
+        dontlike_swim: mid body1 dontlike swim1
+        laugh_pioneer: mid body1 laugh pioneer1
+        laugh_swim: mid body1 laugh swim1
+        scared_pioneer: mid body1 scared pioneer1
+        scared_swim: mid body1 scared swim1
+        shocked_pioneer: mid body1 shocked pioneer1
+        shocked_swim: mid body1 shocked swim1
+        shy_pioneer: mid body1 shy pioneer1
+        shy_swim: mid body1 shy swim1
+        surprise_pioneer: mid body1 surprise pioneer1
+        surprise_swim: mid body1 surprise swim1
+        cry_smile_pioneer: mid body2 cry_smile pioneer2
+        cry_smile_swim: mid body2 cry_smile swim2
+        grin_pioneer: mid body2 grin pioneer2
+        grin_swim: mid body2 grin swim2
+        happy_pioneer: mid body2 happy pioneer2
+        happy_swim: mid body2 happy swim2
+        sad_pioneer: mid body2 sad pioneer2
+        sad_swim: mid body2 sad swim2
+        smile_pioneer: mid body2 smile pioneer2
+        smile_swim: mid body2 smile swim2
+        angry_pioneer: mid body3 angry pioneer3
+        angry_swim: mid body3 angry swim3
+        normal_pioneer: mid body3 normal pioneer3
+        normal_swim: mid body3 normal swim3
+        rage_pioneer: mid body3 rage pioneer3
+        rage_swim: mid body3 rage swim3
+        serious_pioneer: mid body3 serious pioneer3
+        serious_swim: mid body3 serious swim3
+        upset_pioneer: mid body3 upset pioneer3
+        upset_swim: mid body3 upset swim3
+
+    #CLOSE
+        cry_pioneer_close: close body1 cry pioneer1
+        cry_swim_close: close body1 cry swim1
+        dontlike_pioneer_close: close body1 dontlike pioneer1
+        dontlike_swim_close: close body1 dontlike swim1
+        laugh_pioneer_close: close body1 laugh pioneer1
+        laugh_swim_close: close body1 laugh swim1
+        scared_pioneer_close: close body1 scared pioneer1
+        scared_swim_close: close body1 scared swim1
+        shocked_pioneer_close: close body1 shocked pioneer1
+        shocked_swim_close: close body1 shocked swim1
+        shy_pioneer_close: close body1 shy pioneer1
+        shy_swim_close: close body1 shy swim1
+        surprise_pioneer_close: close body1 surprise pioneer1
+        surprise_swim_close: close body1 surprise swim1
+        cry_smile_pioneer_close: close body2 cry_smile pioneer2
+        cry_smile_swim_close: close body2 cry_smile swim2
+        grin_pioneer_close: close body2 grin pioneer2
+        grin_swim_close: close body2 grin swim2
+        happy_pioneer_close: close body2 happy pioneer2
+        happy_swim_close: close body2 happy swim2
+        sad_pioneer_close: close body2 sad pioneer2
+        sad_swim_close: close body2 sad swim2
+        smile_pioneer_close: close body2 smile pioneer2
+        smile_swim_close: close body2 smile swim2
+        angry_pioneer_close: close body3 angry pioneer3
+        angry_swim_close: close body3 angry swim3
+        normal_pioneer_close: close body3 normal pioneer3
+        normal_swim_close: close body3 normal swim3
+        rage_pioneer_close: close body3 rage pioneer3
+        rage_swim_close: close body3 rage swim3
+        serious_pioneer_close: close body3 serious pioneer3
+        serious_swim_close: close body3 serious swim3
+        upset_pioneer_close: close body3 upset pioneer3
+        upset_swim_close: close body3 upset swim3
+    
+    #FAR
+        cry_pioneer_far: far body1 cry pioneer1
+        cry_swim_far: far body1 cry swim1
+        dontlike_pioneer_far: far body1 dontlike pioneer1
+        dontlike_swim_far: far body1 dontlike swim1
+        laugh_pioneer_far: far body1 laugh pioneer1
+        laugh_swim_far: far body1 laugh swim1
+        scared_pioneer_far: far body1 scared pioneer1
+        scared_swim_far: far body1 scared swim1
+        shocked_pioneer_far: far body1 shocked pioneer1
+        shocked_swim_far: far body1 shocked swim1
+        shy_pioneer_far: far body1 shy pioneer1
+        shy_swim_far: far body1 shy swim1
+        surprise_pioneer_far: far body1 surprise pioneer1
+        surprise_swim_far: far body1 surprise swim1
+        cry_smile_pioneer_far: far body2 cry_smile pioneer2
+        cry_smile_swim_far: far body2 cry_smile swim2
+        grin_pioneer_far: far body2 grin pioneer2
+        grin_swim_far: far body2 grin swim2
+        happy_pioneer_far: far body2 happy pioneer2
+        happy_swim_far: far body2 happy swim2
+        sad_pioneer_far: far body2 sad pioneer2
+        sad_swim_far: far body2 sad swim2
+        smile_pioneer_far: far body2 smile pioneer2
+        smile_swim_far: far body2 smile swim2
+        angry_pioneer_far: far body3 angry pioneer3
+        angry_swim_far: far body3 angry swim3
+        normal_pioneer_far: far body3 normal pioneer3
+        normal_swim_far: far body3 normal swim3
+        rage_pioneer_far: far body3 rage pioneer3
+        rage_swim_far: far body3 rage swim3
+        serious_pioneer_far: far body3 serious pioneer3
+        serious_swim_far: far body3 serious swim3
+        upset_pioneer_far: far body3 upset pioneer3
+        upset_swim_far: far body3 upset swim3
+        
+      poses:
+        mid:
+          ~body:
+            default: body3
+            parts:
+              body1: sprites/normal/mi/mi_1_body.png
+              body2: sprites/normal/mi/mi_2_body.png
+              body3: sprites/normal/mi/mi_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              cry: sprites/normal/mi/mi_1_cry.png
+              dontlike: sprites/normal/mi/mi_1_dontlike.png
+              laugh: sprites/normal/mi/mi_1_laugh.png
+              scared: sprites/normal/mi/mi_1_scared.png
+              shocked: sprites/normal/mi/mi_1_shocked.png
+              shy: sprites/normal/mi/mi_1_shy.png
+              surprise: sprites/normal/mi/mi_1_surprise.png
+              cry_smile: sprites/normal/mi/mi_2_cry_smile.png
+              grin: sprites/normal/mi/mi_2_grin.png
+              happy: sprites/normal/mi/mi_2_happy.png
+              sad: sprites/normal/mi/mi_2_sad.png
+              smile: sprites/normal/mi/mi_2_smile.png
+              angry: sprites/normal/mi/mi_3_angry.png
+              normal: sprites/normal/mi/mi_3_normal.png
+              rage: sprites/normal/mi/mi_3_rage.png
+              serious: sprites/normal/mi/mi_3_serious.png
+              upset: sprites/normal/mi/mi_3_upset.png
+
+          ~uniform:
+            default: pioneer3
+            parts:
+              pioneer1: sprites/normal/mi/mi_1_pioneer.png
+              pioneer2: sprites/normal/mi/mi_2_pioneer.png
+              pioneer3: sprites/normal/mi/mi_3_pioneer.png
+              swim1: sprites/normal/mi/mi_1_swim.png
+              swim2: sprites/normal/mi/mi_2_swim.png
+              swim3: sprites/normal/mi/mi_3_swim.png
+              
+        close:
+          ~body:
+            default: body3
+            parts:
+              body1: sprites/close/mi/mi_1_body.png
+              body2: sprites/close/mi/mi_2_body.png
+              body3: sprites/close/mi/mi_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              cry: sprites/close/mi/mi_1_cry.png
+              dontlike: sprites/close/mi/mi_1_dontlike.png
+              laugh: sprites/close/mi/mi_1_laugh.png
+              scared: sprites/close/mi/mi_1_scared.png
+              shocked: sprites/close/mi/mi_1_shocked.png
+              shy: sprites/close/mi/mi_1_shy.png
+              surprise: sprites/close/mi/mi_1_surprise.png
+              cry_smile: sprites/close/mi/mi_2_cry_smile.png
+              grin: sprites/close/mi/mi_2_grin.png
+              happy: sprites/close/mi/mi_2_happy.png
+              sad: sprites/close/mi/mi_2_sad.png
+              smile: sprites/close/mi/mi_2_smile.png
+              angry: sprites/close/mi/mi_3_angry.png
+              normal: sprites/close/mi/mi_3_normal.png
+              rage: sprites/close/mi/mi_3_rage.png
+              serious: sprites/close/mi/mi_3_serious.png
+              upset: sprites/close/mi/mi_3_upset.png
+
+          ~uniform:
+            default: pioneer3
+            parts:
+              pioneer1: sprites/close/mi/mi_1_pioneer.png
+              pioneer2: sprites/close/mi/mi_2_pioneer.png
+              pioneer3: sprites/close/mi/mi_3_pioneer.png
+              swim1: sprites/close/mi/mi_1_swim.png
+              swim2: sprites/close/mi/mi_2_swim.png
+              swim3: sprites/close/mi/mi_3_swim.png
+              
+        far:
+          ~body:
+            default: body3
+            parts:
+              body1: sprites/far/mi/mi_1_body.png
+              body2: sprites/far/mi/mi_2_body.png
+              body3: sprites/far/mi/mi_3_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              cry: sprites/far/mi/mi_1_cry.png
+              dontlike: sprites/far/mi/mi_1_dontlike.png
+              laugh: sprites/far/mi/mi_1_laugh.png
+              scared: sprites/far/mi/mi_1_scared.png
+              shocked: sprites/far/mi/mi_1_shocked.png
+              shy: sprites/far/mi/mi_1_shy.png
+              surprise: sprites/far/mi/mi_1_surprise.png
+              cry_smile: sprites/far/mi/mi_2_cry_smile.png
+              grin: sprites/far/mi/mi_2_grin.png
+              happy: sprites/far/mi/mi_2_happy.png
+              sad: sprites/far/mi/mi_2_sad.png
+              smile: sprites/far/mi/mi_2_smile.png
+              angry: sprites/far/mi/mi_3_angry.png
+              normal: sprites/far/mi/mi_3_normal.png
+              rage: sprites/far/mi/mi_3_rage.png
+              serious: sprites/far/mi/mi_3_serious.png
+              upset: sprites/far/mi/mi_3_upset.png
+
+          ~uniform:
+            default: pioneer3
+            parts:
+              pioneer1: sprites/far/mi/mi_1_pioneer.png
+              pioneer2: sprites/far/mi/mi_2_pioneer.png
+              pioneer3: sprites/far/mi/mi_3_pioneer.png
+              swim1: sprites/far/mi/mi_1_swim.png
+              swim2: sprites/far/mi/mi_2_swim.png
+              swim3: sprites/far/mi/mi_3_swim.png
+    uv: 
+      shortnames:
+    #MID
+        dontlike_: mid body1 dontlike pioneer1
+        rage_: mid body1 rage pioneer1
+        sad_: mid body1 sad pioneer1
+        shocked_: mid body1 shocked pioneer1
+        normal_: mid body2 normal pioneer2
+        smile_: mid body2 smile pioneer2
+        grin_: mid body3 grin pioneer3
+        laugh_: mid body3 laugh pioneer3
+        surprise2_: mid body3 surprise2 pioneer3
+        guilty_: mid body4 guilty pioneer4
+        surprise_: mid body4 surprise pioneer4
+        upset_: mid body4 upset pioneer4
+
+    #CLOSE
+        dontlike_close: close body1 dontlike pioneer1
+        rage_close: close body1 rage pioneer1
+        sad_close: close body1 sad pioneer1
+        shocked_close: close body1 shocked pioneer1
+        normal_close: close body2 normal pioneer2
+        smile_close: close body2 smile pioneer2
+        grin_close: close body3 grin pioneer3
+        laugh_close: close body3 laugh pioneer3
+        surprise2_close: close body3 surprise2 pioneer3
+        guilty_close: close body4 guilty pioneer4
+        surprise_close: close body4 surprise pioneer4
+        upset_close: close body4 upset pioneer4
+    
+    #FAR
+        dontlike_far: far body1 dontlike pioneer1
+        rage_far: far body1 rage pioneer1
+        sad_far: far body1 sad pioneer1
+        shocked_far: far body1 shocked pioneer1
+        normal_far: far body2 normal pioneer2
+        smile_far: far body2 smile pioneer2
+        grin_far: far body3 grin pioneer3
+        laugh_far: far body3 laugh pioneer3
+        surprise2_far: far body3 surprise2 pioneer3
+        guilty_far: far body4 guilty pioneer4
+        surprise_far: far body4 surprise pioneer4
+        upset_far: far body4 upset pioneer4
+        
+      poses:
+        mid:
+          ~body:
+            default: body2
+            parts:
+              body1: sprites/normal/uv/uv_1_body.png
+              body2: sprites/normal/uv/uv_2_body.png
+              body3: sprites/normal/uv/uv_3_body.png
+              body4: sprites/normal/uv/uv_4_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              dontlike: sprites/normal/uv/uv_1_dontlike.png
+              rage: sprites/normal/uv/uv_1_rage.png
+              sad: sprites/normal/uv/uv_1_sad.png
+              shocked: sprites/normal/uv/uv_1_shocked.png
+              normal: sprites/normal/uv/uv_2_normal.png
+              smile: sprites/normal/uv/uv_2_smile.png
+              grin: sprites/normal/uv/uv_3_grin.png
+              laugh: sprites/normal/uv/uv_3_laugh.png
+              surprise2: sprites/normal/uv/uv_3_surprise2.png
+              guilty: sprites/normal/uv/uv_4_guilty.png
+              surprise: sprites/normal/uv/uv_4_surprise.png
+              upset: sprites/normal/uv/uv_4_upset.png
+
+          ~uniform:
+            default: pioneer2
+            parts:
+              pioneer1: sprites/normal/uv/uv_1_pioneer.png
+              pioneer2: sprites/normal/uv/uv_2_pioneer.png
+              pioneer3: sprites/normal/uv/uv_3_pioneer.png
+              pioneer4: sprites/normal/uv/uv_4_pioneer.png
+
+        close:
+          ~body:
+            default: body2
+            parts:
+              body1: sprites/close/uv/uv_1_body.png
+              body2: sprites/close/uv/uv_2_body.png
+              body3: sprites/close/uv/uv_3_body.png
+              body4: sprites/close/uv/uv_4_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              dontlike: sprites/close/uv/uv_1_dontlike.png
+              rage: sprites/close/uv/uv_1_rage.png
+              sad: sprites/close/uv/uv_1_sad.png
+              shocked: sprites/close/uv/uv_1_shocked.png
+              normal: sprites/close/uv/uv_2_normal.png
+              smile: sprites/close/uv/uv_2_smile.png
+              grin: sprites/close/uv/uv_3_grin.png
+              laugh: sprites/close/uv/uv_3_laugh.png
+              surprise2: sprites/close/uv/uv_3_surprise2.png
+              guilty: sprites/close/uv/uv_4_guilty.png
+              surprise: sprites/close/uv/uv_4_surprise.png
+              upset: sprites/close/uv/uv_4_upset.png
+
+          ~uniform:
+            default: pioneer2
+            parts:
+              pioneer1: sprites/close/uv/uv_1_pioneer.png
+              pioneer2: sprites/close/uv/uv_2_pioneer.png
+              pioneer3: sprites/close/uv/uv_3_pioneer.png
+              pioneer4: sprites/close/uv/uv_4_pioneer.png
+              
+        far:
+          ~body:
+            default: body2
+            parts:
+              body1: sprites/far/uv/uv_1_body.png
+              body2: sprites/far/uv/uv_2_body.png
+              body3: sprites/far/uv/uv_3_body.png
+              body4: sprites/far/uv/uv_4_body.png
+
+          ~emotion:
+            default: normal
+            parts:
+              dontlike: sprites/far/uv/uv_1_dontlike.png
+              rage: sprites/far/uv/uv_1_rage.png
+              sad: sprites/far/uv/uv_1_sad.png
+              shocked: sprites/far/uv/uv_1_shocked.png
+              normal: sprites/far/uv/uv_2_normal.png
+              smile: sprites/far/uv/uv_2_smile.png
+              grin: sprites/far/uv/uv_3_grin.png
+              laugh: sprites/far/uv/uv_3_laugh.png
+              surprise2: sprites/far/uv/uv_3_surprise2.png
+              guilty: sprites/far/uv/uv_4_guilty.png
+              surprise: sprites/far/uv/uv_4_surprise.png
+              upset: sprites/far/uv/uv_4_upset.png
+
+          ~uniform:
+            default: pioneer2
+            parts:
+              pioneer1: sprites/far/uv/uv_1_pioneer.png
+              pioneer2: sprites/far/uv/uv_2_pioneer.png
+              pioneer3: sprites/far/uv/uv_3_pioneer.png
+              pioneer4: sprites/far/uv/uv_4_pioneer.png
+    pi: 
+      shortnames:
+    #MID
+        normal_: mid normal
+        smile_: mid smile
+
+    #CLOSE
+        normal_close: close normal
+        smile_close: close smile
+    
+    #FAR
+        normal_far: far normal
+        smile_far: far smile
+        
+      poses:
+        mid:
+          ~body:
+            default: normal
+            parts:
+              normal: sprites/normal/pi/pi_1_pioneer.png
+              smile: sprites/normal/pi/pi_1_pioneer_smile.png
+        close:
+          ~body:
+            default: normal
+            parts:
+              normal: sprites/close/pi/pi_1_pioneer.png
+              smile: sprites/close/pi/pi_1_pioneer_smile.png
+        far:
+          ~body:
+            default: normal
+            parts:
+              normal: sprites/far/pi/pi_1_pioneer.png
+              smile: sprites/far/pi/pi_1_pioneer_smile.png
