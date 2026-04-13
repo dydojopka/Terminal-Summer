@@ -101,6 +101,10 @@ class ScriptParser:
             await self._handle_pause(line)
         elif line.startswith("scene"):
             await self._handle_scene(line)
+        elif line.startswith("show"):
+            await self._handle_show(line)
+        elif line.startswith("hide"):
+            await self._handle_hide(line)
         elif line.startswith("play"):
             await self._handle_play(line)
         elif line.startswith("window"):
@@ -148,19 +152,43 @@ class ScriptParser:
         if match:
             category = match.group(1)
             scene_name = match.group(2)
-    
 
-            ansi_art = self.app.generate_scene_ansi(category, scene_name)
-    
+            # Смена сцены всегда очищает активные спрайты.
+            self.app.current_scene = scene_name
+            self.app.current_scene_category = category
+            self.app.clear_active_sprites()
+
+            ansi_art = self.app.generate_scene_with_sprites_ansi()
+
             bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
             bg_cg.update(ansi_art)
     
-            # сохраняем имя для последующей смены качества
-            self.app.current_scene = scene_name
-            self.app.current_scene_category = category
-    
             if not self.backward:
                 await self.next_line()
+
+
+    async def _handle_show(self, line):
+        """Обработка show: собрать спрайт, добавить/заменить его на сцене."""
+        ansi_art = self.app.show_sprite_from_script_line(line)
+        if ansi_art is not None:
+            bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
+            bg_cg.update(ansi_art)
+
+        if not self.backward:
+            await self.next_line()
+
+
+    async def _handle_hide(self, line):
+        """Обработка hide: убрать персонажа со сцены."""
+        match = re.search(r'hide\s+([a-zA-Z0-9_]+)', line)
+        if match:
+            character_id = match.group(1)
+            ansi_art = self.app.hide_sprite_by_id(character_id)
+            bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
+            bg_cg.update(ansi_art)
+
+        if not self.backward:
+            await self.next_line()
 
 
 

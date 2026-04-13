@@ -2,6 +2,7 @@ import os
 import json
 import threading
 import asyncio
+from pathlib import Path
 
 from PIL import Image
 from pil2ansi import convert_img, Palettes
@@ -20,6 +21,12 @@ from rich.segment import Segment
 from rich.text import Text
 
 from script_parser import ScriptParser
+from sprites_builder import (
+    parse_show_like,
+    load_yaml_dict as load_sprite_resources_yaml,
+    resolve_sprite,
+    compose_layers,
+)
 
 
 # Цвета персонажей в истории
@@ -357,6 +364,13 @@ class TerminalSummer(App):
             "style": "ANSI",
             "text_speed": "0.025",
         }
+
+        self._sprite_resources = None
+        self._sprite_resources_loaded = False
+        self._sprite_assets_root = Path("TS/game")
+        self._sprite_runtime_dir = Path("TS/game/sprites/generated_runtime")
+        self._active_sprites = {}
+        self._sprite_order_seq = 0
         #self.audio_player = AudioPlayer()
         self._next_scene_in_progress = False
         self._text_animating = False
@@ -573,7 +587,7 @@ class TerminalSummer(App):
             reset_globals()
 
             # Запуск новой игры (всегда пролог)
-            self.script = ScriptParser("TS/text/prologue.txt", self)
+            self.script = ScriptParser("TS/text/day1.txt", self)
 
             # Отображение NovelMenu
             self.query_one("#novel-menu").remove_class("hidden")
@@ -894,30 +908,227 @@ class TerminalSummer(App):
 
 
     # ============ Функции - прочие ============
-    def generate_scene_ansi(self, category: str, scene_name: str):
-        """Конвертирует JPG сцены в ANSI арт для игрового окна."""
-        img_path = f"ES/{category}/{scene_name}.jpg"
-        if not os.path.exists(img_path):
-            img_path = f"ES/{category}/{scene_name}.png"
-        if not os.path.exists(img_path):
-            return Text.from_markup(f"[Файл не найден: {img_path}]")
+    def _get_scene_image_path(self, category: str, scene_name: str) -> str | None:
+        """Возвращает путь до файла фона/CG."""
+        for ext in ("jpg", "jpeg", "png", "webp"):
+            candidate = f"TS/game/{category}/{scene_name}.{ext}"
+            if os.path.exists(candidate):
+                return candidate
+        return None
 
-        # Берём width прямо из настроек
+    def _load_sprite_resources(self):
+        """Ленивая загрузка resources.yaml для сборщика спрайтов."""
+        if self._sprite_resources_loaded:
+            return self._sprite_resources
+
+        self._sprite_resources_loaded = True
+        resource_candidates = (
+            (Path("TS/resources.yaml"), Path("TS/game")),
+            (Path("ES/resources.yaml"), Path("ES")),
+            (Path("resources.yaml"), Path("TS/game")),
+            (Path("resources.yaml"), Path("ES")),
+        )
+        for candidate, assets_root in resource_candidates:
+            if not candidate.exists():
+                continue
+
+            try:
+                self._sprite_resources = load_sprite_resources_yaml(candidate)
+                self._sprite_assets_root = assets_root
+            except Exception as e:
+                self._sprite_resources = None
+                self.sub_title = f"Sprite resources error: {e}"
+            return self._sprite_resources
+
+        self._sprite_resources = None
+        self.sub_title = "Sprite resources not found"
+        return None
+
+    @staticmethod
+    def _sprite_position_factor(position: str | None) -> float:
+        """Позиция спрайта по горизонтали."""
+        mapping = {
+            "fleft": 0.18,
+            "left": 0.30,
+            "cleft": 0.40,
+            "center": 0.50,
+            "cright": 0.60,
+            "right": 0.70,
+            "fright": 0.82,
+        }
+        key = (position or "center").strip().lower()
+        return mapping.get(key, 0.50)
+
+    @staticmethod
+    def _sprite_size_scale(size_name: str | None) -> float:
+        """Доп. масштаб из show size <...>."""
+        mapping = {
+            "normal": 1.0,
+            "small": 0.86,
+            "large": 1.12,
+            "big": 1.12,
+        }
+        key = (size_name or "normal").strip().lower()
+        return mapping.get(key, 1.0)
+
+    def _sorted_active_sprites(self) -> list[dict]:
+        """Возвращает активные спрайты в порядке от заднего к переднему."""
+        sprites = sorted(self._active_sprites.values(), key=lambda item: item.get("order", 0))
+        if len(sprites) <= 1:
+            return sprites
+
+        # Учитываем `behind <character>`.
+        guard = 0
+        max_passes = len(sprites) * len(sprites)
+        while guard < max_passes:
+            changed = False
+            for idx, item in enumerate(list(sprites)):
+                behind_id = item.get("behind")
+                if not behind_id:
+                    continue
+
+                target_idx = next(
+                    (i for i, candidate in enumerate(sprites) if candidate.get("character") == behind_id),
+                    None,
+                )
+                if target_idx is None:
+                    continue
+
+                if idx > target_idx:
+                    sprites.insert(target_idx, sprites.pop(idx))
+                    changed = True
+                    break
+
+            if not changed:
+                break
+            guard += 1
+
+        return sprites
+
+    def generate_scene_ansi(self, category: str, scene_name: str):
+        """Конвертирует только сцену (без спрайтов) в ANSI/ASCII."""
+        img_path = self._get_scene_image_path(category, scene_name)
+        if img_path is None:
+            return Text.from_markup(f"[Файл не найден: TS/game/{category}/{scene_name}.*]")
+
         width = int(self.settings.get("quality", 150))
 
         try:
             img = Image.open(img_path)
-            if self.settings["style"] == "ANSI":    # Если параметр ANSI
-                palette = Palettes.color
-            elif self.settings["style"] == "ASCII": # Если параметр ASCII
-                palette = Palettes.ascii
-            
-            # Конвертация изображения в ANSI/ASCII 
+            palette = Palettes.color if self.settings["style"] == "ANSI" else Palettes.ascii
             ansi_art = convert_img(img, width=width, alpha=True, palette=palette)
             return Text.from_ansi(ansi_art)
         except Exception as e:
             return Text.from_markup(f"[Ошибка конвертации: {e}]")
-    
+
+    def generate_scene_with_sprites_ansi(self):
+        """Собирает сцену + активные спрайты и конвертирует в ANSI/ASCII."""
+        if not hasattr(self, "current_scene") or not self.current_scene:
+            return Text("")
+        if not hasattr(self, "current_scene_category") or not self.current_scene_category:
+            return Text("")
+
+        if not self._active_sprites:
+            return self.generate_scene_ansi(self.current_scene_category, self.current_scene)
+
+        scene_path = self._get_scene_image_path(self.current_scene_category, self.current_scene)
+        if scene_path is None:
+            return Text.from_markup(
+                f"[Файл не найден: TS/game/{self.current_scene_category}/{self.current_scene}.*]"
+            )
+
+        width = int(self.settings.get("quality", 150))
+        palette = Palettes.color if self.settings["style"] == "ANSI" else Palettes.ascii
+
+        try:
+            composed = Image.open(scene_path).convert("RGBA")
+
+            for sprite in self._sorted_active_sprites():
+                sprite_path = sprite.get("image_path")
+                if not sprite_path or not os.path.exists(sprite_path):
+                    continue
+
+                sprite_img = Image.open(sprite_path).convert("RGBA")
+
+                scale = self._sprite_size_scale(sprite.get("size"))
+                if abs(scale - 1.0) > 1e-3:
+                    new_w = max(1, int(sprite_img.width * scale))
+                    new_h = max(1, int(sprite_img.height * scale))
+                    sprite_img = sprite_img.resize((new_w, new_h), resample=Image.NEAREST)
+
+                max_sprite_height = max(1, int(composed.height * 0.98))
+                if sprite_img.height > max_sprite_height:
+                    new_w = max(1, int(sprite_img.width * (max_sprite_height / sprite_img.height)))
+                    sprite_img = sprite_img.resize((new_w, max_sprite_height), resample=Image.NEAREST)
+
+                x_factor = self._sprite_position_factor(sprite.get("at"))
+                x = int(composed.width * x_factor - sprite_img.width / 2)
+                x = max(0, min(x, composed.width - sprite_img.width))
+                y = max(0, composed.height - sprite_img.height)
+
+                composed.alpha_composite(sprite_img, dest=(x, y))
+
+            ansi_art = convert_img(composed, width=width, alpha=False, palette=palette)
+            return Text.from_ansi(ansi_art)
+        except Exception as e:
+            return Text.from_markup(f"[Ошибка сборки сцены со спрайтами: {e}]")
+
+    def show_sprite_from_script_line(self, show_line: str):
+        """Собирает PNG спрайта из show-строки и обновляет активный набор спрайтов."""
+        resources = self._load_sprite_resources()
+        if not resources:
+            return None
+
+        try:
+            request = parse_show_like(show_line)
+            resolved = resolve_sprite(resources, request, self._sprite_assets_root)
+            sprite_img = compose_layers(resolved.picks)
+        except Exception as e:
+            self.sub_title = f"Sprite build error: {e}"
+            return None
+
+        runtime_dir = self._sprite_runtime_dir
+        try:
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            runtime_dir = Path("/tmp/terminal-summer-sprites/generated_runtime")
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            out_path = runtime_dir / f"{request.character}.png"
+            sprite_img.save(out_path, format="PNG")
+        except Exception as e:
+            self.sub_title = f"Sprite save error: {e}"
+            return None
+
+        previous = self._active_sprites.get(request.character)
+        if previous is None:
+            self._sprite_order_seq += 1
+            order = self._sprite_order_seq
+        else:
+            order = previous.get("order", 0)
+
+        self._active_sprites[request.character] = {
+            "character": request.character,
+            "image_path": str(out_path),
+            "at": request.at or (previous.get("at") if previous else "center"),
+            "size": request.size or (previous.get("size") if previous else "normal"),
+            "behind": request.extras.get("behind") if request.extras else None,
+            "order": order,
+        }
+
+        return self.generate_scene_with_sprites_ansi()
+
+    def hide_sprite_by_id(self, character_id: str):
+        """Удаляет персонажа со сцены."""
+        self._active_sprites.pop(character_id, None)
+        return self.generate_scene_with_sprites_ansi()
+
+    def clear_active_sprites(self):
+        """Очищает активные спрайты сцены."""
+        self._active_sprites.clear()
+        self._sprite_order_seq = 0
+
     def load_settings(self):
         """Загрузка настроек"""
         if os.path.exists(self.CONFIG_FILE):
@@ -972,9 +1183,9 @@ class TerminalSummer(App):
             self.query_one("#btn-speed-instantly", Button).variant = "primary"
 
     def load_gallery_images(self):
-        """Загружает список JPG/PNG файлов из папки ES/bg или ES/cg"""
+        """Загружает список JPG/PNG файлов из папки TS/game/bg или TS/game/cg"""
         # Папка с изображениями
-        folder = f"ES/{self.gallery_mode}"
+        folder = f"TS/gallery/{self.gallery_mode}"
 
         previous_filename = (
             self.gallery_images[self.gallery_index]
@@ -1005,7 +1216,7 @@ class TerminalSummer(App):
             return
 
         filename = self.gallery_images[self.gallery_index]
-        img = Image.open(f"ES/{self.gallery_mode}/{filename}")
+        img = Image.open(f"TS/gallery/{self.gallery_mode}/{filename}")
 
         # gallery_size = "50" / "150" / "200"
         width = int(self.gallery_size)
@@ -1027,10 +1238,7 @@ class TerminalSummer(App):
         if not hasattr(self, "current_scene_category") or not self.current_scene_category:
             return
 
-        ansi_art = self.generate_scene_ansi(
-            self.current_scene_category, 
-            self.current_scene
-        )
+        ansi_art = self.generate_scene_with_sprites_ansi()
 
         try:
             self.query_one("#bg-cg").update(ansi_art)
@@ -1050,6 +1258,7 @@ class TerminalSummer(App):
 
         # Очистка ASCII-фона
         bg_cg.update("")
+        self.clear_active_sprites()
 
         # Очистка pending_choices
         if hasattr(self, "pending_choices"):
