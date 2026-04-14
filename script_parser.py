@@ -191,7 +191,6 @@ class ScriptParser:
             await self.next_line()
 
 
-
     async def _handle_play(self, line):
         """Обработка строки play"""
         if not self.backward:
@@ -358,7 +357,7 @@ class ScriptParser:
     async def _handle_changeLP(self, line):
         """Обработка изменения поинтов и флагов"""
         global SL, UN, DV, US  # Поинты
-        global PROLOGUE # Флаги
+        global PROLOGUE, D1_KEYS # Флаги
 
         # Словарь поинтов
         POINT_VARS = {
