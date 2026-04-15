@@ -1817,7 +1817,7 @@ label epilogue_uv_city
         # $ achievement.grant("ACH_HAREM")
     }
     # goto harem_ending
-    load endings_s
+    load endings
 label epilogue_uv_ulya
     scene bg ext_road_night
     show uv normal_ size normal spritecolor night at center
@@ -3473,4 +3473,4 @@ label epilogue_uv_ulya
         # $ achievement.grant("ACH_UV")
     }
     # goto uv_ending
-    load endings_s
+    load endings

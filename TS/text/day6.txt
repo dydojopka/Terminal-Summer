@@ -735,7 +735,7 @@ label day6_main
     scene color black with esfade3
     stop music fadeout 3
     pause 3
-    load day7_s
+    load day7
 label day6_un
     #$ backdrop = "un"
     #$ persistent.sprite_time = "day"
@@ -1658,7 +1658,7 @@ label day6_after_map
     scene color black with esfade3
     stop ambience fadeout 3
     pause 3
-    load day7_s
+    load day7
 label day6_us
 #     $ backdrop = "us"
 #     $ persistent.sprite_time = "day"
@@ -2613,7 +2613,7 @@ label day6_us
     scene color black with esfade3
     stop ambience fadeout 3
     pause 3
-    load day7_s
+    load day7
 label day6_sl
 #     $ backdrop = "sl"
 #     $ persistent.sprite_time = "day"
@@ -3600,7 +3600,7 @@ label day6_sl
     window hide
     scene color black with esfade3
     pause 3
-    load day7_s
+    load day7
 label day6_dv:
     time day
     pause 1
@@ -4620,4 +4620,4 @@ label day6_dv:
     "Лучший выход в такой ситуации – последовать её примеру и тоже поспать.<w>Не успев додумать мысль, я отключился."
     window hide
     pause 3
-    load day7_s
+    load day7

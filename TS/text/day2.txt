@@ -2835,4 +2835,4 @@ label day2_main4
     stop music fadeout 3
     scene color black with esfade3
     pause 3
-    load day3_s
+    load day3

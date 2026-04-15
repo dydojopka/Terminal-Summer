@@ -14,7 +14,7 @@ label prologue_l
     window hide
     scene color black with esfade3
     scene bg ext_camp_entrance_night
-    show owl_1 at sova
+    # show owl_1 at sova
     show prologue_filter
     with esfade3
     window show
@@ -332,4 +332,4 @@ label prologue_l
     scene color black with esfade3
     pause 3
     volume music 1
-    load day1_s
+    load day1

@@ -2551,7 +2551,7 @@ label day3_evening_sl:
     scene color black with esfade3
     pause 3
     $goto_day4_std_morning = true
-    load day4_s   
+    load day4  
 label day3_evening_un
     $day3_un_evening = 1
     hide sl with dissolve
@@ -3053,7 +3053,7 @@ label day3_evening_un
     scene color black with esfade3
     pause 3
     $goto_day4_std_morning = true
-    load day4_s
+    load day4
 label day3_evening_us:
     $day3_us_evening = 1
     hide sl with dissolve
@@ -3411,7 +3411,7 @@ label day3_evening_us:
     scene color black with esfade3
     pause 3
     $goto_day4_us_morning = true
-    load day4_s
+    load day4
 label day3_evening_dv:
     $day3_dv_evening = 1
     #$persistent.sprite_time = "night"
@@ -3831,7 +3831,7 @@ label day3_evening_dv:
     scene color black with esfade3
     pause 3
     $goto_day4_std_morning = true
-    load day4_s
+    load day4
 label day3_fail:
     hide sl with dissolve
     "Славя вернулась к танцующим."
@@ -4029,4 +4029,4 @@ label day3_fail:
     scene color black with esfade3
     pause 3
     $goto_day4_fail_morning = true
-    load day4_s
+    load day4

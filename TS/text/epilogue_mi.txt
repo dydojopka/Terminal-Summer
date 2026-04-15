@@ -3510,4 +3510,4 @@
     }
     # call postscriptum from _call_postscriptum_9
     # jump mi_ending
-    load epilogue_s
+    load epilogue

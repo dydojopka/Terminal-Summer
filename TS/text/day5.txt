@@ -2347,7 +2347,7 @@ label day5_main3
     window hide
     stop ambience fadeout 3
     pause 3
-    load day6_s
+    load day6
 label day5_dv
     "Из всего благолепия выбивались только Лена и Алиса."
     "Нет, само по себе то, что Алиса с кем-то ссорится, было абсолютно естественным."
@@ -2855,7 +2855,7 @@ label day5_dv
     scene color black with esfade3
     stop ambience fadeout 3
     pause 3
-    load day6_s
+    load day6
 label day5_sl
     "Мне было действительно интересно, куда ушла Славя."
     "Впрочем, я также хотел поскорее убраться отсюда, и, если и не улечься наконец спать, то хотя бы побыть наедине с собой, вдали от всех этих пионеров и Ольги Дмитриевны, которой так не терпелось меня опять чем-нибудь занять."
@@ -3304,7 +3304,7 @@ label day5_sl
     scene color black with esfade3
     stop ambience fadeout 3
     pause 3
-    load day6_s
+    load day6
 label day5_us
     "Вечером я совсем не думал об Ульяне."
     th "Весь этот случай с тортом…<w> Как будто его и не было..."
@@ -3723,7 +3723,7 @@ label day5_us
     scene color black with esfade3
     stop ambience fadeout 3
     pause 3
-    load day6_s
+    load day6
 label day5_un
     "Из всего благолепия выбивались только Лена и Алиса."
     "Нет, само по себе то, что Алиса с кем-то ссорится, было абсолютно естественным."
@@ -4166,4 +4166,4 @@ label day5_un
     stop music fadeout 4
     scene color black with esfade3
     pause 3
-    load day6_s
+    load day6

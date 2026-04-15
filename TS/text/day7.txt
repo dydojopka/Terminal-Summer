@@ -762,7 +762,7 @@ label day7_main
             }
             # goto main_bad_ending
             $persistent.scenario_complete = true
-            load endings_s
+            load endings
         }
         "Не ходить за голосом"
         {
@@ -864,7 +864,7 @@ label day7_main
     scene color black with esfade3
     stop music fadeout 3
     pause 3
-    load epilogue_s
+    load epilogue
     # goto epilogue_main
 label day7_un
     # $ backdrop = "un"
@@ -1487,7 +1487,7 @@ label day7_un_bad
     stop loop fadeout 2
     stop music fadeout 3
     pause 3
-    load epilogue_s
+    load epilogue
 label day7_un_good
     window show
     "Будить Лену совершенно не хотелось."
@@ -1703,7 +1703,7 @@ label day7_un_good
     scene color black with esfade3
     stop music fadeout 3
     pause 3
-    load epilogue_s
+    load epilogue
 label day7_us
     # $ backdrop = "us"
     # $ persistent.sprite_time = "day"
@@ -2515,7 +2515,7 @@ label day7_us_bad
     scene color black with esfade3
     stop music fadeout 3
     pause 3
-    load epilogue_s
+    load epilogue
 label day7_us_good
     time day
     stop music fadeout 2
@@ -2694,7 +2694,7 @@ label day7_us_good
     scene color black with esfade3
     stop music fadeout 3
     pause 3
-    load epilogue_s
+    load epilogue
 label day7_dv
     # $ backdrop = "dv"
     # $ persistent.sprite_time = "day"
@@ -3235,7 +3235,7 @@ label day7_dv_bad
     stop ambience fadeout 2
     stop loop fadeout 2
     pause 3
-    load epilogue_s
+    load epilogue
 label day7_dv_good
     dv "Я бы не была так уверена."
     me "А я вот уверен, позволь мне решать за себя!"
@@ -3413,7 +3413,7 @@ label day7_dv_good
     scene color black with esfade3
     stop music fadeout 3
     pause 3
-    load epilogue_s
+    load epilogue
 label day7_sl:
     # $ backdrop = "sl"
     # $ persistent.sprite_time = "day"
@@ -3996,7 +3996,7 @@ label day7_sl_bad
     scene color black with esfade3
     stop music fadeout 3
     pause 3
-    load epilogue_s
+    load epilogue
 label day7_sl_good
     me "Ты думаешь, только для тебя это всё сложно!"
     show sl normal_pioneer size normal at center with dspr
@@ -4168,4 +4168,4 @@ label day7_sl_good
     scene color black with esfade3
     stop music fadeout 3
     pause 3
-    load epilogue_s
+    load epilogue

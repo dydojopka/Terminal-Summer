@@ -1870,4 +1870,4 @@ label postscriptum
     "Почти у каждой…"
     window hide
     pause 5
-    load endings_s
+    load endings

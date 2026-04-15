@@ -3400,7 +3400,7 @@ label fail_mine_miku
     stop ambience fadeout 2
     pause 3
     #$ backdrop = "epilogue"
-    load epilogue_mi_s
+    load epilogue_mi
 label fail_mine_exit
     #$ persistent.sprite_time = "night"
     scene bg int_mine_door with esfade
@@ -3574,9 +3574,9 @@ label fail_mine_exit
     pause 3
     if ($day4_uv_mine == 1)
     {
-        load epilogue_uv_s
+        load epilogue_uv
     }
-    load day5_s
+    load day5
 label day4_uv
     $day4_uv_mine = 1
     stop music fadeout 1
@@ -4310,7 +4310,7 @@ label sl_mine_exit
     scene color black with esfade3
     stop ambience fadeout 2
     pause 3
-    load day5_s
+    load day5
 label day4_dv
     mt "А с тобой пойдёт Двачевская!"
     "Ольга Дмитриевна словно угадала мои мысли."
@@ -5205,7 +5205,7 @@ label dv_mine_exit
     stop music fadeout 5
     scene color black with esfade3
     pause 3
-    load day5_s
+    load day5
 label day4_us
     hide sl
     with dissolve
@@ -5953,7 +5953,7 @@ label us_mine_exit
     scene color black with esfade3
     stop ambience fadeout 3
     pause 3
-    load day5_s
+    load day5
 label day4_un
     me "Я же не пойду туда один?!"
     show mt normal_pioneer size normal spritecolor sunset at left with dspr
@@ -6832,4 +6832,4 @@ label un_mine_exit
     scene color black with esfade3
     stop ambience fadeout 3
     pause 3
-    load day5_s
+    load day5
