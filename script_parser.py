@@ -379,13 +379,25 @@ class ScriptParser:
             "d1_keys" : "D1_KEYS"
         }
 
-        # Парсим строку
-        match = re.match(r'\$(lp_)?([a-zA-Z0-9_]+)\s*([+\-]?=)\s*(\d+)', line)
+        # Парсим строку ($lp_sl += 1, $prologue = 1, $d1_keys = true)
+        match = re.match(
+            r'\$(lp_)?([a-zA-Z0-9_]+)\s*([+\-]?=)\s*(true|false|-?\d+)\s*$',
+            line,
+            re.IGNORECASE,
+        )
         if not match:
+            if not self.backward:
+                await self.next_line()
             return
 
-        prefix, target, operation, value = match.groups()
-        value = int(value)
+        prefix, target, operation, raw_value = match.groups()
+        value_lower = raw_value.lower()
+        if value_lower == "true":
+            value = True
+        elif value_lower == "false":
+            value = False
+        else:
+            value = int(raw_value)
 
         # Определяем тип переменной
         if prefix == "lp_":
@@ -394,14 +406,26 @@ class ScriptParser:
             var_map = FLAG_VARS
 
         var_name = var_map.get(target)
+        if not var_name:
+            if not self.backward:
+                await self.next_line()
+            return
 
         # Извлекаем текущее значение
         current = globals().get(var_name, 0)
 
         # Применяем операцию
         if operation == "+=":
+            if isinstance(current, bool):
+                current = int(current)
+            if isinstance(value, bool):
+                value = int(value)
             current += value
         elif operation == "-=":
+            if isinstance(current, bool):
+                current = int(current)
+            if isinstance(value, bool):
+                value = int(value)
             current -= value
         elif operation == "=":
             current = value
