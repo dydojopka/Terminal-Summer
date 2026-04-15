@@ -1,5 +1,6 @@
 import asyncio
 import re
+from pathlib import Path
 
 from textual.widget import Widget
 from textual.widgets import ListView, ListItem, Label
@@ -69,13 +70,17 @@ class ScriptParser:
         self.app = app
         self.lines = []
         self.index = 0
+        self.backward = False
         self.load_script()
 
 
-    def load_script(self):
+    def load_script(self, filename=None):
         """Загрузка файла сценария"""
+        if filename:
+            self.filename = str(filename)
         with open(self.filename, 'r', encoding='utf-8') as f:
             self.lines = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
+        self.index = 0
 
     async def next_line(self):
         """Шаг вперёд"""
@@ -109,14 +114,16 @@ class ScriptParser:
             await self._handle_play(line)
         elif line.startswith("window"):
             await self._handle_window(line)
-        elif '"' in line:
-            await self._handle_dialogue(line)
         elif line.startswith("time"):
             await self.next_line()
         elif line.startswith("menu"):
             await self._handle_choice(line)
         elif line.startswith("$"):
             await self._handle_changeLP(line)
+        elif line.startswith("load"):
+            await self._handle_load(line)
+        elif '"' in line:
+            await self._handle_dialogue(line)
         else:
             await self.next_line()
            
@@ -405,5 +412,32 @@ class ScriptParser:
         globals()[var_name] = current
 
         # Продолжаем выполнение
+        if not self.backward:
+            await self.next_line()
+
+    async def _handle_load(self, line):
+        """Переход к файлу сценария"""
+        match = re.match(r'load\s+(.+)$', line)
+        if not match:
+            return
+
+        raw_target = match.group(1).strip().strip('"').strip("'")
+        if not raw_target:
+            return
+
+        current_dir = Path(self.filename).resolve().parent
+        target_path = Path(raw_target)
+
+        if target_path.suffix.lower() != ".txt":
+            target_path = target_path.with_suffix(".txt")
+        if not target_path.is_absolute():
+            target_path = current_dir / target_path
+
+        target_path = target_path.resolve()
+        if not target_path.exists():
+            self.app.sub_title = f"[Load error] File not found: {target_path}"
+            return
+
+        self.load_script(target_path)
         if not self.backward:
             await self.next_line()
