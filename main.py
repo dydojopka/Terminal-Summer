@@ -120,19 +120,30 @@ class MainMenuStartBtn(Vertical):
     """Виджет для кнопки "Начать игру" с описанием"""
     def compose(self):
         yield Button("Начать игру ▶", id="btn-start-game")
-        yield Label('   Дорогой пионер!\n   Ты — на пороге удивительных открытий.\n   Перед тобой распахнулись двери самого прекрасного места в мире — нашего любимого лагеря "Совёнок". Эта смена запомниться тебе на всю жизнь.\nДобро пожаловать!')
+        yield Label('   Дорогой пионер!\n' \
+        'Ты — на пороге удивительных открытий.\n' \
+        '   Перед тобой распахнулись двери самого прекрасного места в мире — ' \
+        'нашего любимого лагеря "Совёнок". Эта смена запомниться тебе на всю жизнь.\n' \
+        'Добро пожаловать!')
 
 class MainMenuLoadBtn(Vertical):
     """Виджет для кнопки "Соханение" с описанием"""
     def compose(self):
         yield Button("Сохранение 📒", id="btn-save-load")
-        yield Label('   Бережно относись к истории своего лагеря. Тщательно записывай свои наблюдения и мысли о прошедших днях.\nПри помощи сохранений ты всегда сможешь вернутся назад к пройденному эпизоду и осмыслить его заново. Удачи тебе в твоих начинаниях!\n   Если что-то пойдёт не так, ты знаешь, что делать')
+        yield Label('   Бережно относись к истории своего лагеря. Тщательно записывай ' \
+        'свои наблюдения и мысли о прошедших днях.\nПри помощи сохранений ты всегда ' \
+        'сможешь вернутся назад к пройденному эпизоду и осмыслить его заново. ' \
+        'Удачи тебе в твоих начинаниях!\n' \
+        '   Если что-то пойдёт не так, ты знаешь, что делать')
 
 class MainMenuGalleryBtn(Vertical):
     """Виджет для кнопки "Галерея" с описанием"""
     def compose(self):
         yield Button("Галерея 📷", id="btn-gallery")
-        yield Label('   Здесь представлены работы участников нашего фотокружка. Твои товарищи всегда готовы запечатлеть важные моменты из жини лагеря, а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим поведением подавай пример окружающим.')
+        yield Label('   Здесь представлены работы участников нашего фотокружка. ' \
+        'Твои товарищи всегда готовы запечатлеть важные моменты из жини лагеря, ' \
+        'а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим ' \
+        'поведением подавай пример окружающим.')
 
 
 class GalleryMenu(HorizontalGroup):
@@ -210,9 +221,11 @@ class SettingHeader(Widget):
             yield DescriptionSettingHeader()
 
 class DescriptionSettingHeader(Widget):
-    """Описание настройки Header"""
+    """Описание настройки 'Верхняя панель(Header)'"""
     def render(self):
-        return "Верхняя панель расположена сверху и будет отображать: название программы, название текущей сцены, и часы \n(может слегка уменьшить обзор)"
+        return """Верхняя панель будет отображать: 
+название программы, текущие поинты, и системное время\n
+(может слегка уменьшить обзор)"""
 
 class SettingQuality(Widget):
     """Виджет с настройкой размера ASCII-артов"""
@@ -225,9 +238,12 @@ class SettingQuality(Widget):
             yield DescriptionSettingQuality()
 
 class DescriptionSettingQuality(Widget):
-    """Описание настройки Quality"""
+    """Описание настройки 'Размер ANSI/ASCII артов'"""
     def render(self):
-        return 'Размер артов необходимо подбирать по размеру окна консоли,\nс сильно большим размером - изображение может не поместиться.\n\nМожете так же попробовать уменьшить размер шрифта самой консоли (Обычно это Ctrl+"+" и Ctrl+"-")'
+        return """Размер артов лучше подбирать по размеру окна консоли,
+с сильно большим размером изображение может не поместиться.\n 
+Можно так же попробовать уменьшить размер шрифта самой консоли 
+(Обычно это Ctrl+"+" и Ctrl+"-")"""
 
 class SettingASCIIorANSI(Widget):
     """Виджет с настройкой стиля артов"""
@@ -239,9 +255,10 @@ class SettingASCIIorANSI(Widget):
             yield DescriptionSettingASCIIorANSI()
 
 class DescriptionSettingASCIIorANSI(Widget):
-    """Описание настройки стиля артов"""
+    """Описание настройки 'Стиль артов'"""
     def render(self):
-        return 'ANSI  - изображение будет цветным\nASCII - изображение будет состоять из символов .,:+*? и другие'
+        return """ANSI  - изображение будет цветным
+ASCII - изображение будет состоять из символов .,:+*? и других"""
 
 class SettingTextSpeed(Widget):
     """Виджет с настройкой скорости текста"""
@@ -255,9 +272,13 @@ class SettingTextSpeed(Widget):
             yield DescriptionSettingTextSpeed()
 
 class DescriptionSettingTextSpeed(Widget):
-    """Описание настройки TextSpeed"""
+    """Описание настройки 'Скорость текста'"""
     def render(self):
-        return "Скорость появления текста в текстовом окне.\n\nМедленный   - 0.04\nСредний     - 0.025\nБыстрый     - 0.01\nМоментально - 0"
+        return """Скорость появления текста в текстовом окне.\n
+Медленный   - 0.04
+Средний     - 0.025
+Быстрый     - 0.01
+Моментально - 0"""
 
 
 class NovelMenu(Static):
@@ -281,7 +302,7 @@ class TextBar(Widget):
     async def animate_text(self, new_text, speed=None, append=False):
         """Анимация текста, символ за символом
 
-        Если append=True  - добавляет текст к текущему,
+        Если append=True  - добавляет текст к текущему,\n
         Если append=False - начинает с нуля"""
 
         speed = float(self.app.text_speed)
@@ -391,9 +412,9 @@ class TerminalSummer(App):
     gallery_images = []
 
     BINDINGS = [
-        Binding("escape",   "pause_game", "Пауза",   show=True, id="bind-pause"),
-        Binding("space", "",           "Далее",   show=True, id="bind-next"),
-        Binding("h",     "log",        "История", show=True, id="bind-log"),
+        Binding("escape", "pause_game", "Пауза",   show=True, id="bind-pause"),
+        Binding("space",  "",           "Далее",   show=True, id="bind-next"),
+        Binding("h",      "log",        "История", show=True, id="bind-log"),
     ]
 
     def get_default_screen(self) -> Screen:
@@ -588,7 +609,7 @@ class TerminalSummer(App):
             reset_globals()
 
             # Запуск новой игры (всегда пролог)
-            self.script = ScriptParser("TS/text/prologue.txt", self)
+            self.script = ScriptParser("TS/text/test.txt", self)
 
             # Отображение NovelMenu
             self.query_one("#novel-menu").remove_class("hidden")
@@ -700,21 +721,6 @@ class TerminalSummer(App):
 
         # продолжаем сценарий
         await self._advance_script_line()
-
-    async def key_space(self, event: events.Key) -> None:
-        """Обработка пробела как перехода с фильтрацией ввода во время анимации."""
-        now = getattr(event, "time", None) or _time.get_time()
-        idle_for = now - self._space_last_event_at
-        self._space_last_event_at = now
-
-        if self._space_require_idle:
-            if idle_for < self._space_idle_gap:
-                return
-            self._space_require_idle = False
-
-        if self._is_space_event_during_animation(event):
-            return
-        await self.action_next_scene()
 
 
     # ============ Функции - action_ ============
@@ -909,6 +915,21 @@ class TerminalSummer(App):
 
 
     # ============ Функции - прочие ============
+    async def key_space(self, event: events.Key) -> None:
+        """Обработка пробела как перехода с фильтрацией ввода во время анимации."""
+        now = getattr(event, "time", None) or _time.get_time()
+        idle_for = now - self._space_last_event_at
+        self._space_last_event_at = now
+
+        if self._space_require_idle:
+            if idle_for < self._space_idle_gap:
+                return
+            self._space_require_idle = False
+
+        if self._is_space_event_during_animation(event):
+            return
+        await self.action_next_scene()
+
     def _get_scene_image_path(self, category: str, scene_name: str) -> str | None:
         """Возвращает путь до файла фона/CG."""
         for ext in ("jpg", "jpeg", "png", "webp"):
@@ -925,9 +946,7 @@ class TerminalSummer(App):
         self._sprite_resources_loaded = True
         resource_candidates = (
             (Path("TS/resources.yaml"), Path("TS/game")),
-            (Path("ES/resources.yaml"), Path("ES")),
             (Path("resources.yaml"), Path("TS/game")),
-            (Path("resources.yaml"), Path("ES")),
         )
         for candidate, assets_root in resource_candidates:
             if not candidate.exists():
