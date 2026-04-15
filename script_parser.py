@@ -51,7 +51,7 @@ US = 0
 
 # Флаги
 PROLOGUE = 0
-D1_KEYS = 0
+D1_KEYS = False
 
 def reset_globals():
     """Сброс всех очков и флагов"""
@@ -61,7 +61,7 @@ def reset_globals():
     DV = 0
     US = 0
     PROLOGUE = 0
-    D1_KEYS = 0
+    D1_KEYS = False
 
 
 class ScriptParser:
