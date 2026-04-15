@@ -391,8 +391,9 @@ class TerminalSummer(App):
     gallery_images = []
 
     BINDINGS = [
-        Binding("escape", "pause_game", "Пауза",      show=True, id="bind-pause"),
-        Binding("h",      "log",        "История",    show=True, id="bind-log"),
+        Binding("escape",   "pause_game", "Пауза",   show=True, id="bind-pause"),
+        Binding("space", "",           "Далее",   show=True, id="bind-next"),
+        Binding("h",     "log",        "История", show=True, id="bind-log"),
     ]
 
     def get_default_screen(self) -> Screen:
