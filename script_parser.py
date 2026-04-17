@@ -94,11 +94,9 @@ class ScriptParser:
     async def parse_line(self, line):
         """Считывание строки сценария (асинхронно)"""
 
-        # Формируем строку статуса поинтов (слева в Header)
+        # Формируем строку статуса поинтов
         lp_status = f"[SL:{SL}] [UN:{UN}] [DV:{DV}] [US:{US}] [PROLOGUE:{PROLOGUE}] [D1_KEYS:{D1_KEYS}]"
 
-        # Отображаем текущую строку сценария (справа)
-        # self.app.sub_title = f"Content: {line}"
         self.app.sub_title = lp_status
 
         # ---- Логика обработки строк ----
@@ -145,7 +143,6 @@ class ScriptParser:
                     self.app._input_blocked = False
                     self.app._input_blocked_until = _time.get_time()
                 await self.next_line()
-            # else: ничего не делаем — просто пропускаем паузу
 
 
     async def _handle_scene(self, line):
@@ -280,7 +277,6 @@ class ScriptParser:
         if list_view.children:
             list_view.index = 0
             list_view.focus() 
-            # (есть визуальный баг при последующих появлениях окна, но бля, как же мне похуй)
 
 
     @staticmethod

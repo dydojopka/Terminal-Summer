@@ -609,7 +609,7 @@ class TerminalSummer(App):
             reset_globals()
 
             # Запуск новой игры (всегда пролог)
-            self.script = ScriptParser("TS/text/test.txt", self)
+            self.script = ScriptParser("TS/text/prologue.txt", self)
 
             # Отображение NovelMenu
             self.query_one("#novel-menu").remove_class("hidden")
@@ -634,7 +634,6 @@ class TerminalSummer(App):
             self.query_one("#btn-gallery-music", Button).variant = "primary"
             self.query_one("#btn-gallery-cg", Button).variant = "default"
             self.query_one("#btn-gallery-bg", Button).variant = "default"
-
         elif button_id == "btn-gallery-cg":       # Кнопка "Иллюстрации"
             # Меняем стили кнопок
             self.query_one("#btn-gallery-music", Button).variant = "default"
