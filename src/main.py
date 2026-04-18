@@ -388,8 +388,8 @@ class TerminalSummer(App):
 
         self._sprite_resources = None
         self._sprite_resources_loaded = False
-        self._sprite_assets_root = Path("TS/game")
-        self._sprite_runtime_dir = Path("TS/game/sprites/generated_runtime")
+        self._sprite_assets_root = Path("../TS/game")
+        self._sprite_runtime_dir = Path("../TS/game/sprites/generated_runtime")
         self._active_sprites = {}
         self._sprite_order_seq = 0
         #self.audio_player = AudioPlayer()
@@ -609,7 +609,7 @@ class TerminalSummer(App):
             reset_globals()
 
             # Запуск новой игры (всегда пролог)
-            self.script = ScriptParser("TS/text/prologue.txt", self)
+            self.script = ScriptParser("../TS/text/prologue.txt", self)
 
             # Отображение NovelMenu
             self.query_one("#novel-menu").remove_class("hidden")
@@ -932,7 +932,7 @@ class TerminalSummer(App):
     def _get_scene_image_path(self, category: str, scene_name: str) -> str | None:
         """Возвращает путь до файла фона/CG."""
         for ext in ("jpg", "jpeg", "png", "webp"):
-            candidate = f"TS/game/{category}/{scene_name}.{ext}"
+            candidate = f"../TS/game/{category}/{scene_name}.{ext}"
             if os.path.exists(candidate):
                 return candidate
         return None
@@ -944,8 +944,8 @@ class TerminalSummer(App):
 
         self._sprite_resources_loaded = True
         resource_candidates = (
-            (Path("TS/resources.yaml"), Path("TS/game")),
-            (Path("resources.yaml"), Path("TS/game")),
+            (Path("../TS/resources.yaml"), Path("../TS/game")),
+            (Path("resources.yaml"), Path("../TS/game")),
         )
         for candidate, assets_root in resource_candidates:
             if not candidate.exists():
@@ -1204,7 +1204,7 @@ class TerminalSummer(App):
     def load_gallery_images(self):
         """Загружает список JPG/PNG файлов из папки TS/game/bg или TS/game/cg"""
         # Папка с изображениями
-        folder = f"TS/gallery/{self.gallery_mode}"
+        folder = f"../TS/gallery/{self.gallery_mode}"
 
         previous_filename = (
             self.gallery_images[self.gallery_index]
@@ -1235,7 +1235,7 @@ class TerminalSummer(App):
             return
 
         filename = self.gallery_images[self.gallery_index]
-        img = Image.open(f"TS/gallery/{self.gallery_mode}/{filename}")
+        img = Image.open(f"../TS/gallery/{self.gallery_mode}/{filename}")
 
         # gallery_size = "50" / "150" / "200"
         width = int(self.gallery_size)

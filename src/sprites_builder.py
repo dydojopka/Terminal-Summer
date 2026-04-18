@@ -367,12 +367,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--assets-root",
-        default="ES",
-        help="Root folder for relative asset paths from resources.yaml (default: ES)",
+        default="TS",
+        help="Root folder for relative asset paths from resources.yaml (default: TS)",
     )
     parser.add_argument(
         "--out-dir",
-        default="TS/game/sprites/generated",
+        default="../TS/game/sprites/generated",
         help="Output folder for generated PNG sprites",
     )
     parser.add_argument(
