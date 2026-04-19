@@ -1,9 +1,37 @@
 import os
-import json
-import threading
-import asyncio
+import sys
 from pathlib import Path
 
+# --- ЛОГИКА ПУТЕЙ ---
+def get_resource_path(relative_path):
+    """Получает путь к ресурсу, работает для dev и для PyInstaller"""
+    if hasattr(sys, '_MEIPASS'):
+        # Путь внутри временной папки PyInstaller
+        return Path(sys._MEIPASS) / relative_path
+    # Путь в обычном режиме разработки
+    return Path(__file__).parent / relative_path
+
+def get_executable_dir():
+    """Путь к папке, где лежит сам .exe (для настроек и папки TS)"""
+    if hasattr(sys, '_MEIPASS'):
+        return Path(sys.executable).parent
+    return Path(__file__).parent.parent
+
+# Пути для стилей и настроек
+CSS_PATH = get_resource_path("gameUI.tcss")
+SETTINGS_PATH = get_executable_dir() / "settings.json"
+
+# Подключаем папку scripts для загрузчика
+sys.path.append(str(get_executable_dir() / "scripts"))
+
+try:
+    import assets_manager
+except ImportError:
+    assets_manager = None
+
+
+import asyncio
+import json
 from PIL import Image
 from pil2ansi import convert_img, Palettes
 
@@ -27,6 +55,12 @@ from sprites_builder import (
     resolve_sprite,
     compose_layers,
 )
+
+def main():
+    # Проверка ассетов (Загрузчик)
+    if assets_manager and not assets_manager.check_assets():
+        assets_manager.download_assets()
+
 
 
 # Цвета персонажей в истории
@@ -386,10 +420,13 @@ class TerminalSummer(App):
             "text_speed": "0.025",
         }
 
+        # Определяем путь к папке TS относительно корня проекта
+        self.ts_path = get_executable_dir() / "TS"
+
         self._sprite_resources = None
         self._sprite_resources_loaded = False
-        self._sprite_assets_root = Path("../TS/game")
-        self._sprite_runtime_dir = Path("../TS/game/sprites/generated_runtime")
+        self._sprite_assets_root = self.ts_path / "game"
+        self._sprite_runtime_dir = self.ts_path / "game/sprites/generated_runtime"
         self._active_sprites = {}
         self._sprite_order_seq = 0
         #self.audio_player = AudioPlayer()
@@ -609,7 +646,8 @@ class TerminalSummer(App):
             reset_globals()
 
             # Запуск новой игры (всегда пролог)
-            self.script = ScriptParser("../TS/text/prologue.txt", self)
+            prologue_path = self.ts_path / "text" / "prologue.txt"
+            self.script = ScriptParser(prologue_path, self)
 
             # Отображение NovelMenu
             self.query_one("#novel-menu").remove_class("hidden")
@@ -932,9 +970,9 @@ class TerminalSummer(App):
     def _get_scene_image_path(self, category: str, scene_name: str) -> str | None:
         """Возвращает путь до файла фона/CG."""
         for ext in ("jpg", "jpeg", "png", "webp"):
-            candidate = f"../TS/game/{category}/{scene_name}.{ext}"
-            if os.path.exists(candidate):
-                return candidate
+            candidate = self.ts_path / "game" / category / f"{scene_name}.{ext}"
+            if candidate.exists():
+                return str(candidate)
         return None
 
     def _load_sprite_resources(self):
@@ -944,8 +982,8 @@ class TerminalSummer(App):
 
         self._sprite_resources_loaded = True
         resource_candidates = (
-            (Path("../TS/resources.yaml"), Path("../TS/game")),
-            (Path("resources.yaml"), Path("../TS/game")),
+            (self.ts_path / "resources.yaml", self.ts_path / "game"),
+            (Path("resources.yaml"), self.ts_path / "game"),
         )
         for candidate, assets_root in resource_candidates:
             if not candidate.exists():
@@ -1204,7 +1242,7 @@ class TerminalSummer(App):
     def load_gallery_images(self):
         """Загружает список JPG/PNG файлов из папки TS/game/bg или TS/game/cg"""
         # Папка с изображениями
-        folder = f"../TS/gallery/{self.gallery_mode}"
+        folder = self.ts_path / "gallery" / self.gallery_mode
 
         previous_filename = (
             self.gallery_images[self.gallery_index]
@@ -1235,7 +1273,8 @@ class TerminalSummer(App):
             return
 
         filename = self.gallery_images[self.gallery_index]
-        img = Image.open(f"../TS/gallery/{self.gallery_mode}/{filename}")
+        image_path = self.ts_path / "gallery" / self.gallery_mode / filename
+        img = Image.open(image_path)
 
         # gallery_size = "50" / "150" / "200"
         width = int(self.gallery_size)
