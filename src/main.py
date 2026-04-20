@@ -57,21 +57,9 @@ from sprites_builder import (
 )
 
 def main():
-    # Сначала качаем/проверяем ассеты
-    if assets_manager:
-        if not assets_manager.check_assets():
-            assets_manager.download_assets()
-        else:
-            print("Ассеты уже на месте")
-    else:
-        print("Внимание: assets_manager не импортирован!")
-
-    # Только потом запускаем игру
-    app = TerminalSummer()
-    app.run()
-
-if __name__ == "__main__":
-    main()
+    # Проверка ассетов (Загрузчик)
+    if assets_manager and not assets_manager.check_assets():
+        assets_manager.download_assets()
 
 
 
