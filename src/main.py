@@ -678,7 +678,7 @@ class TerminalSummer(App):
             reset_globals()
 
             # Запуск новой игры (всегда пролог)
-            prologue_path = self.ts_path / "text" / "test.txt"
+            prologue_path = self.ts_path / "text" / "prologue.txt"
             self.script = ScriptParser(prologue_path, self)
 
             # Отображение NovelMenu
