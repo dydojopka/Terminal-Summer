@@ -1,14 +1,22 @@
 #!/bin/bash
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "$ROOT_DIR"
+
 # Установка зависимостей
-pip install pyinstaller requests rich textual Pillow pil2ansi yaml
+python3 -m pip install -r requirements.txt
+python3 -m pip install pyinstaller requests PyYAML
 
 # Сборка
-pyinstaller --onefile \
-            --name "Terminal-Summer-Linux" \
-            --add-data "src/gameUI.tcss:." \
-            --paths src \
-            --paths scripts \
-            --clean \
-            src/main.py
+python3 -m PyInstaller --onefile \
+                       --name "Terminal-Summer-Linux" \
+                       --add-data "src/gameUI.tcss:." \
+                       --paths src \
+                       --paths scripts \
+                       --hidden-import assets_manager \
+                       --clean \
+                       src/main.py
 
-echo "Сборка завершена! Исполняемый файл находится в папке dist/"
+echo "Сборка завершена! Исполняемый файл: dist/Terminal-Summer-Linux"

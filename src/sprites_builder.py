@@ -28,7 +28,7 @@ from pathlib import Path
 from PIL import Image
 
 
-# Put quick manual tests here.
+# Put quick manual tests here
 MANUAL_COMMANDS = [
     "sl normal_pioneer_far size normal at center with dissolve",
 ]
@@ -65,9 +65,24 @@ class ResolvedSprite:
 
 
 def load_yaml_dict(path: Path) -> dict:
-    """Load YAML using yq (no PyYAML dependency)."""
+    """Load YAML via PyYAML, fallback to yq if PyYAML is unavailable."""
+    try:
+        import yaml
+    except ImportError:
+        yaml = None
+
+    if yaml is not None:
+        with path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        if not isinstance(data, dict):
+            raise RuntimeError(f"Unexpected YAML root type in {path}: {type(data).__name__}")
+        return data
+
     if not shutil.which("yq"):
-        raise RuntimeError("Command 'yq' is not installed. Install it to read resources.yaml.")
+        raise RuntimeError(
+            "PyYAML is not installed and 'yq' command was not found. "
+            "Install PyYAML or yq to read resources.yaml."
+        )
 
     proc = subprocess.run(
         ["yq", "-o=json", ".", str(path)],

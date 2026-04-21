@@ -1,34 +1,58 @@
 import os
 import sys
 from pathlib import Path
+from importlib import import_module
 
 # --- ЛОГИКА ПУТЕЙ ---
-def get_resource_path(relative_path):
-    """Получает путь к ресурсу, работает для dev и для PyInstaller"""
-    if hasattr(sys, '_MEIPASS'):
-        # Путь внутри временной папки PyInstaller
-        return Path(sys._MEIPASS) / relative_path
-    # Путь в обычном режиме разработки
-    return Path(__file__).parent / relative_path
+IS_FROZEN = hasattr(sys, "_MEIPASS")
+SRC_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(sys.executable).resolve().parent if IS_FROZEN else SRC_DIR.parent
+BUNDLE_DIR = Path(sys._MEIPASS) if IS_FROZEN else SRC_DIR
 
-def get_executable_dir():
-    """Путь к папке, где лежит сам .exe (для настроек и папки TS)"""
-    if hasattr(sys, '_MEIPASS'):
-        return Path(sys.executable).parent
-    return Path(__file__).parent.parent
 
-# Пути для стилей и настроек
+def get_resource_path(relative_path: str) -> Path:
+    """Путь к встроенному ресурсу (из src в dev, из _MEIPASS в сборке)"""
+    return BUNDLE_DIR / relative_path
+
+
+def get_ts_path() -> Path:
+    """Путь к папке TS в runtime-среде"""
+    return PROJECT_ROOT / "TS"
+
+
+def get_settings_path() -> Path:
+    """Путь к файлу настроек
+
+    В dev сохраняем в src/settings.json
+    В onefile-сборке сохраняем рядом с .exe
+    """
+    if IS_FROZEN:
+        return PROJECT_ROOT / "settings.json"
+    return SRC_DIR / "settings.json"
+
+
 CSS_PATH = get_resource_path("gameUI.tcss")
-SETTINGS_PATH = get_executable_dir() / "settings.json"
+SETTINGS_PATH = get_settings_path()
 
-# Подключаем папку scripts для загрузчика
-sys.path.append(str(get_executable_dir() / "scripts"))
+# Подключаем пути для загрузчика ассетов в dev-режиме.
+# Для `scripts.assets_manager` нужен PROJECT_ROOT в sys.path.
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
+scripts_dir = PROJECT_ROOT / "scripts"
+if scripts_dir.exists() and str(scripts_dir) not in sys.path:
+    # Fallback для прямого `import assets_manager`
+    sys.path.append(str(scripts_dir))
+
+assets_manager = None
+assets_import_error = None
 try:
-    import assets_manager
-except ImportError:
-    assets_manager = None
-
+    assets_manager = import_module("scripts.assets_manager")
+except Exception as exc:
+    try:
+        assets_manager = import_module("assets_manager")
+    except Exception:
+        assets_import_error = exc
 
 import asyncio
 import json
@@ -57,9 +81,18 @@ from sprites_builder import (
 )
 
 def main():
-    # Проверка ассетов (Загрузчик)
-    if assets_manager and not assets_manager.check_assets():
+    if assets_manager is None:
+        print("Не удалось импортировать assets_manager.py", file=sys.stderr)
+        if assets_import_error is not None:
+            print(f"Причина: {assets_import_error}", file=sys.stderr)
+        return
+    if assets_manager.check_assets():
+        return
+    try:
         assets_manager.download_assets()
+    except Exception as exc:
+        print(f"Ошибка загрузки ассетов: {exc}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 
@@ -407,9 +440,9 @@ class LogMenu(Log):
 
 class TerminalSummer(App):
     """Основное приложение новеллы"""
-    CSS_PATH = "gameUI.tcss"
+    CSS_PATH = str(CSS_PATH)
 
-    CONFIG_FILE = "settings.json"
+    CONFIG_FILE = SETTINGS_PATH
 
     def __init__(self):
         super().__init__()
@@ -420,8 +453,7 @@ class TerminalSummer(App):
             "text_speed": "0.025",
         }
 
-        # Определяем путь к папке TS относительно корня проекта
-        self.ts_path = get_executable_dir() / "TS"
+        self.ts_path = get_ts_path()
 
         self._sprite_resources = None
         self._sprite_resources_loaded = False
@@ -646,7 +678,7 @@ class TerminalSummer(App):
             reset_globals()
 
             # Запуск новой игры (всегда пролог)
-            prologue_path = self.ts_path / "text" / "prologue.txt"
+            prologue_path = self.ts_path / "text" / "test.txt"
             self.script = ScriptParser(prologue_path, self)
 
             # Отображение NovelMenu
@@ -1188,15 +1220,16 @@ class TerminalSummer(App):
 
     def load_settings(self):
         """Загрузка настроек"""
-        if os.path.exists(self.CONFIG_FILE):
-            with open(self.CONFIG_FILE, "r", encoding="utf-8") as f:
+        if self.CONFIG_FILE.exists():
+            with self.CONFIG_FILE.open("r", encoding="utf-8") as f:
                 self.settings = json.load(f)
         else:
             self.save_settings()
     
     def save_settings(self):
         """Сохранение настроек"""
-        with open(self.CONFIG_FILE, "w", encoding="utf-8") as f:
+        self.CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with self.CONFIG_FILE.open("w", encoding="utf-8") as f:
             json.dump(self.settings, f, indent=4)
 
     def apply_settings(self):
@@ -1415,5 +1448,6 @@ class TerminalSummer(App):
 
 
 if __name__ == "__main__":
+    main()
     app = TerminalSummer()
     app.run()
