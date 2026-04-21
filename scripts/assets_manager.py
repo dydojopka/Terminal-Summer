@@ -4,14 +4,14 @@ from pathlib import Path
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn
 
 # Твоя ссылка из Yandex Cloud
-ASSETS_URL = "https://storage.yandexcloud.net/ts-assets/TS-0.1.zip"
+ASSETS_URL = "https://storage.yandexcloud.net/terminal-summer-assets/TS.zip"
 
 def get_project_root() -> Path:
     """Возвращает рабочий корень, где должны лежать папка TS и settings."""
     if hasattr(sys, "_MEIPASS"):
-        # Для onefile-сборки работаем рядом с бинарником.
+        # Для onefile-сборки работаем рядом с бинарником
         return Path(sys.executable).resolve().parent
-    # scripts/assets_manager.py -> корень проекта на уровень выше scripts.
+    # scripts/assets_manager.py -> корень проекта на уровень выше scripts
     return Path(__file__).resolve().parent.parent
 
 
