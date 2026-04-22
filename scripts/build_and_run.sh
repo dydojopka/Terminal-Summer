@@ -17,16 +17,16 @@ python3 -m pip install pyinstaller requests PyYAML
 # Сборка
 python3 -m PyInstaller --onefile \
                        --name "${APP_NAME}" \
-                       --add-data "src/gameUI.tcss:." \
-                       --paths src \
-                       --paths scripts \
+                       --add-data "${ROOT_DIR}/src/gameUI.tcss:." \
+                       --paths "${ROOT_DIR}/src" \
+                       --paths "${ROOT_DIR}/scripts" \
                        --hidden-import assets_manager \
                        --distpath "${ROOT_DIR}" \
                        --workpath "${PYI_BUILD_DIR}" \
                        --specpath "${PYI_BUILD_DIR}" \
                        --noconfirm \
                        --clean \
-                       src/main.py
+                       "${ROOT_DIR}/src/main.py"
 
 mkdir -p "${LOCAL_BIN_DIR}"
 if [[ -e "${LINK_PATH}" && ! -L "${LINK_PATH}" ]]; then
