@@ -5,18 +5,41 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$ROOT_DIR"
 
+APP_NAME="terminal-summer"
+PYI_BUILD_DIR="${ROOT_DIR}/build/pyinstaller"
+LOCAL_BIN_DIR="${HOME}/.local/bin"
+LINK_PATH="${LOCAL_BIN_DIR}/${APP_NAME}"
+
 # Установка зависимостей
 python3 -m pip install -r requirements.txt
 python3 -m pip install pyinstaller requests PyYAML
 
 # Сборка
 python3 -m PyInstaller --onefile \
-                       --name "Terminal-Summer-Linux" \
+                       --name "${APP_NAME}" \
                        --add-data "src/gameUI.tcss:." \
                        --paths src \
                        --paths scripts \
                        --hidden-import assets_manager \
+                       --distpath "${ROOT_DIR}" \
+                       --workpath "${PYI_BUILD_DIR}" \
+                       --specpath "${PYI_BUILD_DIR}" \
+                       --noconfirm \
                        --clean \
                        src/main.py
 
-echo "Сборка завершена! Исполняемый файл: dist/Terminal-Summer-Linux"
+mkdir -p "${LOCAL_BIN_DIR}"
+if [[ -e "${LINK_PATH}" && ! -L "${LINK_PATH}" ]]; then
+    echo "ВНИМАНИЕ: ${LINK_PATH} уже существует и не является symlink."
+    echo "Создай symlink вручную: ln -s \"${ROOT_DIR}/${APP_NAME}\" \"${LINK_PATH}\""
+else
+    ln -sfn "${ROOT_DIR}/${APP_NAME}" "${LINK_PATH}"
+fi
+
+echo "Сборка завершена! Бинарник: ${ROOT_DIR}/${APP_NAME}"
+echo "Команда для запуска из любого места: ${APP_NAME}"
+
+if [[ ":${PATH}:" != *":${LOCAL_BIN_DIR}:"* ]]; then
+    echo "ВНИМАНИЕ: ${LOCAL_BIN_DIR} не в PATH."
+    echo "Добавь в ~/.bashrc: export PATH=\"${LOCAL_BIN_DIR}:\$PATH\""
+fi
