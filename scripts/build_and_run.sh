@@ -11,6 +11,8 @@ LOCAL_BIN_DIR="${HOME}/.local/bin"
 LINK_PATH="${LOCAL_BIN_DIR}/${APP_NAME}"
 
 # Установка зависимостей
+pythin3 -m venv venv
+source venv/bin/activate
 python3 -m pip install -r requirements.txt
 python3 -m pip install pyinstaller
 
