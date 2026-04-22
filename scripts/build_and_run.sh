@@ -13,13 +13,17 @@ VENV_DIR="${ROOT_DIR}/.venv"
 VENV_PYTHON="${VENV_DIR}/bin/python"
 
 # Подготовка виртуального окружения и зависимостей
-if [[ ! -d "${VENV_DIR}" ]]; then
-    python3 -m venv "${VENV_DIR}"
-fi
-
 if [[ ! -x "${VENV_PYTHON}" ]]; then
-    echo "Ошибка: не найден интерпретатор виртуального окружения: ${VENV_PYTHON}"
-    exit 1
+    if ! python3 -m venv "${VENV_DIR}"; then
+        PY_MAJMIN="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+        echo "Ошибка: не удалось создать виртуальное окружение ${VENV_DIR}."
+        echo "Причина обычно: отсутствует пакет venv/ensurepip для системного Python."
+        echo "Установи пакет и повтори сборку:"
+        echo "  sudo apt install python${PY_MAJMIN}-venv"
+        echo "  # fallback:"
+        echo "  sudo apt install python3-venv"
+        exit 1
+    fi
 fi
 
 "${VENV_PYTHON}" -m pip install --upgrade pip
