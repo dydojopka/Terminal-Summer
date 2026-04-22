@@ -87,3 +87,23 @@ def download_assets():
         raise RuntimeError("Assets downloaded, but required files are still missing.")
 
     print("Все ресурсы успешно установлены.\n")
+
+
+def ensure_assets() -> None:
+    """Гарантирует наличие ассетов в рабочем корне."""
+    if check_assets():
+        print("Ассеты уже есть. Скачивание не требуется.")
+        return
+    download_assets()
+
+
+def main() -> None:
+    try:
+        ensure_assets()
+    except Exception as exc:
+        print(f"Ошибка менеджера ассетов: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

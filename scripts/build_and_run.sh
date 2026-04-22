@@ -12,7 +12,10 @@ LINK_PATH="${LOCAL_BIN_DIR}/${APP_NAME}"
 
 # Установка зависимостей
 python3 -m pip install -r requirements.txt
-python3 -m pip install pyinstaller requests PyYAML
+python3 -m pip install pyinstaller
+
+# Подготовка ассетов в корне проекта
+python3 "${ROOT_DIR}/scripts/assets_manager.py"
 
 # Сборка
 python3 -m PyInstaller --onefile \
@@ -20,7 +23,6 @@ python3 -m PyInstaller --onefile \
                        --add-data "${ROOT_DIR}/src/gameUI.tcss:." \
                        --paths "${ROOT_DIR}/src" \
                        --paths "${ROOT_DIR}/scripts" \
-                       --hidden-import assets_manager \
                        --distpath "${ROOT_DIR}" \
                        --workpath "${PYI_BUILD_DIR}" \
                        --specpath "${PYI_BUILD_DIR}" \

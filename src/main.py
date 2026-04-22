@@ -1,7 +1,6 @@
 import os
 import sys
 from pathlib import Path
-from importlib import import_module
 
 # --- ЛОГИКА ПУТЕЙ ---
 IS_FROZEN = hasattr(sys, "_MEIPASS")
@@ -34,26 +33,6 @@ def get_settings_path() -> Path:
 CSS_PATH = get_resource_path("gameUI.tcss")
 SETTINGS_PATH = get_settings_path()
 
-# Подключаем пути для загрузчика ассетов в dev-режиме.
-# Для `scripts.assets_manager` нужен PROJECT_ROOT в sys.path.
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-scripts_dir = PROJECT_ROOT / "scripts"
-if scripts_dir.exists() and str(scripts_dir) not in sys.path:
-    # Fallback для прямого `import assets_manager`
-    sys.path.append(str(scripts_dir))
-
-assets_manager = None
-assets_import_error = None
-try:
-    assets_manager = import_module("scripts.assets_manager")
-except Exception as exc:
-    try:
-        assets_manager = import_module("assets_manager")
-    except Exception:
-        assets_import_error = exc
-
 import asyncio
 import json
 from PIL import Image
@@ -81,18 +60,26 @@ from sprites_builder import (
 )
 
 def main():
-    if assets_manager is None:
-        print("Не удалось импортировать assets_manager.py", file=sys.stderr)
-        if assets_import_error is not None:
-            print(f"Причина: {assets_import_error}", file=sys.stderr)
+    ts_dir = get_ts_path()
+    required_paths = [
+        ts_dir / "gallery",
+        ts_dir / "game",
+        ts_dir / "text",
+        ts_dir / "resources.yaml",
+    ]
+    missing_paths = [path for path in required_paths if not path.exists()]
+    if not missing_paths:
         return
-    if assets_manager.check_assets():
-        return
-    try:
-        assets_manager.download_assets()
-    except Exception as exc:
-        print(f"Ошибка загрузки ассетов: {exc}", file=sys.stderr)
-        raise SystemExit(1)
+
+    print("Ошибка: не найдены обязательные ассеты проекта TS.", file=sys.stderr)
+    print(f"Ожидаемая директория ассетов: {ts_dir}", file=sys.stderr)
+    print("Для сборки из исходников используй:", file=sys.stderr)
+    print("  Linux: bash scripts/build_and_run.sh", file=sys.stderr)
+    print(r"  Windows: scripts\build_and_run.bat", file=sys.stderr)
+    print("Отсутствуют:", file=sys.stderr)
+    for path in missing_paths:
+        print(f"  - {path}", file=sys.stderr)
+    raise SystemExit(1)
 
 
 
