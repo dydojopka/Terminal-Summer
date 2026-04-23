@@ -42,8 +42,8 @@ fi
 
 mkdir -p "${LOCAL_BIN_DIR}"
 if [[ -e "${LINK_PATH}" && ! -L "${LINK_PATH}" ]]; then
-    echo "ВНИМАНИЕ: ${LINK_PATH} уже существует и не является symlink."
-    echo "Создай symlink вручную: ln -s \"${ROOT_DIR}/${APP_NAME}\" \"${LINK_PATH}\""
+    echo "ВНИМАНИЕ: ${LINK_PATH} уже существует и не является symlink"
+    echo "Создайте symlink вручную: ln -s \"${ROOT_DIR}/${APP_NAME}\" \"${LINK_PATH}\""
 else
     ln -sfn "${ROOT_DIR}/${APP_NAME}" "${LINK_PATH}"
 fi
@@ -52,6 +52,11 @@ echo "Сборка завершена: ${ROOT_DIR}/${APP_NAME}"
 echo "Команда для запуска из любого места: ${APP_NAME}"
 
 if [[ ":${PATH}:" != *":${LOCAL_BIN_DIR}:"* ]]; then
-    echo "ВНИМАНИЕ: ${LOCAL_BIN_DIR} не в PATH."
-    echo "Добавте в ~/.bashrc: export PATH=\"${LOCAL_BIN_DIR}:\$PATH\""
+    echo "ВНИМАНИЕ: ${LOCAL_BIN_DIR} не в PATH"
+    echo "Для текущей сессии выполните:"
+    echo "  export PATH=\"${LOCAL_BIN_DIR}:\$PATH\""
+    echo "  hash -r"
+    echo "Для постоянного использования добавьте в ~/.bashrc:"
+    echo "  export PATH=\"${LOCAL_BIN_DIR}:\$PATH\""
+    echo "И затем примените: source ~/.bashrc"
 fi

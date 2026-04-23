@@ -7,7 +7,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, Downlo
 ASSETS_URL = "https://storage.yandexcloud.net/terminal-summer-assets/TS.zip"
 
 def get_project_root() -> Path:
-    """Возвращает рабочий корень, где должны лежать папка TS и settings."""
+    """Возвращает рабочий корень, где должны лежать папка TS и settings"""
     if hasattr(sys, "_MEIPASS"):
         # Для onefile-сборки работаем рядом с бинарником
         return Path(sys.executable).resolve().parent
@@ -46,7 +46,7 @@ def download_assets():
         import requests
     except ImportError as exc:
         raise RuntimeError(
-            "Модуль 'requests' не установлен. Установите зависимости из requirements.txt."
+            "Модуль 'requests' не установлен. Установите зависимости из requirements.txt"
         ) from exc
 
     root = get_project_root()
@@ -84,15 +84,15 @@ def download_assets():
             zip_path.unlink()
 
     if not check_assets():
-        raise RuntimeError("Assets downloaded, but required files are still missing.")
+        raise RuntimeError("Assets downloaded, but required files are still missing")
 
     print("Все ресурсы успешно установлены.\n")
 
 
 def ensure_assets() -> None:
-    """Гарантирует наличие ассетов в рабочем корне."""
+    """Гарантирует наличие ассетов в рабочем корне"""
     if check_assets():
-        print("Ассеты уже есть. Скачивание не требуется.")
+        print("Ассеты уже есть. Скачивание не требуется")
         return
     download_assets()
 
