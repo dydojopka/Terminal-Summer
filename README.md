@@ -23,9 +23,9 @@
 
 ## Технологии
 - [Python 3.8+](https://www.python.org/)
-- [Textual](https://github.com/Textualize/textual) - фреймворк для построения Rich TUI.
-- [Pillow](https://python-pillow.org/) - обработка изображений и спрайтов.
-- [pil2ansi](https://github.com/MatthiasValvekens/pil2ansi) - конвертация PNG в ANSI/SCII-арт.
+- [Textual](https://textual.textualize.io/) - фреймворк для построения Rich TUI.
+- [Pillow](https://pypi.org/project/pillow/) - обработка изображений и спрайтов.
+- [pil2ansi](https://github.com/lostways/pil2ansi) - конвертация PNG в ANSI/SCII-арт.
 
 ## Требования
 - **Python** версии 3.8 или выше
