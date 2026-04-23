@@ -1,10 +1,10 @@
 # Terminal-Summer
 Перенос легендарной визуальной новеллы ["Бесконечное лето"](https://store.steampowered.com/app/331470/Beskonechnoe_Leto/) в консольное окружение.  
-Все сцены, спрайты и задники преобразуються в ANSI/ASCII - арты, а сам проект сделан на python фреймворке [textual](https://textual.textualize.io/).
+Все сцены, спрайты и задники преобразуются в ANSI/ASCII-арты, а сам проект сделан на Python-фреймворке [textual](https://textual.textualize.io/).
 
 Скриншоты:
-|Everlasting Summer      |Terminal Summer(ANSI)   |Terminal Summer(ASCII)  |
-|:---:                   |:---:                   |:---:                   |
+|Everlasting Summer |Terminal Summer (ANSI) |Terminal Summer (ASCII) |
+|:---:              |:---:                  |:---:                   |
 |<img width="1920" height="1080" alt="ES_s1" src="https://github.com/user-attachments/assets/4db635bd-4de3-43c4-8b8c-f549911084c1" />|<img width="1920" height="1080" alt="TS_s1c" src="https://github.com/user-attachments/assets/92320e8a-c765-4ab5-b302-9af8c0e079c9" />|<img width="1920" height="1080" alt="TS_s1t" src="https://github.com/user-attachments/assets/c19a160c-9289-4ba7-9673-c02dc241cbf7" />|
 |<img width="1920" height="1080" alt="ES_s2" src="https://github.com/user-attachments/assets/5a1c254f-a951-4600-9b41-0eb4a77a85fb" />|<img width="1920" height="1080" alt="TS_s2c" src="https://github.com/user-attachments/assets/a9e46ee6-a2d3-406b-9c75-40c0948d1cad" />|<img width="1920" height="1080" alt="TS_s2t" src="https://github.com/user-attachments/assets/f986ca57-b1bc-4da7-9cc1-14ad12027db8" />|
 |<img width="1920" height="1080" alt="ES_s3" src="https://github.com/user-attachments/assets/c305fede-d4ab-4242-9619-e7e0e9ffe2dc" />|<img width="1920" height="1080" alt="TS_s3c" src="https://github.com/user-attachments/assets/d0573f1e-c3f5-4dfc-9a92-53ec987740f2" />|<img width="1920" height="1080" alt="TS_s3t" src="https://github.com/user-attachments/assets/afcb2856-4b5a-4b7c-b660-cf4c21ae2b9d" />|
@@ -15,9 +15,9 @@
 
 ## Содержание
 - [Технологии](#технологии)
+- [Требования](#требования)
 - [Использование](#использование)
-  - [Требования](#требования)
-  - [Сборка](#cборка)
+  - [Сборка](#сборка)
 
 
 ## Технологии
@@ -26,6 +26,10 @@
 - [Pillow](https://python-pillow.org/) - обработка изображений и спрайтов.
 - [pil2ansi](https://github.com/MatthiasValvekens/pil2ansi) - конвертация PNG в ANSI/SCII-арт.
 
+## Требования
+- **Python** версии 3.8 или выше
+- **Git** для клонирования репозитория
+- Терминал с поддержкой **True Color** (Windows Terminal, kitty или другие).
 
 ## Использование
 Скачайте архив со [страницы последнего релиза](https://github.com/dydojopka/Terminal-Summer/releases/latest), разархивируйте и запустите из корня:
@@ -36,18 +40,14 @@ Linux:
 ```
 
 Windows:
-```powershell
+```shell
 Terminal-Summer-Windows.exe
 ```
 
 
-### Требования
-- **Python** версии 3.8 или выше
-- **Git** для клонирования репозитория
-- Терминал с поддержкой **True Color** (Windows Terminal, kitty или другие).
+Или собрать самому:
 
-
-### Cборка
+### Сборка
 #### Linux:
 1. Клонирование репозитория:
 ```bash
@@ -76,13 +76,13 @@ bash scripts/build_and_run.sh
 
 #### Windows:
 1. Клонирование репозитория:
-```powershell
+```shell
 git clone https://github.com/dydojopka/Terminal-Summer.git
 cd Terminal-Summer
 ```
 
 2. Установка зависимостей:
-```powershell
+```shell
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
@@ -90,15 +90,15 @@ pip install pyinstaller
 ```
 
 3. Сборка:
-```powershell
+```shell
 scripts\build_and_run.bat
 ```
 
 4. Запуск:
-```powershell
+```shell
 Terminal-Summer-Windows.exe
 ```
 
 > [!TIP]
-> Если ANSI/ASCII арт обрезаеться даже если он должен полностью помещяться на экране - 
-> закройте программу, откройте окно консоли во весь экран и после запускайте программу.
+> Если ANSI/ASCII-арт обрезается, даже если он должен полностью помещаться на экране - 
+> закройте программу, откройте окно консоли во весь экран и после этого запустите программу снова.
