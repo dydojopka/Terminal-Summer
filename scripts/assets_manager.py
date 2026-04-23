@@ -86,7 +86,7 @@ def download_assets():
     if not check_assets():
         raise RuntimeError("Assets downloaded, but required files are still missing")
 
-    print("Все ресурсы успешно установлены.\n")
+    print("Все ресурсы успешно скачаны!\n")
 
 
 def ensure_assets() -> None:

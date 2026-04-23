@@ -36,4 +36,5 @@ REM Подготовка ассетов в корне проекта
                       "%ROOT_DIR%\src\main.py" || exit /b 1
 
 echo Сборка завершена: %cd%\%APP_NAME%.exe
+echo Запуск из корня проекта: %APP_NAME%.exe
 pause
