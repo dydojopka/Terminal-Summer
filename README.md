@@ -35,7 +35,7 @@
 ## Использование
 Скачайте архив со [страницы последнего релиза](https://github.com/dydojopka/Terminal-Summer/releases/latest), разархивируйте и запустите из корня:
 
-Linux:
+Linux (проверенно на Arch):
 ```bash
 ./terminal-summer
 ```
