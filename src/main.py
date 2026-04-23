@@ -67,19 +67,30 @@ def main():
         ts_dir / "text",
         ts_dir / "resources.yaml",
     ]
+
     missing_paths = [path for path in required_paths if not path.exists()]
     if not missing_paths:
         return
 
-    print("Ошибка: не найдены обязательные ассеты проекта TS.", file=sys.stderr)
-    print(f"Ожидаемая директория ассетов: {ts_dir}", file=sys.stderr)
-    print("Для сборки из исходников используй:", file=sys.stderr)
-    print("  Linux: bash scripts/build_and_run.sh", file=sys.stderr)
-    print(r"  Windows: scripts\build_and_run.bat", file=sys.stderr)
-    print("Отсутствуют:", file=sys.stderr)
-    for path in missing_paths:
-        print(f"  - {path}", file=sys.stderr)
-    raise SystemExit(1)
+    print("Ассеты не найдены. Запускаю загрузку...", file=sys.stderr)
+
+    scripts_dir = PROJECT_ROOT / "scripts"
+    if scripts_dir.exists():
+        sys.path.insert(0, str(scripts_dir))
+
+    try:
+        from scripts.assets_manager import ensure_assets
+        ensure_assets()
+    except Exception as exc:
+        print(f"Ошибка загрузки ассетов: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+
+    missing_paths = [path for path in required_paths if not path.exists()]
+    if missing_paths:
+        print("Ошибка: ассеты после загрузки всё ещё отсутствуют.", file=sys.stderr)
+        for path in missing_paths:
+            print(f"  - {path}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 
