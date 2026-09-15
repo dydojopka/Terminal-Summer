@@ -30,8 +30,85 @@ def get_settings_path() -> Path:
     return SRC_DIR / "settings.json"
 
 
+def get_saves_path() -> Path:
+    """Путь к директории сохранений"""
+    if IS_FROZEN:
+        return PROJECT_ROOT / "saves"
+    return SRC_DIR / "saves"
+
+
 CSS_PATH = get_resource_path("gameUI.tcss")
 SETTINGS_PATH = get_settings_path()
+SAVES_PATH = get_saves_path()
+
+
+# ============ Сохранения ============
+def _save_path(page: int, slot: int) -> Path:
+    """Путь к файлу сохранения: saves/{page+1}/{slot+1}.json"""
+    return SAVES_PATH / str(page + 1) / f"{slot + 1}.json"
+
+
+def save_game_state(page: int, slot: int, game_state: dict, timestamp: str = "") -> None:
+    """Сохранение состояния игры в JSON файл"""
+    save_file = _save_path(page, slot)
+    save_file.parent.mkdir(parents=True, exist_ok=True)
+    save_data = {
+        "save_id": f"{page}/{slot}",
+        "page": page,
+        "slot": slot,
+        "timestamp": timestamp,
+        "game_state": game_state,
+    }
+    with save_file.open("w", encoding="utf-8") as f:
+        json.dump(save_data, f, indent=2, ensure_ascii=False)
+
+
+def load_game_state(page: int, slot: int) -> dict | None:
+    """Загрузка состояния игры из JSON файла"""
+    save_file = _save_path(page, slot)
+    if not save_file.exists():
+        return None
+    with save_file.open("r", encoding="utf-8") as f:
+        save_data = json.load(f)
+    return save_data.get("game_state")
+
+
+def delete_save(page: int, slot: int) -> bool:
+    """Удаление сохранения"""
+    save_file = _save_path(page, slot)
+    if save_file.exists():
+        save_file.unlink()
+        # Удаляем пустую директорию страницы, если она пуста
+        try:
+            save_file.parent.rmdir()
+        except OSError:
+            pass
+        return True
+    return False
+
+
+def get_all_saves() -> dict[str, dict]:
+    """Получение всех сохранений (возвращает dict['page/slot' -> save_data])"""
+    saves = {}
+    if not SAVES_PATH.exists():
+        return saves
+    for page_dir in SAVES_PATH.iterdir():
+        if not page_dir.is_dir():
+            continue
+        try:
+            page_num = int(page_dir.name)
+        except ValueError:
+            continue
+        for save_file in page_dir.glob("*.json"):
+            try:
+                with save_file.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
+                slot_num = int(save_file.stem)
+                save_id = f"{page_num - 1}/{slot_num - 1}"
+                saves[save_id] = data
+            except Exception:
+                continue
+    return saves
 
 import asyncio
 import json
@@ -137,7 +214,7 @@ class AnsiView(Static):
     ALLOW_SELECT = False
 
     def on_mount(self) -> None:
-        # ANSI-арт не интерактивен: отключаем лишнюю обработку мыши и ссылок.
+        # ANSI-арт не интерактивен: отключаем лишнюю обработку мыши и ссылок
         self.auto_links = False
         self.disable_messages(events.MouseMove, events.Enter, events.Leave)
 
@@ -248,6 +325,61 @@ class GalleryMenuBottomBtns(HorizontalGroup):
         yield Button("->", id="btn-next-gallery")
 
 
+class SaveMenuLeftBtns(Vertical):
+    """Виджет-контейнер для кнопок сохранений слева (Назад + номера страниц)"""
+    def compose(self):
+        yield Button("Назад ↩", id="btn-close-save-menu")
+        with Static(id="container-save-page-btns"):
+            for i in range(1, 10):
+                yield Button(str(i), id=f"btn-save-page-{i}", classes="save-page-btn")
+
+
+class SaveMenuMidBtns(Vertical):
+    """Виджет-контейнер для слотов и кнопок действий в центре"""
+    BORDER_TITLE = "Сохранения"
+    def compose(self):
+        yield SaveMenuSlots(id="save-menu-slots")
+        yield SaveMenuActionBtns(id="save-action-btns")
+
+
+class SaveMenuSlots(Static):
+    """Сетка из 12 слотов сохранения"""
+    def compose(self):
+        for row in range(3):
+            with HorizontalGroup(id=f"save-row-{row}"):
+                for col in range(4):
+                    slot_index = row * 4 + col
+                    yield Button(
+                        f"Пусто\nСлот {slot_index + 1}",
+                        id=f"save-slot-{slot_index}",
+                        classes="save-slot save-slot-empty",
+                    )
+
+
+class SaveMenuActionBtns(HorizontalGroup):
+    """Кнопки действий: Удалить, Загрузить, Сохранить"""
+    def compose(self):
+        yield Button("Удалить", id="btn-save-delete", classes="save-action-btn")
+        yield Button("Загрузить", id="btn-save-load-game", classes="save-action-btn")
+        yield Button("Сохранить", id="btn-save-save", classes="save-action-btn")
+
+
+class SaveMenu(HorizontalGroup):
+    """Меню сохранений с пагинацией и слотами"""
+    BORDER_TITLE = "Сохранения"
+
+    def __init__(self, *args, opened_from: str = "menu", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.opened_from = opened_from  # "menu" или "pause"
+        self.current_page = 0  # 0-8 (страницы 1-9)
+        self.selected_slot: str | None = None  # id выбранного слота
+        self.all_saves: dict[str, dict] = {}
+
+    def compose(self):
+        yield SaveMenuLeftBtns()
+        yield SaveMenuMidBtns()
+
+
 class PauseMenu(Static):
     """Виджет меню паузы"""
     def compose(self):
@@ -258,8 +390,7 @@ class PauseMenuContainer(VerticalScroll):
     BORDER_TITLE = "Пауза"
     def compose(self):
         yield Button("Продолжить", id="btn-continue")
-        yield Button("Сохранить", id="btn-save")
-        yield Button("Загрузить", id="btn-load")
+        yield Button("Сохранения", id="btn-save")
         yield Button("Настройки", id="btn-settings-pause")
         yield Button("В главное меню", id="btn-menu")
         yield Button("Выход", id="btn-exit-pause")
@@ -340,9 +471,9 @@ class DescriptionSettingTextSpeed(Widget):
     """Описание настройки 'Скорость текста'"""
     def render(self):
         return """Скорость появления текста в текстовом окне.\n
-Медленный   - 0.04
-Средний     - 0.025
-Быстрый     - 0.01
+Медленно    - 0.04
+Средние     - 0.025
+Быстро      - 0.01
 Моментально - 0"""
 
 
@@ -498,6 +629,7 @@ class TerminalSummer(App):
         yield PauseMenu(   id="pause-menu",    classes="hidden")
         yield SettingsMenu(id="settings-menu", classes="hidden")
         yield GalleryMenu( id="gallery-menu",  classes="hidden")
+        yield SaveMenu(    id="save-menu",     classes="hidden")
 
 
 
@@ -516,10 +648,8 @@ class TerminalSummer(App):
         # Кнопки в PauseMenu:
         elif button_id == "btn-continue":         # Кнопка "Продолжить"
             self.action_pause_game()
-        elif button_id == "btn-save":             # Кнопка "Сохранить"
-            pass
-        elif button_id == "btn-load":             # Кнопка "Загрузить"
-            pass
+        elif button_id == "btn-save":             # Кнопка "Сохранения"
+            self.open_save_menu("pause")
         elif button_id == "btn-settings-pause":   # Кнопка "Настройки"
             self.query_one("#settings-menu").add_class("open-from-pause") # Класс-флаг что настройки открыты из PauseMenu
             self.action_open_settings()
@@ -686,7 +816,7 @@ class TerminalSummer(App):
             # Фокус на кнопке "Вперёд" в игровом меню
             self.query_one("#btn-next", Button).focus()
         elif button_id == "btn-save-load":        # Кнопка "Сохранение"
-            pass
+            self.open_save_menu("menu")
         elif button_id == "btn-gallery":          # Кнопка "Галерея"
             self.action_open_gallery()
         elif button_id == "btn-settings-menu":    # Кнопка "Настройки"
@@ -763,6 +893,25 @@ class TerminalSummer(App):
         elif button_id == "btn-close-gallery":    # Кнопка "Назад"
             self.action_open_gallery()
 
+        # Кнопки в SaveMenu:
+        # Кнопка "Назад"
+        elif button_id == "btn-close-save-menu":
+            self.close_save_menu()
+        # Page buttons (1-9)
+        elif button_id.startswith("btn-save-page-"):
+            page_num = int(button_id.split("-")[-1]) - 1
+            self.switch_save_page(page_num)
+        # Slot buttons (save-slot-0 through save-slot-11)
+        elif button_id.startswith("save-slot-"):
+            self.select_save_slot(button_id)
+        # Action buttons
+        elif button_id == "btn-save-delete":
+            self.delete_selected_save()
+        elif button_id == "btn-save-load-game":
+            self.load_selected_save()
+        elif button_id == "btn-save-save":
+            self.save_to_selected_slot()
+
     def on_mount(self) -> None:
         """Загрузка настроек при запуске"""
         self.load_settings()
@@ -830,11 +979,12 @@ class TerminalSummer(App):
         settings_menu = self.query_one("#settings-menu")
         main_menu = self.query_one("#main-menu")
         gallery_menu = self.query_one("#gallery-menu")
+        save_menu = self.query_one("#save-menu")
         choice_bar = self.query_one("#choice-bar")
         log_menu = self.query_one("#log-menu")
         
 
-        if main_menu.has_class("hidden") and gallery_menu.has_class("hidden"): # Если НЕ открыто главное меню
+        if main_menu.has_class("hidden") and gallery_menu.has_class("hidden") and save_menu.has_class("hidden"): # Если НЕ открыто главное меню
             # Если открыто из главного меню ИЛИ НЕ скрыто окно выбора И окно истории
             if settings_menu.has_class("open-from-menu") or not (choice_bar.has_class("hidden") and log_menu.has_class("hidden")):
                 pass # Пропуск
@@ -980,6 +1130,335 @@ class TerminalSummer(App):
             self.action_open_menu()
             #main_menu.remove_class("hidden")
 
+
+    # ============ Сохранения ============
+    def is_savable_game_state(self) -> bool:
+        """Проверка: можно ли сохраняться в текущем состоянии.
+
+        Запрещает сохранение во время анимации текста, блокировки ввода,
+        показа меню выбора или отсутствия запущенного сценария.
+        """
+        if self._text_animating:
+            return False
+        if self._input_blocked:
+            return False
+        if not hasattr(self, "script") or not self.script:
+            return False
+        if not self.query_one("#choice-bar").has_class("hidden"):
+            return False
+        return True
+
+    def open_save_menu(self, opened_from: str) -> None:
+        """Открытие меню сохранений"""
+        save_menu = self.query_one("#save-menu")
+        pause_menu = self.query_one("#pause-menu")
+        main_menu = self.query_one("#main-menu")
+        novel_menu = self.query_one("#novel-menu")
+        novel_window = self.query_one("#novel-window")
+
+        save_menu.opened_from = opened_from
+        save_menu.current_page = 0
+        save_menu.selected_slot = None
+        save_menu.all_saves = get_all_saves()
+
+        # Скрытие предыдущего меню
+        if opened_from == "pause":
+            pause_menu.add_class("hidden")
+        elif opened_from == "menu":
+            main_menu.add_class("hidden")
+
+        # Скрытие игровых элементов
+        novel_menu.add_class("hidden")
+        novel_window.add_class("hidden")
+
+        # Показ меню сохранений
+        save_menu.remove_class("hidden")
+
+        # Настройка видимости кнопки "Сохранить"
+        save_btn = self.query_one("#btn-save-save", Button)
+        if opened_from == "pause":
+            save_btn.disabled = False
+        else:
+            save_btn.disabled = True
+
+        # Обновление отображения
+        self.update_save_menu_display()
+
+        # Подсветка первой страницы как активной
+        self.query_one("#btn-save-page-1", Button).variant = "primary"
+        for i in range(2, 10):
+            self.query_one(f"#btn-save-page-{i}", Button).variant = "default"
+
+        # Фокус на кнопку "Назад"
+        self.query_one("#btn-close-save-menu", Button).focus()
+
+    def close_save_menu(self) -> None:
+        """Закрытие меню сохранений"""
+        save_menu = self.query_one("#save-menu")
+        save_menu.add_class("hidden")
+
+        opened_from = save_menu.opened_from
+
+        if opened_from == "pause":
+            self.query_one("#novel-menu").remove_class("hidden")
+            self.query_one("#novel-window").remove_class("hidden")
+            self.query_one("#btn-next", Button).focus()
+        elif opened_from == "menu":
+            self.query_one("#main-menu").remove_class("hidden")
+            self.query_one("#btn-start-game", Button).focus()
+
+    def update_save_menu_display(self) -> None:
+        """Обновление отображения слотов на текущей странице"""
+        save_menu = self.query_one("#save-menu")
+        page = save_menu.current_page
+        all_saves = save_menu.all_saves
+
+        for slot_index in range(12):
+            save_id = f"{page}/{slot_index}"
+            btn_id = f"save-slot-{slot_index}"
+
+            try:
+                btn = self.query_one(f"#{btn_id}", Button)
+            except Exception:
+                continue
+
+            save_data = all_saves.get(save_id)
+            if save_data:
+                game_state = save_data.get("game_state", {})
+                dialogue = game_state.get("dialogue", {})
+                speaker = dialogue.get("speaker", "")
+                text = dialogue.get("text", "")
+                timestamp = save_data.get("timestamp", "")
+
+                # Обрезаем текст до 5 слов
+                words = text.split()
+                if len(words) > 6:
+                    short_text = " ".join(words[:6]) + "..."
+                else:
+                    short_text = text
+
+                # Формируем метку слота
+                if speaker and short_text:
+                    label = f"{speaker}: {short_text}"
+                elif short_text:
+                    label = short_text
+                else:
+                    label = "Пусто"
+
+                btn.label = f"{label}\n{timestamp}"
+                btn.remove_class("save-slot-empty")
+                btn.add_class("save-slot-filled")
+            else:
+                btn.label = f"Пусто\nСлот {slot_index + 1}"
+                btn.remove_class("save-slot-filled")
+                btn.add_class("save-slot-empty")
+
+            # Сброс выделения
+            btn.remove_class("save-slot-selected")
+
+        # Выделение выбранного слота
+        if save_menu.selected_slot:
+            try:
+                selected_btn = self.query_one(f"#{save_menu.selected_slot}", Button)
+                selected_btn.add_class("save-slot-selected")
+            except Exception:
+                pass
+
+    def switch_save_page(self, page: int) -> None:
+        """Переключение страницы сохранений"""
+        save_menu = self.query_one("#save-menu")
+        save_menu.current_page = page
+        save_menu.selected_slot = None
+        self.update_save_menu_display()
+
+        # Обновление стиля активной кнопки страницы
+        for i in range(1, 10):
+            try:
+                page_btn = self.query_one(f"#btn-save-page-{i}", Button)
+                if i - 1 == page:
+                    page_btn.variant = "primary"
+                else:
+                    page_btn.variant = "default"
+            except Exception:
+                continue
+
+    def select_save_slot(self, slot_id: str) -> None:
+        """Выбор слота сохранения"""
+        save_menu = self.query_one("#save-menu")
+
+        # Сброс предыдущего выделения
+        if save_menu.selected_slot:
+            try:
+                old_btn = self.query_one(f"#{save_menu.selected_slot}", Button)
+                old_btn.remove_class("save-slot-selected")
+            except Exception:
+                pass
+
+        save_menu.selected_slot = slot_id
+
+        # Новое выделение
+        try:
+            new_btn = self.query_one(f"#{slot_id}", Button)
+            new_btn.add_class("save-slot-selected")
+        except Exception:
+            pass
+
+    def delete_selected_save(self) -> None:
+        """Удаление выбранного сохранения"""
+        save_menu = self.query_one("#save-menu")
+        if not save_menu.selected_slot:
+            return
+
+        slot_index = int(save_menu.selected_slot.split("-")[-1])
+        page = save_menu.current_page
+
+        delete_save(page, slot_index)
+        save_menu.all_saves = get_all_saves()
+        save_menu.selected_slot = None
+        self.update_save_menu_display()
+
+    def load_selected_save(self) -> None:
+        """Загрузка выбранного сохранения"""
+        save_menu = self.query_one("#save-menu")
+        if not save_menu.selected_slot:
+            return
+
+        slot_index = int(save_menu.selected_slot.split("-")[-1])
+        page = save_menu.current_page
+
+        game_state = load_game_state(page, slot_index)
+        if game_state is None:
+            return
+
+        # Закрытие меню сохранений
+        self.close_save_menu()
+
+        # Сброс текущего состояния
+        self.reset_game_view()
+
+        # Восстановление глобальных переменных
+        from script_parser import reset_globals, SL, UN, DV, US, PROLOGUE, D1_KEYS
+        import script_parser
+        variables = game_state.get("variables", {})
+        script_parser.SL = variables.get("SL", 0)
+        script_parser.UN = variables.get("UN", 0)
+        script_parser.DV = variables.get("DV", 0)
+        script_parser.US = variables.get("US", 0)
+        script_parser.PROLOGUE = variables.get("PROLOGUE", 0)
+        script_parser.D1_KEYS = variables.get("D1_KEYS", False)
+
+        # Восстановление сцены
+        scene = game_state.get("scene", {})
+        self.current_scene = scene.get("current_scene", "")
+        self.current_scene_category = scene.get("current_scene_category", "")
+
+        # Восстановление спрайтов
+        sprites_data = game_state.get("sprites", {})
+        self._active_sprites = sprites_data.get("active_sprites", {})
+        self._sprite_order_seq = sprites_data.get("sprite_order_seq", 0)
+
+        # Загрузка сценария
+        script_filename = game_state.get("script_filename", "")
+        script_index = game_state.get("script_index", 0)
+
+        if script_filename:
+            self.script = ScriptParser(script_filename, self)
+            self.script.index = script_index
+
+            # Скрытие главного меню (если загрузка из главного меню)
+            if save_menu.opened_from == "menu":
+                self.query_one("#main-menu").add_class("hidden")
+                self.query_one(Footer).remove_class("hidden")
+
+            # Показ игровых элементов
+            self.query_one("#novel-menu").remove_class("hidden")
+            self.query_one("#novel-window").remove_class("hidden")
+
+            # Восстановление текста и имени персонажа
+            dialogue = game_state.get("dialogue", {})
+            text_bar = self.query_one("#text-bar", Widget)
+
+            # Очистка старых CSS-классов персонажа
+            text_bar.remove_class(*[cls for cls in text_bar.classes if cls != "text-bar"])
+
+            # Установка имени и текста
+            text_bar.border_title = dialogue.get("speaker", "")
+            text_bar.text = dialogue.get("text", "")
+
+            # Восстановление CSS-класса персонажа для цвета имени
+            saved_speaker_id = dialogue.get("speaker_id")
+            if saved_speaker_id:
+                text_bar.add_class(saved_speaker_id)
+
+            text_bar.refresh()
+
+            # Обновление отображения
+            self.update_current_scene_art()
+
+            # Фокус на кнопку "Вперёд"
+            self.query_one("#btn-next", Button).focus()
+
+    def save_to_selected_slot(self) -> None:
+        """Сохранение в выбранный слот"""
+        save_menu = self.query_one("#save-menu")
+        if not save_menu.selected_slot:
+            return
+
+        # Сохранение доступно только из паузы
+        if save_menu.opened_from != "pause":
+            return
+
+        slot_index = int(save_menu.selected_slot.split("-")[-1])
+        page = save_menu.current_page
+
+        # Проверка: можно ли сохранять в текущем состоянии
+        if not self.is_savable_game_state():
+            return
+
+        import script_parser
+
+        # Текущий текст и имя персонажа из текстового бара
+        text_bar = self.query_one("#text-bar", Widget)
+        current_speaker = str(text_bar.border_title) if text_bar.border_title else ""
+        current_text = text_bar.text if text_bar.text else ""
+        # speaker_id — CSS-класс персонажа (sl, un, dv и т.д.)
+        speaker_classes = [cls for cls in text_bar.classes if cls != "text-bar"]
+        speaker_id = speaker_classes[0] if speaker_classes else None
+
+        # Сбор состояния игры
+        game_state = {
+            "script_filename": str(self.script.filename) if hasattr(self, "script") else "",
+            "script_index": self.script.index if hasattr(self, "script") else 0,
+            "variables": {
+                "SL": script_parser.SL,
+                "UN": script_parser.UN,
+                "DV": script_parser.DV,
+                "US": script_parser.US,
+                "PROLOGUE": script_parser.PROLOGUE,
+                "D1_KEYS": script_parser.D1_KEYS,
+            },
+            "scene": {
+                "current_scene": getattr(self, "current_scene", ""),
+                "current_scene_category": getattr(self, "current_scene_category", ""),
+            },
+            "sprites": {
+                "active_sprites": self._active_sprites,
+                "sprite_order_seq": self._sprite_order_seq,
+            },
+            "dialogue": {
+                "speaker": current_speaker,
+                "speaker_id": speaker_id,
+                "text": current_text,
+            },
+        }
+
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
+        save_game_state(page, slot_index, game_state, timestamp)
+
+        # Обновление отображения
+        save_menu.all_saves = get_all_saves()
+        self.update_save_menu_display()
 
     # ============ Функции - прочие ============
     async def key_space(self, event: events.Key) -> None:
