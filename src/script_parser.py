@@ -173,6 +173,14 @@ class ScriptParser:
         elif line.startswith("time"):
             self.app.current_time = line.split(maxsplit=1)[1].strip() if " " in line else "day"
             await self.next_line()
+        elif line.startswith("mode"):
+            self.app.current_text_mode = line.split(maxsplit=1)[1].strip() if " " in line else "adv"
+            await self.next_line()
+        elif line == "clear":
+            widget = self.app.query_one("#text-bar", expect_type=Widget)
+            widget.text = ""
+            widget.refresh()
+            await self.next_line()
         elif line.startswith("menu"):
             await self._handle_choice(line)
         elif line.startswith("$"):
