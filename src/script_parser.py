@@ -28,8 +28,10 @@ DISPLAY_NAMES = {
     "mtp": "Вожатая",
     "mt_voice": "Голос",
     "cs": "Виола",
+    "csp": "Медсестра",
     "mz": "Женя",
     "mi": "Мику",
+    "mip": "Пионерка",
     "ma": "Маша",
     "uv": "Юля",
     "uvp": "Странная девочка",
@@ -43,25 +45,57 @@ DISPLAY_NAMES = {
     "all": "Пионеры"
 }
 
-# Переменные с поинтами
-SL = 0
-UN = 0
-DV = 0
-US = 0
+# Состояние прохождения. Ключи совпадают с именами DSL без `$`.
+DEFAULT_SCRIPT_STATE = {
+    "lp_sl": 0, "lp_un": 0, "lp_dv": 0, "lp_us": 0,
+    "prologue": 0, "d1_keys": False,
+    "day2_map_necessary_done": 0,
+    "day2_map_clubs": False, "day2_map_musclub": False,
+    "day2_map_dinning_hall": False, "day2_map_aidpost": False,
+    "day2_map_library": False, "day2_cards_with_sl": 0,
+    "day2_dv_bet": 0, "day2_un": 0, "day2_card_result": None,
+    "d2_gave_keys": False, "d2_cardgame_block_rollback": False,
+}
+SCRIPT_STATE = DEFAULT_SCRIPT_STATE.copy()
 
-# Флаги
-PROLOGUE = 0
+# Совместимые поля для текущего UI и старых сохранений.
+SL = UN = DV = US = PROLOGUE = 0
 D1_KEYS = False
+
+
+def _sync_legacy_globals() -> None:
+    global SL, UN, DV, US, PROLOGUE, D1_KEYS
+    SL = SCRIPT_STATE["lp_sl"]
+    UN = SCRIPT_STATE["lp_un"]
+    DV = SCRIPT_STATE["lp_dv"]
+    US = SCRIPT_STATE["lp_us"]
+    PROLOGUE = SCRIPT_STATE["prologue"]
+    D1_KEYS = SCRIPT_STATE["d1_keys"]
+
+
+def get_script_state() -> dict:
+    """Возвращает копию сериализуемого состояния прохождения."""
+    return SCRIPT_STATE.copy()
+
+
+def set_script_state(state: dict) -> None:
+    """Восстанавливает состояние, дополняя его новыми значениями по умолчанию."""
+    SCRIPT_STATE.clear()
+    SCRIPT_STATE.update(DEFAULT_SCRIPT_STATE)
+    SCRIPT_STATE.update(state)
+    _sync_legacy_globals()
+
+
+def ensure_day2_state() -> None:
+    """Добавляет флаги второго дня при входе в его первую метку."""
+    for key in DEFAULT_SCRIPT_STATE:
+        if key.startswith("day2_") or key.startswith("d2_"):
+            SCRIPT_STATE.setdefault(key, DEFAULT_SCRIPT_STATE[key])
+
 
 def reset_globals():
     """Сброс всех очков и флагов"""
-    global SL, UN, DV, US, PROLOGUE, D1_KEYS
-    SL = 0
-    UN = 0
-    DV = 0
-    US = 0
-    PROLOGUE = 0
-    D1_KEYS = False
+    set_script_state({})
 
 
 class ScriptParser:
@@ -69,6 +103,7 @@ class ScriptParser:
         self.filename = filename
         self.app = app
         self.lines = []
+        self.labels = {}
         self.index = 0
         self.backward = False
         self.load_script()
@@ -80,7 +115,21 @@ class ScriptParser:
             self.filename = str(filename)
         with open(self.filename, 'r', encoding='utf-8') as f:
             self.lines = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
+        self._index_labels()
         self.index = 0
+
+    def restore_runtime_lines(self, lines: list[str]) -> None:
+        """Восстанавливает строки с уже вставленными блоками выбранных меню."""
+        self.lines = lines.copy()
+        self._index_labels()
+
+    def _index_labels(self) -> None:
+        """Строит индекс меток для текущего набора строк."""
+        self.labels = {}
+        for index, line in enumerate(self.lines):
+            match = re.fullmatch(r"label\s+([a-zA-Z0-9_]+):?", line)
+            if match:
+                self.labels[match.group(1)] = index
 
     async def next_line(self):
         """Шаг вперёд"""
@@ -100,7 +149,11 @@ class ScriptParser:
         self.app.sub_title = lp_status
 
         # ---- Логика обработки строк ----
-        if line.startswith("pause"):
+        if line.startswith("label"):
+            await self._handle_label(line)
+        elif line.startswith("goto"):
+            await self._handle_goto(line)
+        elif line.startswith("pause"):
             await self._handle_pause(line)
         elif line.startswith("scene"):
             await self._handle_scene(line)
@@ -123,6 +176,31 @@ class ScriptParser:
         elif '"' in line:
             await self._handle_dialogue(line)
         else:
+            await self.next_line()
+
+    async def _handle_label(self, line):
+        """Пропускает метку: она нужна только для переходов."""
+        match = re.fullmatch(r"label\s+([a-zA-Z0-9_]+):?", line)
+        if match and match.group(1) == "day2_main1":
+            ensure_day2_state()
+        if not self.backward:
+            await self.next_line()
+
+    async def _handle_goto(self, line):
+        """Переходит на строку с именованной меткой."""
+        match = re.fullmatch(r"goto\s+([a-zA-Z0-9_]+)", line)
+        if not match:
+            self.app.sub_title = f"[Script error] Invalid goto: {line}"
+            return
+
+        label = match.group(1)
+        target_index = self.labels.get(label)
+        if target_index is None:
+            self.app.sub_title = f"[Script error] Label not found: {label}"
+            return
+
+        self.index = target_index
+        if not self.backward:
             await self.next_line()
            
 
@@ -428,8 +506,10 @@ class ScriptParser:
         else:
             return
 
-        # Обновляем глобальную переменную
-        globals()[var_name] = current
+        # Обновляем единое состояние и совместимые поля UI.
+        state_key = f"lp_{target}" if prefix == "lp_" else target
+        SCRIPT_STATE[state_key] = current
+        _sync_legacy_globals()
 
         # Продолжаем выполнение
         if not self.backward:
