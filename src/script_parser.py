@@ -226,6 +226,11 @@ class ScriptParser:
     async def _handle_scene(self, line):
         """Обработка строки scene cg/bg"""
         if "scene color" in line:
+            self.app.current_scene = ""
+            self.app.current_scene_category = ""
+            self.app.clear_active_sprites()
+            bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
+            bg_cg.update("")
             if not self.backward:
                 await self.next_line()
             return
