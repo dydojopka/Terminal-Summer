@@ -592,6 +592,7 @@ class TerminalSummer(App):
         self._sprite_runtime_dir = self.ts_path / "game/sprites/generated_runtime"
         self._active_sprites = {}
         self._sprite_order_seq = 0
+        self.current_time = "day"
         #self.audio_player = AudioPlayer()
         self._next_scene_in_progress = False
         self._text_animating = False
@@ -1365,6 +1366,7 @@ class TerminalSummer(App):
         scene = game_state.get("scene", {})
         self.current_scene = scene.get("current_scene", "")
         self.current_scene_category = scene.get("current_scene_category", "")
+        self.current_time = scene.get("current_time", "day")
 
         # Восстановление спрайтов
         sprites_data = game_state.get("sprites", {})
@@ -1458,6 +1460,7 @@ class TerminalSummer(App):
             "scene": {
                 "current_scene": getattr(self, "current_scene", ""),
                 "current_scene_category": getattr(self, "current_scene_category", ""),
+                "current_time": getattr(self, "current_time", "day"),
             },
             "sprites": {
                 "active_sprites": self._active_sprites,

@@ -171,6 +171,7 @@ class ScriptParser:
         elif line.startswith("window"):
             await self._handle_window(line)
         elif line.startswith("time"):
+            self.app.current_time = line.split(maxsplit=1)[1].strip() if " " in line else "day"
             await self.next_line()
         elif line.startswith("menu"):
             await self._handle_choice(line)
@@ -309,9 +310,9 @@ class ScriptParser:
 
     async def _handle_pause(self, line):
         """Обработка строки pause"""
-        match = re.search(r'pause\s+(hard\s+)?(\d+)', line)
+        match = re.search(r'pause\s+(hard\s+)?(\d+(?:\.\d+)?)', line)
         if match:
-            seconds = int(match.group(2))
+            seconds = float(match.group(2))
             if not self.backward:
                 self.app._input_blocked = True
                 self.app._input_blocked_since = _time.get_time()
