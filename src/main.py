@@ -1190,6 +1190,7 @@ class TerminalSummer(App):
             pause_menu.add_class("hidden")
         elif opened_from == "menu":
             main_menu.add_class("hidden")
+            self.query_one(Footer).remove_class("hidden")
 
         # Скрытие игровых элементов
         novel_menu.add_class("hidden")
@@ -1229,6 +1230,7 @@ class TerminalSummer(App):
             self.query_one("#btn-next", Button).focus()
         elif opened_from == "menu":
             self.query_one("#main-menu").remove_class("hidden")
+            self.query_one(Footer).add_class("hidden")
             self.query_one("#btn-start-game", Button).focus()
 
     def update_save_menu_display(self) -> None:
