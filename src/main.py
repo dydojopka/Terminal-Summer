@@ -1990,3 +1990,10 @@ if __name__ == "__main__":
     app.run()
         novel_window = self.query_one("#novel-window")
                 novel_window.remove_class("hidden")
+
+        # Escape закрывает сохранения и возвращает пользователя туда, откуда
+        # меню было открыто: в главное меню или в окно новеллы.
+        if not save_menu.has_class("hidden"):
+            self.close_save_menu()
+            return
+
