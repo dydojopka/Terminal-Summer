@@ -55,6 +55,9 @@ DEFAULT_SCRIPT_STATE = {
     "day2_map_library": False, "day2_cards_with_sl": 0,
     "day2_dv_bet": 0, "day2_un": 0, "day2_card_result": None,
     "d2_gave_keys": False, "d2_cardgame_block_rollback": False,
+    "persistent.CardsDemo": False, "persistent.CardsWon1": False,
+    "persistent.CardsWon2": False, "persistent.CardsWon3": False,
+    "persistent.CardsFail": False,
 }
 SCRIPT_STATE = DEFAULT_SCRIPT_STATE.copy()
 
@@ -153,6 +156,8 @@ class ScriptParser:
             await self._handle_label(line)
         elif line.startswith("goto"):
             await self._handle_goto(line)
+        elif line.startswith("if ") or line.startswith("if("):
+            await self._handle_if(line)
         elif line.startswith("pause"):
             await self._handle_pause(line)
         elif line.startswith("scene"):
@@ -200,6 +205,103 @@ class ScriptParser:
             return
 
         self.index = target_index
+        if not self.backward:
+            await self.next_line()
+
+    def _read_block(self, start: int) -> tuple[list[str], int]:
+        """Читает блок `{ ... }` и возвращает строки и индекс после него."""
+        if start >= len(self.lines) or self.lines[start] != "{":
+            raise ValueError("Expected `{` after conditional")
+
+        depth = 1
+        index = start + 1
+        block = []
+        while index < len(self.lines) and depth:
+            line = self.lines[index]
+            if line == "{":
+                depth += 1
+            elif line == "}":
+                depth -= 1
+                if depth == 0:
+                    return block, index + 1
+            block.append(line)
+            index += 1
+
+        raise ValueError("Unclosed conditional block")
+
+    def _state_value(self, name: str):
+        key = name.strip().lstrip("$")
+        if key not in SCRIPT_STATE:
+            raise ValueError(f"Unknown script variable: ${key}")
+        return SCRIPT_STATE[key]
+
+    def _evaluate_condition(self, expression: str) -> bool:
+        """Вычисляет ограниченное логическое выражение DSL."""
+        expression = expression.strip()
+        if expression.startswith("(") and expression.endswith(")"):
+            expression = expression[1:-1].strip()
+
+        expression = re.sub(
+            r"\$[a-zA-Z0-9_.]+",
+            lambda match: f'V("{match.group(0)[1:]}")',
+            expression,
+        )
+        expression = expression.replace("&&", " and ").replace("||", " or ")
+        expression = re.sub(r"!(?!=)", " not ", expression)
+        expression = re.sub(r"\btrue\b", "True", expression, flags=re.IGNORECASE)
+        expression = re.sub(r"\bfalse\b", "False", expression, flags=re.IGNORECASE)
+        expression = re.sub(r"\bnull\b", "None", expression, flags=re.IGNORECASE)
+
+        try:
+            return bool(eval(expression, {"__builtins__": {}}, {"V": self._state_value}))
+        except Exception as exc:
+            self.app.sub_title = f"[Script error] Invalid condition: {exc}"
+            return False
+
+    async def _handle_if(self, line):
+        """Выполняет первую истинную ветку цепочки if/else if/else."""
+        branches = []
+        condition = line[2:].strip()
+        cursor = self.index
+
+        while True:
+            try:
+                block, cursor = self._read_block(cursor)
+            except ValueError as exc:
+                self.app.sub_title = f"[Script error] {exc}"
+                return
+            branches.append((condition, block))
+
+            if cursor >= len(self.lines):
+                break
+            next_line = self.lines[cursor]
+            if next_line.startswith("else if"):
+                condition = next_line[len("else if"):].strip()
+                cursor += 1
+                continue
+            if next_line == "else":
+                cursor += 1
+                try:
+                    block, cursor = self._read_block(cursor)
+                except ValueError as exc:
+                    self.app.sub_title = f"[Script error] {exc}"
+                    return
+                branches.append((None, block))
+            break
+
+        selected = None
+        for branch_condition, block in branches:
+            if branch_condition is None or self._evaluate_condition(branch_condition):
+                selected = block
+                break
+
+        insertion_index = cursor
+        self.index = insertion_index
+        if selected:
+            self.lines[insertion_index:insertion_index] = selected
+            self._index_labels()
+            self.index = insertion_index
+
         if not self.backward:
             await self.next_line()
            
@@ -308,26 +410,23 @@ class ScriptParser:
 
             # начало варианта
             if line.startswith('"'):
-                choice_text = re.match(r'"(.+)"', line).group(1)
+                choice_match = re.match(r'"(.+?)"(?:\s+if\s+(.+))?$', line)
+                if not choice_match:
+                    self.index += 1
+                    continue
+                choice_text, condition = choice_match.groups()
                 self.index += 1
                 block_lines = []
 
+                if condition and not self._evaluate_condition(condition):
+                    # Пропускаем тело недоступного пункта.
+                    if self.index < len(self.lines) and self.lines[self.index] == "{":
+                        _, self.index = self._read_block(self.index)
+                    continue
+
                 # собираем строки внутри { ... }
-                if self.lines[self.index] == "{":
-                    self.index += 1
-                    depth = 1
-                    while self.index < len(self.lines) and depth > 0:
-                        l = self.lines[self.index]
-                        if l == "{":
-                            depth += 1
-                        elif l == "}":
-                            depth -= 1
-                            if depth == 0:
-                                self.index += 1
-                                break
-                        if depth > 0:
-                            block_lines.append(l)
-                        self.index += 1
+                if self.index < len(self.lines) and self.lines[self.index] == "{":
+                    block_lines, self.index = self._read_block(self.index)
 
                 options[choice_text] = block_lines
             else:
@@ -445,22 +544,9 @@ class ScriptParser:
         global SL, UN, DV, US  # Поинты
         global PROLOGUE, D1_KEYS # Флаги
 
-        # Словарь поинтов
-        POINT_VARS = {
-            "sl": "SL",
-            "un": "UN",
-            "dv": "DV",
-            "us": "US",
-        }
-        # Словарь флагов
-        FLAG_VARS = {
-            "prologue": "PROLOGUE",
-            "d1_keys" : "D1_KEYS"
-        }
-
-        # Парсим строку ($lp_sl += 1, $prologue = 1, $d1_keys = true)
+        # Парсим строку ($lp_sl += 1, $day2_flag = true, $persistent.flag = false)
         match = re.match(
-            r'\$(lp_)?([a-zA-Z0-9_]+)\s*([+\-]?=)\s*(true|false|-?\d+)\s*$',
+            r'\$(lp_)?([a-zA-Z0-9_.]+)\s*([+\-]?=)\s*(true|false|null|-?\d+)\s*$',
             line,
             re.IGNORECASE,
         )
@@ -475,23 +561,20 @@ class ScriptParser:
             value = True
         elif value_lower == "false":
             value = False
+        elif value_lower == "null":
+            value = None
         else:
             value = int(raw_value)
 
-        # Определяем тип переменной
-        if prefix == "lp_":
-            var_map = POINT_VARS
-        else:
-            var_map = FLAG_VARS
-
-        var_name = var_map.get(target)
-        if not var_name:
+        state_key = f"lp_{target}" if prefix == "lp_" else target
+        if state_key not in SCRIPT_STATE:
+            self.app.sub_title = f"[Script error] Unknown script variable: ${state_key}"
             if not self.backward:
                 await self.next_line()
             return
 
         # Извлекаем текущее значение
-        current = globals().get(var_name, 0)
+        current = SCRIPT_STATE[state_key]
 
         # Применяем операцию
         if operation == "+=":
@@ -512,7 +595,6 @@ class ScriptParser:
             return
 
         # Обновляем единое состояние и совместимые поля UI.
-        state_key = f"lp_{target}" if prefix == "lp_" else target
         SCRIPT_STATE[state_key] = current
         _sync_legacy_globals()
 
