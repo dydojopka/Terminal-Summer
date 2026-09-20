@@ -193,8 +193,10 @@ SPEAKER_NAME_COLORS = {
     "mtp":         "rgb(0,234,50)",
     "mt_voice":    "rgb(0,234,50)",
     "cs":          "rgb(165,165,255)",
+    "csp":         "rgb(165,165,255)",
     "mz":          "rgb(114,160,255)",
     "mi":          "rgb(0,252,255)",
+    "mip":         "rgb(0,252,255)",
     "ma":          "rgb(0,252,255)",
     "uv":          "rgb(78,255,0)",
     "uvp":         "rgb(78,255,0)",
@@ -919,20 +921,27 @@ class TerminalSummer(App):
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
+        choice_bar = self.query_one("#choice-bar")
+        pending_choices = getattr(self, "pending_choices", None)
+        if choice_bar.has_class("hidden") or not pending_choices:
+            return
+
         choice_label = event.item.query_one(Label)
         choice_text = str(choice_label.content).strip()
+        block = pending_choices.get(choice_text)
+        if block is None:
+            return
 
-        if hasattr(self, "pending_choices") and self.pending_choices:
-            block = self.pending_choices.get(choice_text)
-            if block:
-                # вставляем строки выбранного блока в сценарий
-                self.script.lines[self.script.index:self.script.index] = block
+        if block:
+            # Вставляем блок в runtime-сценарий, сохраняемый вместе с игрой.
+            self.script.lines[self.script.index:self.script.index] = block
+            self.script._index_labels()
 
-            # очищаем pending_choices
-            self.pending_choices = None
+        # Очищаем pending_choices до продолжения сценария.
+        self.pending_choices = None
 
         # скрываем меню и возвращаем фон
-        self.query_one("#choice-bar").add_class("hidden")
+        choice_bar.add_class("hidden")
         self.query_one("#bg-cg").remove_class("hidden")
 
         # продолжаем сценарий
@@ -1336,16 +1345,21 @@ class TerminalSummer(App):
         # Сброс текущего состояния
         self.reset_game_view()
 
-        # Восстановление глобальных переменных
-        from script_parser import reset_globals, SL, UN, DV, US, PROLOGUE, D1_KEYS
-        import script_parser
+        # Восстановление состояния сценария.
+        from script_parser import set_script_state
         variables = game_state.get("variables", {})
-        script_parser.SL = variables.get("SL", 0)
-        script_parser.UN = variables.get("UN", 0)
-        script_parser.DV = variables.get("DV", 0)
-        script_parser.US = variables.get("US", 0)
-        script_parser.PROLOGUE = variables.get("PROLOGUE", 0)
-        script_parser.D1_KEYS = variables.get("D1_KEYS", False)
+        if "state" in variables:
+            set_script_state(variables["state"])
+        else:
+            # Формат сохранений до единого состояния.
+            set_script_state({
+                "lp_sl": variables.get("SL", 0),
+                "lp_un": variables.get("UN", 0),
+                "lp_dv": variables.get("DV", 0),
+                "lp_us": variables.get("US", 0),
+                "prologue": variables.get("PROLOGUE", 0),
+                "d1_keys": variables.get("D1_KEYS", False),
+            })
 
         # Восстановление сцены
         scene = game_state.get("scene", {})
@@ -1354,8 +1368,10 @@ class TerminalSummer(App):
 
         # Восстановление спрайтов
         sprites_data = game_state.get("sprites", {})
-        self._active_sprites = sprites_data.get("active_sprites", {})
-        self._sprite_order_seq = sprites_data.get("sprite_order_seq", 0)
+        self.restore_active_sprites(
+            sprites_data.get("active_sprites", {}),
+            sprites_data.get("sprite_order_seq", 0),
+        )
 
         # Загрузка сценария
         script_filename = game_state.get("script_filename", "")
@@ -1363,6 +1379,11 @@ class TerminalSummer(App):
 
         if script_filename:
             self.script = ScriptParser(script_filename, self)
+            runtime_lines = game_state.get("runtime_lines")
+            if isinstance(runtime_lines, list) and all(
+                isinstance(line, str) for line in runtime_lines
+            ):
+                self.script.restore_runtime_lines(runtime_lines)
             self.script.index = script_index
 
             # Скрытие главного меню (если загрузка из главного меню)
@@ -1427,15 +1448,12 @@ class TerminalSummer(App):
 
         # Сбор состояния игры
         game_state = {
+            "save_format": 2,
             "script_filename": str(self.script.filename) if hasattr(self, "script") else "",
             "script_index": self.script.index if hasattr(self, "script") else 0,
+            "runtime_lines": self.script.lines.copy() if hasattr(self, "script") else [],
             "variables": {
-                "SL": script_parser.SL,
-                "UN": script_parser.UN,
-                "DV": script_parser.DV,
-                "US": script_parser.US,
-                "PROLOGUE": script_parser.PROLOGUE,
-                "D1_KEYS": script_parser.D1_KEYS,
+                "state": script_parser.get_script_state(),
             },
             "scene": {
                 "current_scene": getattr(self, "current_scene", ""),
@@ -1676,6 +1694,7 @@ class TerminalSummer(App):
 
         self._active_sprites[request.character] = {
             "character": request.character,
+            "show_line": show_line,
             "image_path": str(out_path),
             "at": request.at or (previous.get("at") if previous else "center"),
             "size": request.size or (previous.get("size") if previous else "normal"),
@@ -1684,6 +1703,41 @@ class TerminalSummer(App):
         }
 
         return self.generate_scene_with_sprites_ansi()
+
+    def restore_active_sprites(
+        self,
+        saved_sprites: dict,
+        saved_order_seq: int,
+    ) -> None:
+        """Собирает спрайты из show-команд, не используя устаревший PNG-кэш."""
+        self.clear_active_sprites()
+        if not isinstance(saved_sprites, dict):
+            return
+
+        sprites = sorted(
+            (sprite for sprite in saved_sprites.values() if isinstance(sprite, dict)),
+            key=lambda sprite: sprite.get("order", 0),
+        )
+        for saved_sprite in sprites:
+            show_line = saved_sprite.get("show_line")
+            character = saved_sprite.get("character")
+            if isinstance(show_line, str) and show_line.startswith("show "):
+                self.show_sprite_from_script_line(show_line)
+                restored_sprite = self._active_sprites.get(character)
+                if restored_sprite is not None:
+                    for key in ("at", "size", "behind", "order"):
+                        if key in saved_sprite:
+                            restored_sprite[key] = saved_sprite[key]
+                continue
+
+            # Старые сохранения не содержат show-команд. Оставляем прежний fallback.
+            if isinstance(character, str):
+                self._active_sprites[character] = saved_sprite.copy()
+
+        self._sprite_order_seq = max(
+            saved_order_seq if isinstance(saved_order_seq, int) else 0,
+            max((sprite.get("order", 0) for sprite in self._active_sprites.values()), default=0),
+        )
 
     def hide_sprite_by_id(self, character_id: str):
         """Удаляет персонажа со сцены."""
