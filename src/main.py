@@ -1988,3 +1988,5 @@ if __name__ == "__main__":
     main()
     app = TerminalSummer()
     app.run()
+        novel_window = self.query_one("#novel-window")
+                novel_window.remove_class("hidden")
