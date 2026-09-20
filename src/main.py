@@ -993,6 +993,17 @@ class TerminalSummer(App):
         save_menu = self.query_one("#save-menu")
         choice_bar = self.query_one("#choice-bar")
         log_menu = self.query_one("#log-menu")
+
+        # Escape закрывает сохранения и возвращает пользователя туда, откуда
+        # меню было открыто: в главное меню или в окно новеллы.
+        if not save_menu.has_class("hidden"):
+            self.close_save_menu()
+            return
+
+        # Галерея всегда открывается из главного меню.
+        if not gallery_menu.has_class("hidden"):
+            self.action_open_gallery()
+            return
         
 
         if main_menu.has_class("hidden") and gallery_menu.has_class("hidden") and save_menu.has_class("hidden"): # Если НЕ открыто главное меню
@@ -1066,6 +1077,7 @@ class TerminalSummer(App):
         pause_menu = self.query_one("#pause-menu")
         main_menu = self.query_one("#main-menu")
         novel_menu = self.query_one("#novel-menu")
+        novel_window = self.query_one("#novel-window")
         bg_cg = self.query_one("#bg-cg")
 
         # Переключение видимости элементов
@@ -1092,6 +1104,7 @@ class TerminalSummer(App):
 
                 # Показ диологового окна, кнопок перемотки и задника
                 novel_menu.remove_class("hidden")
+                novel_window.remove_class("hidden")
                 bg_cg.remove_class("hidden")
 
                 # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
@@ -1988,12 +2001,3 @@ if __name__ == "__main__":
     main()
     app = TerminalSummer()
     app.run()
-        novel_window = self.query_one("#novel-window")
-                novel_window.remove_class("hidden")
-
-        # Escape закрывает сохранения и возвращает пользователя туда, откуда
-        # меню было открыто: в главное меню или в окно новеллы.
-        if not save_menu.has_class("hidden"):
-            self.close_save_menu()
-            return
-
