@@ -482,9 +482,11 @@ class DescriptionSettingTextSpeed(Widget):
 class NovelMenu(Static):
     """Виджет-контейнер для текст бара и кнопок"""
     def compose(self):
-        yield Button("История", id="btn-log")
+        with Vertical(id="novel-log-control", classes="novel-control"):
+            yield Button("История", id="btn-log")
         yield TextBar(id="text-bar")
-        yield Button("Продолжить", id="btn-next")
+        with Vertical(id="novel-next-control", classes="novel-control"):
+            yield Button("Продолжить", id="btn-next")
 
 class TextBar(Widget):
     """Виджет текст бара"""
@@ -515,6 +517,7 @@ class TextBar(Widget):
             await asyncio.sleep(speed)
 
         self.refresh()
+        self.scroll_end(animate=False)
 
 
 class NovelWindow(Widget):
@@ -594,6 +597,7 @@ class TerminalSummer(App):
         self._sprite_order_seq = 0
         self.current_time = "day"
         self.current_text_mode = "adv"
+        self._interface_hidden = False
         #self.audio_player = AudioPlayer()
         self._next_scene_in_progress = False
         self._text_animating = False
@@ -617,7 +621,10 @@ class TerminalSummer(App):
         Binding("escape", "pause_game", "Пауза",   show=True, id="bind-pause"),
         Binding("space",  "",           "Далее",   show=True, id="bind-next"),
         Binding("h",      "log",        "История", show=True, id="bind-log"),
+        Binding("f",      "toggle_interface", "Скрыть интерфейс", show=True, id="bind-toggle-interface"),
     ]
+
+    TEXT_MODES = {"adv", "nvl"}
 
     def get_default_screen(self) -> Screen:
         return PerformanceScreen(id="_default")
@@ -634,6 +641,34 @@ class TerminalSummer(App):
         yield SettingsMenu(id="settings-menu", classes="hidden")
         yield GalleryMenu( id="gallery-menu",  classes="hidden")
         yield SaveMenu(    id="save-menu",     classes="hidden")
+
+    def set_text_mode(self, mode: str) -> None:
+        """Сохраняет режим текста и обновляет его отображение."""
+        normalized_mode = mode.lower().strip()
+        self.current_text_mode = (
+            normalized_mode if normalized_mode in self.TEXT_MODES else "adv"
+        )
+        self.sync_text_mode_display()
+
+    def sync_text_mode_display(self) -> None:
+        """Синхронизирует оформление NVL и видимость сцены с состоянием UI."""
+        novel_menu = self.query_one("#novel-menu", Widget)
+        novel_window = self.query_one("#novel-window", Widget)
+        bg_cg = self.query_one("#bg-cg", Widget)
+        choice_bar = self.query_one("#choice-bar", Widget)
+        is_nvl = self.current_text_mode == "nvl"
+
+        novel_menu.set_class(is_nvl, "nvl-mode")
+        novel_window.set_class(
+            is_nvl
+            and not self._interface_hidden
+            and choice_bar.has_class("hidden"),
+            "hidden",
+        )
+        bg_cg.set_class(
+            is_nvl or self._interface_hidden or not choice_bar.has_class("hidden"),
+            "hidden",
+        )
 
 
 
@@ -804,6 +839,8 @@ class TerminalSummer(App):
             # Скрытие главного меню
             self.action_open_menu()
             self.clear_log()
+            self._interface_hidden = False
+            self.set_text_mode("adv")
 
             # Сброс всех глобальных переменных
             from script_parser import reset_globals
@@ -942,9 +979,10 @@ class TerminalSummer(App):
         # Очищаем pending_choices до продолжения сценария.
         self.pending_choices = None
 
-        # скрываем меню и возвращаем фон
+        # Скрываем меню выбора и возвращаем видимость, подходящую текущему режиму.
         choice_bar.add_class("hidden")
-        self.query_one("#bg-cg").remove_class("hidden")
+        self.query_one("#novel-menu").remove_class("hidden")
+        self.sync_text_mode_display()
 
         # продолжаем сценарий
         await self._advance_script_line()
@@ -981,6 +1019,44 @@ class TerminalSummer(App):
             # Показ bc, cg, text и кнопок
             novel_menu.remove_class("hidden")
             novel_window.remove_class("hidden")
+            self.sync_text_mode_display()
+
+    def action_toggle_interface(self) -> None:
+        """Показывает или скрывает интерфейс новеллы, оставляя сцену видимой."""
+        if not hasattr(self, "script"):
+            return
+
+        main_menu = self.query_one("#main-menu")
+        choice_bar = self.query_one("#choice-bar")
+        blocked_menus = (
+            self.query_one("#log-menu"),
+            self.query_one("#pause-menu"),
+            self.query_one("#settings-menu"),
+            self.query_one("#save-menu"),
+            self.query_one("#gallery-menu"),
+        )
+        if (
+            not main_menu.has_class("hidden")
+            or not choice_bar.has_class("hidden")
+            or any(not menu.has_class("hidden") for menu in blocked_menus)
+        ):
+            return
+
+        novel_menu = self.query_one("#novel-menu")
+        novel_window = self.query_one("#novel-window")
+        if self._interface_hidden:
+            self._interface_hidden = False
+            novel_menu.remove_class("hidden")
+            self.sync_text_mode_display()
+            return
+
+        if novel_menu.has_class("hidden"):
+            return
+
+        self._interface_hidden = True
+        novel_menu.add_class("hidden")
+        novel_window.remove_class("hidden")
+        self.query_one("#bg-cg").remove_class("hidden")
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
@@ -1030,6 +1106,7 @@ class TerminalSummer(App):
                     # Показ диологового окна, кнопок перемотки и задника
                     novel_menu.remove_class("hidden")
                     novel_window.remove_class("hidden")
+                    self.sync_text_mode_display()
 
                     # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
                     self.query_one("#btn-next", Button).focus()
@@ -1040,6 +1117,7 @@ class TerminalSummer(App):
                 # Показ диологового окна, кнопок перемотки и задника
                 novel_menu.remove_class("hidden")
                 novel_window.remove_class("hidden")
+                self.sync_text_mode_display()
 
                 # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
                 self.query_one("#btn-next", Button).focus()
@@ -1078,7 +1156,6 @@ class TerminalSummer(App):
         main_menu = self.query_one("#main-menu")
         novel_menu = self.query_one("#novel-menu")
         novel_window = self.query_one("#novel-window")
-        bg_cg = self.query_one("#bg-cg")
 
         # Переключение видимости элементов
         if settings_menu.has_class("hidden"):
@@ -1105,7 +1182,7 @@ class TerminalSummer(App):
                 # Показ диологового окна, кнопок перемотки и задника
                 novel_menu.remove_class("hidden")
                 novel_window.remove_class("hidden")
-                bg_cg.remove_class("hidden")
+                self.sync_text_mode_display()
 
                 # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
                 self.query_one("#btn-next", Button).focus()
@@ -1227,6 +1304,7 @@ class TerminalSummer(App):
         if opened_from == "pause":
             self.query_one("#novel-menu").remove_class("hidden")
             self.query_one("#novel-window").remove_class("hidden")
+            self.sync_text_mode_display()
             self.query_one("#btn-next", Button).focus()
         elif opened_from == "menu":
             self.query_one("#main-menu").remove_class("hidden")
@@ -1383,7 +1461,8 @@ class TerminalSummer(App):
         self.current_scene = scene.get("current_scene", "")
         self.current_scene_category = scene.get("current_scene_category", "")
         self.current_time = scene.get("current_time", "day")
-        self.current_text_mode = scene.get("current_text_mode", "adv")
+        self._interface_hidden = False
+        self.set_text_mode(scene.get("current_text_mode", "adv"))
 
         # Восстановление спрайтов
         sprites_data = game_state.get("sprites", {})
@@ -1413,6 +1492,7 @@ class TerminalSummer(App):
             # Показ игровых элементов
             self.query_one("#novel-menu").remove_class("hidden")
             self.query_one("#novel-window").remove_class("hidden")
+            self.sync_text_mode_display()
 
             # Восстановление текста и имени персонажа
             dialogue = game_state.get("dialogue", {})
@@ -1893,6 +1973,8 @@ class TerminalSummer(App):
         # Получаем элементы
         text_bar = self.query_one("#text-bar", Widget)
         bg_cg = self.query_one("#bg-cg", Widget)
+        novel_menu = self.query_one("#novel-menu", Widget)
+        novel_window = self.query_one("#novel-window", Widget)
 
         # Очистка текста и имени персонажа
         text_bar.text = ""
@@ -1920,6 +2002,10 @@ class TerminalSummer(App):
         self._input_blocked_until = 0.0
         self._space_last_event_at = 0.0
         self._space_require_idle = False
+        self._interface_hidden = False
+        self.set_text_mode("adv")
+        novel_menu.add_class("hidden")
+        novel_window.add_class("hidden")
 
     def can_advance_scene(self) -> bool:
         """Можно ли переходить к следующей строке по пользовательскому вводу."""

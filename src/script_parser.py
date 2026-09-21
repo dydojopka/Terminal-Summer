@@ -174,7 +174,8 @@ class ScriptParser:
             self.app.current_time = line.split(maxsplit=1)[1].strip() if " " in line else "day"
             await self.next_line()
         elif line.startswith("mode"):
-            self.app.current_text_mode = line.split(maxsplit=1)[1].strip() if " " in line else "adv"
+            mode = line.split(maxsplit=1)[1].strip() if " " in line else "adv"
+            self.app.set_text_mode(mode)
             await self.next_line()
         elif line == "clear":
             widget = self.app.query_one("#text-bar", expect_type=Widget)
@@ -397,8 +398,8 @@ class ScriptParser:
 
     async def _handle_window(self, line):
         """Обработка строки window"""
-        widget = self.app.query_one("#text-bar", expect_type=Widget)
-        widget.display = "show" in line
+        novel_menu = self.app.query_one("#novel-menu", expect_type=Widget)
+        novel_menu.set_class("show" not in line, "invisible")
         if not self.backward:
             await self.next_line()
 
@@ -455,6 +456,9 @@ class ScriptParser:
         # отобразить ChoiceBar и скрыть фон
         choice_bar.remove_class("hidden")
         self.app.query_one("#bg-cg").add_class("hidden")
+        if self.app.current_text_mode == "nvl":
+            self.app.query_one("#novel-window").remove_class("hidden")
+            self.app.query_one("#novel-menu").add_class("hidden")
 
         # дождаться одного кадра, чтобы Textual успел пересчитать фокус
         await asyncio.sleep(0.01)
@@ -515,15 +519,23 @@ class ScriptParser:
                 speaker_id=id_to_set,
             )
 
+            is_nvl = self.app.current_text_mode == "nvl"
             widget.remove_class(*[cls for cls in widget.classes if cls != "text-bar"])
             if id_to_set:
                 widget.add_class(id_to_set)
 
-            widget.border_title = speaker if speaker else ""
+            widget.border_title = "" if is_nvl else speaker
 
             # Конвертируем <i>, <b> в rich-разметку
             text = re.sub(r'<i>(.*?)</i>', r'[italic]\1[/italic]', text)
             text = re.sub(r'<b>(.*?)</b>', r'[bold]\1[/bold]', text)
+
+            if is_nvl:
+                if widget.text:
+                    widget.text += "\n"
+                if speaker:
+                    widget.text += f"[bold]{speaker}:[/bold] "
+                widget.refresh()
 
             # Разбиваем текст на части по <w> с паузами
             parts = text.split("<w>")
@@ -531,7 +543,10 @@ class ScriptParser:
                 part = part.strip()
                 if part:
                     prefix = "" if i == 0 else " "
-                    await widget.animate_text(prefix + part, append=(i > 0))
+                    await widget.animate_text(
+                        prefix + part,
+                        append=is_nvl or i > 0,
+                    )
 
                 if i < len(parts) - 1:
                     await asyncio.sleep(1)

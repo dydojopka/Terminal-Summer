@@ -74,32 +74,67 @@ NovelMenu {
     margin-bottom: 1;
     padding: 0;
 
+    .novel-control {
+        width: 27;
+        height: 100%;
+    }
+
+    #novel-log-control {
+        dock: none;
+        align: left bottom;
+    }
+
+    #novel-next-control {
+        dock: none;
+        align: right bottom;
+    }
+
     # Кнопки "Назад" и "Вперёд" 
     #btn-log {
-        dock: left;
+        dock: none;
         margin-left: 10;
-        margin-top: 1;
+        margin-bottom: 1;
         margin-right: 1;
         height: 4;
-        width: 4;
+        min-width: 16;
+        width: 16;
     }
     #btn-next{
-        dock: right;
+        dock: none;
         margin-right: 10;
-        margin-top: 1;
+        margin-bottom: 1;
         margin-left: 1;
         height: 4;
-        width: 4;
+        min-width: 16;
+        width: 16;
     }
     
     # Нижнее окно с текстом + имя персонажа
     TextBar {
+        width: 1fr;
         padding: 0;
         background: $boost;
         min-height: 6;
         border: round white;
         border-title-style: b;
         color: $text;
+    }
+}
+
+# Режим NVL: высокая нижняя панель с обычными элементами управления.
+NovelMenu.nvl-mode {
+    layout: horizontal;
+    dock: bottom;
+    height: 99%;
+    margin-bottom: 1;
+    padding: 0;
+
+    TextBar {
+        height: 100%;
+        min-height: 6;
+        background: $boost;
+        border: round white;
+        overflow-y: auto;
     }
 }
 
