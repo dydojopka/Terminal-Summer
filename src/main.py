@@ -1,8 +1,11 @@
 import os
+import re
 import sys
 import asyncio
 import hashlib
+import threading
 from collections import OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
 
 # --- ЛОГИКА ПУТЕЙ ---
@@ -138,6 +141,42 @@ from sprites_builder import (
     resolve_sprite,
     compose_layers,
 )
+
+
+@dataclass(frozen=True)
+class RenderSprite:
+    character: str
+    show_line: str
+    image_path: str
+    at: str
+    size: str
+    behind: str | None
+    order: int
+
+
+@dataclass(frozen=True)
+class SceneRenderSnapshot:
+    category: str
+    name: str
+    sprites: tuple[RenderSprite, ...]
+    width: int
+    style: str
+    cache_epoch: int
+
+    @property
+    def key(self) -> tuple:
+        sprite_key = tuple(
+            (
+                sprite.character,
+                sprite.show_line,
+                sprite.at,
+                sprite.size,
+                sprite.behind,
+                sprite.order,
+            )
+            for sprite in self.sprites
+        )
+        return self.category, self.name, sprite_key, str(self.width), self.style, 2
 
 def main():
     ts_dir = get_ts_path()
@@ -621,8 +660,17 @@ class TerminalSummer(App):
         self._space_idle_gap = 0.12
         self._space_require_idle = False
         self.scene_dirty = False
+        self._scene_generation = 0
+        self._cache_epoch = 0
+        self._cache_lock = threading.RLock()
         self._scene_render_cache: OrderedDict[tuple, Text] = OrderedDict()
         self._sprite_build_cache: OrderedDict[str, str] = OrderedDict()
+        self._decoded_image_cache: OrderedDict[str, tuple[Image.Image, int]] = OrderedDict()
+        self._decoded_image_cache_bytes = 0
+        self._decoded_image_cache_limit = 128 * 1024 * 1024
+        self._render_tasks: dict[tuple, asyncio.Task] = {}
+        self._prefetch_tasks: set[asyncio.Task] = set()
+        self._render_semaphore = asyncio.Semaphore(2)
         self._script_preload_task = None
         self._preload_generation = 0
         self._preload_filename = None
@@ -758,7 +806,7 @@ class TerminalSummer(App):
             # Сохранение в файл настроек и обновление
             self.settings["quality"] = "50"
             self.save_settings()
-            self.update_current_scene_art()
+            await self.update_current_scene_art()
         elif button_id == "btn-medium":           # Кнопка "Средний"
             # Меняем стили кнопок
             self.query_one("#btn-small", Button).variant = "default"
@@ -768,7 +816,7 @@ class TerminalSummer(App):
             # Сохранение в файл настроек и обновление
             self.settings["quality"] = "150"
             self.save_settings()
-            self.update_current_scene_art()
+            await self.update_current_scene_art()
         elif button_id == "btn-large":            # Кнопка "ОГРОМНЫЙ"
             # Меняем стили кнопок
             self.query_one("#btn-small", Button).variant = "default"
@@ -778,7 +826,7 @@ class TerminalSummer(App):
             # Сохранение в файл настроек и обновление
             self.settings["quality"] = "200"
             self.save_settings()
-            self.update_current_scene_art()
+            await self.update_current_scene_art()
 
         # ASCIIorANSI
         elif button_id == "btn-ANSI":             # Кнопка "ANSI"
@@ -789,7 +837,7 @@ class TerminalSummer(App):
             # Сохранение в файл настроек и обновляем текущую сцену
             self.settings["style"] = "ANSI"
             self.save_settings()
-            self.update_current_scene_art()
+            await self.update_current_scene_art()
         elif button_id == "btn-ASCII":            # Кнопка "ASCII"
             # Меняем стили кнопок
             self.query_one("#btn-ANSI", Button).variant = "default"
@@ -798,7 +846,7 @@ class TerminalSummer(App):
             # Сохранение в файл настроек и обновляем текущую сцену
             self.settings["style"] = "ASCII"
             self.save_settings()
-            self.update_current_scene_art()
+            await self.update_current_scene_art()
 
         # TextSpeed
         elif button_id == "btn-speed-slow":       # Кнопка "Медленно"
@@ -1548,8 +1596,9 @@ class TerminalSummer(App):
 
             text_bar.refresh()
 
-            # Обновление отображения
-            self.update_current_scene_art()
+            # Отрисовка и прогрев выполняются под полноэкранным оверлеем.
+            self.mark_scene_dirty()
+            self.start_script_preload(self.script)
 
             # Фокус на кнопку "Вперёд"
             self.query_one("#btn-next", Button).focus()
@@ -1700,9 +1749,10 @@ class TerminalSummer(App):
         key = (size_name or "normal").strip().lower()
         return mapping.get(key, 1.0)
 
-    def _sorted_active_sprites(self) -> list[dict]:
+    def _sorted_active_sprites(self, active_sprites: dict | None = None) -> list[dict]:
         """Возвращает активные спрайты в порядке от заднего к переднему."""
-        sprites = sorted(self._active_sprites.values(), key=lambda item: item.get("order", 0))
+        source = self._active_sprites if active_sprites is None else active_sprites
+        sprites = sorted(source.values(), key=lambda item: item.get("order", 0))
         if len(sprites) <= 1:
             return sprites
 
@@ -1734,26 +1784,283 @@ class TerminalSummer(App):
 
         return sprites
 
-    def _scene_render_key(self) -> tuple:
-        """Ключ видимого состояния; пути временных PNG в него не входят."""
+    def mark_scene_dirty(self) -> None:
+        """Помечает логическую сцену изменённой и инвалидирует старый UI-рендер."""
+        self.scene_dirty = True
+        self._scene_generation += 1
+
+    def _make_scene_snapshot(
+        self,
+        category: str,
+        name: str,
+        active_sprites: dict,
+    ) -> SceneRenderSnapshot:
         sprites = tuple(
-            (
-                sprite.get("character"), sprite.get("show_line"), sprite.get("at"),
-                sprite.get("size"), sprite.get("behind"), sprite.get("order"),
+            RenderSprite(
+                character=str(sprite.get("character", "")),
+                show_line=str(sprite.get("show_line", "")),
+                image_path=str(sprite.get("image_path", "")),
+                at=str(sprite.get("at") or "center"),
+                size=str(sprite.get("size") or "normal"),
+                behind=sprite.get("behind"),
+                order=int(sprite.get("order", 0)),
             )
-            for sprite in self._sorted_active_sprites()
+            for sprite in self._sorted_active_sprites(active_sprites)
         )
-        return (
-            self.current_scene_category, self.current_scene, sprites,
-            self.settings.get("quality"), self.settings.get("style"), 1,
+        return SceneRenderSnapshot(
+            category=category,
+            name=name,
+            sprites=sprites,
+            width=int(self.settings.get("quality", 150)),
+            style=str(self.settings.get("style", "ANSI")),
+            cache_epoch=self._cache_epoch,
         )
 
+    def _capture_scene_snapshot(self) -> SceneRenderSnapshot:
+        return self._make_scene_snapshot(
+            getattr(self, "current_scene_category", ""),
+            getattr(self, "current_scene", ""),
+            {key: value.copy() for key, value in self._active_sprites.items()},
+        )
+
+    def _get_cached_render(self, key: tuple) -> Text | None:
+        with self._cache_lock:
+            cached = self._scene_render_cache.get(key)
+            if cached is not None:
+                self._scene_render_cache.move_to_end(key)
+            return cached
+
     def _remember_render(self, key: tuple, art: Text) -> Text:
-        self._scene_render_cache[key] = art
-        self._scene_render_cache.move_to_end(key)
-        while len(self._scene_render_cache) > self._render_cache_limit:
-            self._scene_render_cache.popitem(last=False)
+        with self._cache_lock:
+            self._scene_render_cache[key] = art
+            self._scene_render_cache.move_to_end(key)
+            while len(self._scene_render_cache) > self._render_cache_limit:
+                self._scene_render_cache.popitem(last=False)
         return art
+
+    def _load_rgba_cached(self, path: str, cache_epoch: int) -> Image.Image:
+        """Возвращает изменяемую копию RGBA, сохраняя декодированный оригинал в LRU."""
+        with self._cache_lock:
+            cached = self._decoded_image_cache.get(path)
+            if cached is not None:
+                self._decoded_image_cache.move_to_end(path)
+                return cached[0].copy()
+
+        with Image.open(path) as source:
+            decoded = source.convert("RGBA")
+        size = decoded.width * decoded.height * 4
+
+        with self._cache_lock:
+            existing = self._decoded_image_cache.get(path)
+            if existing is not None:
+                decoded.close()
+                self._decoded_image_cache.move_to_end(path)
+                return existing[0].copy()
+            if (
+                cache_epoch == self._cache_epoch
+                and size <= self._decoded_image_cache_limit
+            ):
+                self._decoded_image_cache[path] = (decoded, size)
+                self._decoded_image_cache_bytes += size
+                while (
+                    self._decoded_image_cache
+                    and self._decoded_image_cache_bytes > self._decoded_image_cache_limit
+                ):
+                    _, (old_image, old_size) = self._decoded_image_cache.popitem(last=False)
+                    self._decoded_image_cache_bytes -= old_size
+                    old_image.close()
+                return decoded.copy()
+        return decoded
+
+    async def _run_scene_render(self, snapshot: SceneRenderSnapshot) -> Text:
+        async with self._render_semaphore:
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(
+                None, self._render_scene_snapshot, snapshot
+            )
+
+    def _render_scene_snapshot(self, snapshot: SceneRenderSnapshot) -> Text:
+        """CPU-часть полного рендера. Метод не обращается к Textual-виджетам."""
+        cached = self._get_cached_render(snapshot.key)
+        if cached is not None:
+            return cached
+        if not snapshot.name or not snapshot.category:
+            return Text("")
+
+        scene_path = self._get_scene_image_path(snapshot.category, snapshot.name)
+        if scene_path is None:
+            return Text.from_markup(
+                f"[Файл не найден: TS/game/{snapshot.category}/{snapshot.name}.*]"
+            )
+
+        palette = Palettes.color if snapshot.style == "ANSI" else Palettes.ascii
+        try:
+            composed = self._load_rgba_cached(scene_path, snapshot.cache_epoch)
+            for sprite in snapshot.sprites:
+                if not sprite.image_path or not os.path.exists(sprite.image_path):
+                    continue
+                sprite_img = self._load_rgba_cached(
+                    sprite.image_path, snapshot.cache_epoch
+                )
+                scale = self._sprite_size_scale(sprite.size)
+                if abs(scale - 1.0) > 1e-3:
+                    resized = sprite_img.resize(
+                        (
+                            max(1, int(sprite_img.width * scale)),
+                            max(1, int(sprite_img.height * scale)),
+                        ),
+                        resample=Image.NEAREST,
+                    )
+                    sprite_img.close()
+                    sprite_img = resized
+                max_sprite_height = max(1, int(composed.height * 0.98))
+                if sprite_img.height > max_sprite_height:
+                    resized = sprite_img.resize(
+                        (
+                            max(
+                                1,
+                                int(
+                                    sprite_img.width
+                                    * (max_sprite_height / sprite_img.height)
+                                ),
+                            ),
+                            max_sprite_height,
+                        ),
+                        resample=Image.NEAREST,
+                    )
+                    sprite_img.close()
+                    sprite_img = resized
+                x = int(
+                    composed.width * self._sprite_position_factor(sprite.at)
+                    - sprite_img.width / 2
+                )
+                x = max(0, min(x, composed.width - sprite_img.width))
+                y = max(0, composed.height - sprite_img.height)
+                composed.alpha_composite(sprite_img, dest=(x, y))
+                sprite_img.close()
+
+            ansi_art = convert_img(
+                composed,
+                width=snapshot.width,
+                alpha=not snapshot.sprites,
+                palette=palette,
+            )
+            composed.close()
+            art = Text.from_ansi(ansi_art)
+        except Exception as exc:
+            art = Text.from_markup(f"[Ошибка сборки сцены со спрайтами: {exc}]")
+
+        if snapshot.cache_epoch == self._cache_epoch:
+            self._remember_render(snapshot.key, art)
+        return art
+
+    async def _get_render_async(self, snapshot: SceneRenderSnapshot) -> Text:
+        cached = self._get_cached_render(snapshot.key)
+        if cached is not None:
+            return cached
+        task = self._render_tasks.get(snapshot.key)
+        if task is None:
+            task = asyncio.create_task(self._run_scene_render(snapshot))
+            self._render_tasks[snapshot.key] = task
+        try:
+            return await task
+        finally:
+            if self._render_tasks.get(snapshot.key) is task:
+                self._render_tasks.pop(snapshot.key, None)
+
+    def _snapshot_after_visual_commands(
+        self, commands: tuple[str, ...]
+    ) -> SceneRenderSnapshot | None:
+        """Строит снимок будущего кадра без изменения настоящей сцены."""
+        category = getattr(self, "current_scene_category", "")
+        name = getattr(self, "current_scene", "")
+        active = {key: value.copy() for key, value in self._active_sprites.items()}
+        order_seq = self._sprite_order_seq
+
+        for line in commands:
+            if line.startswith("scene color"):
+                category = ""
+                name = ""
+                active.clear()
+                order_seq = 0
+                continue
+            scene_match = re.search(
+                r"scene\s+(cg|bg)\s+([a-zA-Z0-9_]+)", line
+            )
+            if scene_match:
+                category, name = scene_match.groups()
+                active.clear()
+                order_seq = 0
+                continue
+            if line.startswith("show "):
+                built = self._build_sprite_png(line)
+                if built is None:
+                    continue
+                request, out_path = built
+                previous = active.get(request.character)
+                if previous is None:
+                    order_seq += 1
+                    order = order_seq
+                else:
+                    order = previous.get("order", 0)
+                active[request.character] = {
+                    "character": request.character,
+                    "show_line": line,
+                    "image_path": str(out_path),
+                    "at": request.at or (previous.get("at") if previous else "center"),
+                    "size": request.size or (
+                        previous.get("size") if previous else "normal"
+                    ),
+                    "behind": request.extras.get("behind") if request.extras else None,
+                    "order": order,
+                }
+                continue
+            hide_match = re.search(r"hide\s+([a-zA-Z0-9_]+)", line)
+            if hide_match:
+                active.pop(hide_match.group(1), None)
+
+        if not name or not category:
+            return None
+        return self._make_scene_snapshot(category, name, active)
+
+    @staticmethod
+    def _consume_prefetch_result(task: asyncio.Task) -> None:
+        if task.cancelled():
+            return
+        try:
+            task.result()
+        except Exception:
+            # Prefetch — оптимизация; ошибка не должна останавливать сценарий.
+            pass
+
+    def _schedule_snapshot_prefetch(
+        self, snapshot: SceneRenderSnapshot | None
+    ) -> None:
+        if snapshot is None or self._get_cached_render(snapshot.key) is not None:
+            return
+        task = asyncio.create_task(self._get_render_async(snapshot))
+        self._prefetch_tasks.add(task)
+
+        def done(completed: asyncio.Task) -> None:
+            self._prefetch_tasks.discard(completed)
+            self._consume_prefetch_result(completed)
+
+        task.add_done_callback(done)
+
+    def prefetch_next_scene(self, script: ScriptParser) -> None:
+        """Готовит следующий детерминированный кадр, пока читается диалог."""
+        commands = script.predict_visual_commands()
+        self._schedule_snapshot_prefetch(
+            self._snapshot_after_visual_commands(commands)
+        )
+
+    def prefetch_choice_scenes(self, script: ScriptParser, choices) -> None:
+        """Готовит первый кадр каждой доступной ветки во время выбора."""
+        for choice in choices:
+            commands = script.predict_choice_visual_commands(choice)
+            self._schedule_snapshot_prefetch(
+                self._snapshot_after_visual_commands(commands)
+            )
 
     async def flush_scene_render(self) -> None:
         """Рендерит сцену только в момент, когда её действительно увидит игрок."""
@@ -1763,7 +2070,11 @@ class TerminalSummer(App):
             self.query_one("#bg-cg", Widget).update("")
             self.scene_dirty = False
             return
-        art = self.generate_scene_with_sprites_ansi()
+        generation = self._scene_generation
+        snapshot = self._capture_scene_snapshot()
+        art = await self._get_render_async(snapshot)
+        if generation != self._scene_generation:
+            return
         self.query_one("#bg-cg", Widget).update(art)
         self.scene_dirty = False
 
@@ -1778,12 +2089,28 @@ class TerminalSummer(App):
             self._script_preload_task.cancel()
         if filename != self._preload_filename:
             # Кэш ограничен текущим файлом сценария, а не всей игрой.
-            self._scene_render_cache.clear()
-            self._sprite_build_cache.clear()
+            self._clear_render_caches()
             self._preload_filename = filename
         self._script_preload_task = asyncio.create_task(
             self._preload_script_scenes(script, generation)
         )
+
+    def _clear_render_caches(self) -> None:
+        """Очищает RAM-кэши и запрещает старым worker возвращать результаты."""
+        self._cache_epoch += 1
+        for task in tuple(self._render_tasks.values()):
+            task.cancel()
+        self._render_tasks.clear()
+        for task in tuple(self._prefetch_tasks):
+            task.cancel()
+        self._prefetch_tasks.clear()
+        with self._cache_lock:
+            self._scene_render_cache.clear()
+            self._sprite_build_cache.clear()
+            for image, _ in self._decoded_image_cache.values():
+                image.close()
+            self._decoded_image_cache.clear()
+            self._decoded_image_cache_bytes = 0
 
     def clear_script_cache(self) -> None:
         """Останавливает прогрев и освобождает кэш при выходе из игры."""
@@ -1792,8 +2119,7 @@ class TerminalSummer(App):
             self._script_preload_task.cancel()
         self._script_preload_task = None
         self._preload_filename = None
-        self._scene_render_cache.clear()
-        self._sprite_build_cache.clear()
+        self._clear_render_caches()
         self._loading_restore_novel = False
         try:
             self.query_one("#script-loading", Widget).add_class("hidden")
@@ -1820,15 +2146,35 @@ class TerminalSummer(App):
                 if generation != self._preload_generation:
                     return
                 label.update(f"Подготовка сценария: {number}/{total}")
-                await asyncio.to_thread(self._cache_plain_scene, category, name, generation)
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(
+                    None, self._cache_plain_scene, category, name, generation
+                )
                 # Даём Textual отрисовать индикатор и обработать ввод.
                 await asyncio.sleep(0)
             for offset, show_line in enumerate(show_lines, start=len(scenes) + 1):
                 if generation != self._preload_generation:
                     return
                 label.update(f"Подготовка спрайтов: {offset}/{total}")
-                await asyncio.to_thread(self._build_sprite_png, show_line, generation)
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(
+                    None, self._build_sprite_png, show_line, generation
+                )
                 await asyncio.sleep(0)
+            if generation == self._preload_generation:
+                current_snapshot = self._capture_scene_snapshot()
+                if current_snapshot.name and current_snapshot.category:
+                    label.update("Подготовка текущего кадра…")
+                    current_art = await self._get_render_async(current_snapshot)
+                    if generation == self._preload_generation:
+                        self.query_one("#bg-cg", Widget).update(current_art)
+                        self.scene_dirty = False
+                label.update("Подготовка следующего кадра…")
+                snapshot = self._snapshot_after_visual_commands(
+                    script.predict_visual_commands()
+                )
+                if snapshot is not None:
+                    await self._get_render_async(snapshot)
         except asyncio.CancelledError:
             raise
         finally:
@@ -1844,89 +2190,19 @@ class TerminalSummer(App):
     def _cache_plain_scene(
         self, category: str, name: str, generation: int | None = None
     ) -> None:
-        key = (category, name, (), self.settings.get("quality"), self.settings.get("style"), 1)
-        if key in self._scene_render_cache:
-            return
-        art = self.generate_scene_ansi(category, name)
-        if generation is None or generation == self._preload_generation:
-            self._remember_render(key, art)
+        snapshot = self._make_scene_snapshot(category, name, {})
+        if self._get_cached_render(snapshot.key) is None:
+            self._render_scene_snapshot(snapshot)
 
     def generate_scene_ansi(self, category: str, scene_name: str):
         """Конвертирует только сцену (без спрайтов) в ANSI/ASCII."""
-        img_path = self._get_scene_image_path(category, scene_name)
-        if img_path is None:
-            return Text.from_markup(f"[Файл не найден: TS/game/{category}/{scene_name}.*]")
-
-        width = int(self.settings.get("quality", 150))
-
-        try:
-            img = Image.open(img_path)
-            palette = Palettes.color if self.settings["style"] == "ANSI" else Palettes.ascii
-            ansi_art = convert_img(img, width=width, alpha=True, palette=palette)
-            return Text.from_ansi(ansi_art)
-        except Exception as e:
-            return Text.from_markup(f"[Ошибка конвертации: {e}]")
+        return self._render_scene_snapshot(
+            self._make_scene_snapshot(category, scene_name, {})
+        )
 
     def generate_scene_with_sprites_ansi(self):
         """Собирает сцену + активные спрайты и конвертирует в ANSI/ASCII."""
-        if not hasattr(self, "current_scene") or not self.current_scene:
-            return Text("")
-        if not hasattr(self, "current_scene_category") or not self.current_scene_category:
-            return Text("")
-
-        key = self._scene_render_key()
-        cached = self._scene_render_cache.get(key)
-        if cached is not None:
-            self._scene_render_cache.move_to_end(key)
-            return cached
-
-        if not self._active_sprites:
-            return self._remember_render(
-                key,
-                self.generate_scene_ansi(self.current_scene_category, self.current_scene),
-            )
-
-        scene_path = self._get_scene_image_path(self.current_scene_category, self.current_scene)
-        if scene_path is None:
-            return Text.from_markup(
-                f"[Файл не найден: TS/game/{self.current_scene_category}/{self.current_scene}.*]"
-            )
-
-        width = int(self.settings.get("quality", 150))
-        palette = Palettes.color if self.settings["style"] == "ANSI" else Palettes.ascii
-
-        try:
-            composed = Image.open(scene_path).convert("RGBA")
-
-            for sprite in self._sorted_active_sprites():
-                sprite_path = sprite.get("image_path")
-                if not sprite_path or not os.path.exists(sprite_path):
-                    continue
-
-                sprite_img = Image.open(sprite_path).convert("RGBA")
-
-                scale = self._sprite_size_scale(sprite.get("size"))
-                if abs(scale - 1.0) > 1e-3:
-                    new_w = max(1, int(sprite_img.width * scale))
-                    new_h = max(1, int(sprite_img.height * scale))
-                    sprite_img = sprite_img.resize((new_w, new_h), resample=Image.NEAREST)
-
-                max_sprite_height = max(1, int(composed.height * 0.98))
-                if sprite_img.height > max_sprite_height:
-                    new_w = max(1, int(sprite_img.width * (max_sprite_height / sprite_img.height)))
-                    sprite_img = sprite_img.resize((new_w, max_sprite_height), resample=Image.NEAREST)
-
-                x_factor = self._sprite_position_factor(sprite.get("at"))
-                x = int(composed.width * x_factor - sprite_img.width / 2)
-                x = max(0, min(x, composed.width - sprite_img.width))
-                y = max(0, composed.height - sprite_img.height)
-
-                composed.alpha_composite(sprite_img, dest=(x, y))
-
-            ansi_art = convert_img(composed, width=width, alpha=False, palette=palette)
-            return self._remember_render(key, Text.from_ansi(ansi_art))
-        except Exception as e:
-            return Text.from_markup(f"[Ошибка сборки сцены со спрайтами: {e}]")
+        return self._render_scene_snapshot(self._capture_scene_snapshot())
 
     def show_sprite_from_script_line(self, show_line: str):
         """Собирает PNG спрайта из show-строки и обновляет активный набор спрайтов."""
@@ -2137,19 +2413,15 @@ class TerminalSummer(App):
 
         self.query_one(GalleryMenuMidBtns).border_title = os.path.splitext(filename)[0]
 
-    def update_current_scene_art(self):
+    async def update_current_scene_art(self):
         """Перерисовывает текущий арт при смене качества."""
         if not hasattr(self, "current_scene") or not self.current_scene:
             return
         if not hasattr(self, "current_scene_category") or not self.current_scene_category:
             return
 
-        ansi_art = self.generate_scene_with_sprites_ansi()
-
-        try:
-            self.query_one("#bg-cg").update(ansi_art)
-        except Exception:
-            pass
+        self.mark_scene_dirty()
+        await self.flush_scene_render()
 
         # Для новых параметров ANSI/ASCII прогреваем только активный файл.
         if hasattr(self, "script"):
@@ -2175,6 +2447,9 @@ class TerminalSummer(App):
         # Очистка ASCII-фона
         bg_cg.update("")
         self.clear_active_sprites()
+        self.current_scene = ""
+        self.current_scene_category = ""
+        self.scene_dirty = False
         self.clear_script_cache()
 
         # Очистка pending_choices

@@ -168,7 +168,7 @@ class ScriptParser:
         scenes = set()
         shows = set()
         for line in self.lines:
-            match = re.fullmatch(r"scene\s+(bg|cg)\s+([a-zA-Z0-9_]+)", line)
+            match = re.match(r"scene\s+(bg|cg)\s+([a-zA-Z0-9_]+)", line)
             if match:
                 scenes.add(match.groups())
             elif line.startswith("show "):
@@ -339,13 +339,14 @@ class ScriptParser:
         self.frames.append(ExecutionFrame(end=end, return_pc=return_pc))
         self.index = start
 
-    def _state_value(self, name: str):
+    def _state_value(self, name: str, state: dict | None = None):
         key = name.strip().lstrip("$")
-        if key not in SCRIPT_STATE:
+        values = SCRIPT_STATE if state is None else state
+        if key not in values:
             raise ValueError(f"Unknown script variable: ${key}")
-        return SCRIPT_STATE[key]
+        return values[key]
 
-    def _evaluate_condition(self, expression: str) -> bool:
+    def _evaluate_condition(self, expression: str, state: dict | None = None) -> bool:
         """Вычисляет ограниченное логическое выражение DSL."""
         expression = expression.strip()
         if expression.startswith("(") and expression.endswith(")"):
@@ -363,10 +364,136 @@ class ScriptParser:
         expression = re.sub(r"\bnull\b", "None", expression, flags=re.IGNORECASE)
 
         try:
-            return bool(eval(expression, {"__builtins__": {}}, {"V": self._state_value}))
+            return bool(
+                eval(
+                    expression,
+                    {"__builtins__": {}},
+                    {"V": lambda name: self._state_value(name, state)},
+                )
+            )
         except Exception as exc:
             self.app.sub_title = f"[Script error] Invalid condition: {exc}"
             return False
+
+    @staticmethod
+    def _predict_change_state(line: str, state: dict) -> None:
+        """Применяет простое присваивание к копии состояния для look-ahead."""
+        match = re.match(
+            r'\$(lp_)?([a-zA-Z0-9_.]+)\s*([+\-]?=)\s*(true|false|null|-?\d+)\s*$',
+            line,
+            re.IGNORECASE,
+        )
+        if not match:
+            return
+        prefix, target, operation, raw_value = match.groups()
+        value_lower = raw_value.lower()
+        if value_lower == "true":
+            value = True
+        elif value_lower == "false":
+            value = False
+        elif value_lower == "null":
+            value = None
+        else:
+            value = int(raw_value)
+        key = f"lp_{target}" if prefix == "lp_" else target
+        if key not in state:
+            return
+        if operation == "=":
+            state[key] = value
+        elif operation == "+=":
+            state[key] = int(state[key]) + int(value)
+        elif operation == "-=":
+            state[key] = int(state[key]) - int(value)
+
+    def predict_visual_commands(
+        self,
+        start: int | None = None,
+        frames: list[ExecutionFrame] | None = None,
+        max_steps: int = 2000,
+    ) -> tuple[str, ...]:
+        """Возвращает изменения сцены до следующей видимой точки без side effects."""
+        pc = self.index if start is None else start
+        predicted_frames = list(self.frames if frames is None else frames)
+        state = SCRIPT_STATE.copy()
+        visual_commands = []
+
+        for _ in range(max_steps):
+            while predicted_frames and pc >= predicted_frames[-1].end:
+                pc = predicted_frames.pop().return_pc
+            if pc >= len(self.lines):
+                break
+
+            line = self.lines[pc]
+            pc += 1
+            if line.startswith("label"):
+                continue
+            if line.startswith("goto"):
+                match = re.fullmatch(r"goto\s+([a-zA-Z0-9_]+)", line)
+                if not match or match.group(1) not in self.labels:
+                    break
+                pc = self.labels[match.group(1)]
+                predicted_frames.clear()
+                continue
+            if line.startswith("if ") or line.startswith("if("):
+                branches = []
+                condition = line[2:].strip()
+                cursor = pc
+                while True:
+                    try:
+                        block_start, block_end = self._read_block_range(cursor)
+                    except ValueError:
+                        return tuple(visual_commands)
+                    cursor = block_end + 1
+                    branches.append((condition, block_start, block_end))
+                    if cursor >= len(self.lines):
+                        break
+                    next_line = self.lines[cursor]
+                    if next_line.startswith("else if"):
+                        condition = next_line[len("else if"):].strip()
+                        cursor += 1
+                        continue
+                    if next_line == "else":
+                        cursor += 1
+                        try:
+                            block_start, block_end = self._read_block_range(cursor)
+                        except ValueError:
+                            return tuple(visual_commands)
+                        cursor = block_end + 1
+                        branches.append((None, block_start, block_end))
+                    break
+                pc = cursor
+                for branch_condition, block_start, block_end in branches:
+                    if branch_condition is None or self._evaluate_condition(
+                        branch_condition, state
+                    ):
+                        predicted_frames.append(
+                            ExecutionFrame(end=block_end, return_pc=cursor)
+                        )
+                        pc = block_start
+                        break
+                continue
+            if line.startswith("menu"):
+                break
+            if line.startswith("load"):
+                break
+            if line.startswith("$"):
+                self._predict_change_state(line, state)
+                continue
+            if line.startswith(("scene", "show", "hide")):
+                visual_commands.append(line)
+                continue
+            if '"' in line:
+                break
+
+        return tuple(visual_commands)
+
+    def predict_choice_visual_commands(
+        self, choice: ChoiceTarget
+    ) -> tuple[str, ...]:
+        """Прогнозирует первый кадр конкретного доступного пункта меню."""
+        frames = list(self.frames)
+        frames.append(ExecutionFrame(end=choice.end, return_pc=choice.return_pc))
+        return self.predict_visual_commands(start=choice.start, frames=frames)
 
     async def _handle_if(self, line):
         """Выполняет первую истинную ветку цепочки if/else if/else."""
@@ -442,7 +569,7 @@ class ScriptParser:
             self.app.current_scene = ""
             self.app.current_scene_category = ""
             self.app.clear_active_sprites()
-            self.app.scene_dirty = True
+            self.app.mark_scene_dirty()
             if not self.backward:
                 await self.next_line()
             return
@@ -457,7 +584,7 @@ class ScriptParser:
             self.app.current_scene_category = category
             self.app.clear_active_sprites()
 
-            self.app.scene_dirty = True
+            self.app.mark_scene_dirty()
     
             if not self.backward:
                 await self.next_line()
@@ -466,7 +593,7 @@ class ScriptParser:
     async def _handle_show(self, line):
         """Обработка show: собрать спрайт, добавить/заменить его на сцене."""
         self.app.show_sprite_from_script_line(line)
-        self.app.scene_dirty = True
+        self.app.mark_scene_dirty()
 
         if not self.backward:
             await self.next_line()
@@ -478,7 +605,7 @@ class ScriptParser:
         if match:
             character_id = match.group(1)
             self.app.hide_sprite_by_id(character_id)
-            self.app.scene_dirty = True
+            self.app.mark_scene_dirty()
 
         if not self.backward:
             await self.next_line()
@@ -554,6 +681,7 @@ class ScriptParser:
         self.app.pending_choices = options
 
         await self.app.flush_scene_render()
+        self.app.prefetch_choice_scenes(self, options.values())
 
         # отобразить ChoiceBar и скрыть фон
         choice_bar.remove_class("hidden")
@@ -591,6 +719,7 @@ class ScriptParser:
     async def _handle_dialogue(self, line):
         """Обработка строки диалога с анимацией текста"""
         await self.app.flush_scene_render()
+        self.app.prefetch_next_scene(self)
         widget = self.app.query_one("#text-bar", expect_type=Widget)
         btn = self.app.query_one("#btn-next")
 
