@@ -148,8 +148,8 @@ NovelMenu {
 NovelMenu.nvl-mode {
     layout: horizontal;
     dock: bottom;
-    height: 99%;
-    margin-bottom: 1;
+    height: 99%; # что бы было видно header
+    margin-bottom: 1; # что бы было видно footer
     padding: 0;
 
     TextBar {
