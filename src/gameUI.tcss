@@ -36,6 +36,29 @@ TextBar.all{border-title-color: rgb(227,58,58)}           # Пионеры
 # Центрирование всего и вся
 Screen {
     align: center middle;
+    layers: base loading;
+}
+
+#script-loading {
+    layer: loading;
+    position: absolute;
+    offset: 0 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    background: $boost;
+    layout: vertical;
+    align: center middle;
+
+    LoadingIndicator {
+        height: 3;
+        width: 34;
+    }
+
+    Label {
+        width: 34;
+        text-align: center;
+    }
 }
 
 # Окно новеллы

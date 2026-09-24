@@ -1,5 +1,7 @@
 import asyncio
+import hashlib
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from textual.widget import Widget
@@ -101,13 +103,36 @@ def reset_globals():
     set_script_state({})
 
 
+@dataclass(frozen=True)
+class ExecutionFrame:
+    """Диапазон исходного сценария, выполняемый вместо вставки строк."""
+
+    end: int
+    return_pc: int
+
+    def to_save_data(self) -> dict:
+        return {"end": self.end, "return_pc": self.return_pc}
+
+
+@dataclass(frozen=True)
+class ChoiceTarget:
+    """Неизменяемая ссылка на тело пункта меню в исходном сценарии."""
+
+    start: int
+    end: int
+    return_pc: int
+
+
 class ScriptParser:
     def __init__(self, filename, app):
         self.filename = filename
         self.app = app
-        self.lines = []
+        self.lines: tuple[str, ...] = ()
         self.labels = {}
         self.index = 0
+        self.frames: list[ExecutionFrame] = []
+        self.content_hash = ""
+        self.resource_manifest = {"scenes": (), "show_lines": ()}
         self.backward = False
         self.load_script()
 
@@ -117,14 +142,78 @@ class ScriptParser:
         if filename:
             self.filename = str(filename)
         with open(self.filename, 'r', encoding='utf-8') as f:
-            self.lines = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
+            self.lines = tuple(
+                line.strip() for line in f
+                if line.strip() and not line.strip().startswith("#")
+            )
+        self.content_hash = hashlib.sha256("\n".join(self.lines).encode("utf-8")).hexdigest()
         self._index_labels()
         self.index = 0
+        self.frames.clear()
+        self._build_resource_manifest()
 
     def restore_runtime_lines(self, lines: list[str]) -> None:
-        """Восстанавливает строки с уже вставленными блоками выбранных меню."""
-        self.lines = lines.copy()
+        """Поддержка save format 2 с ранее вставленными строками.
+
+        Новые сохранения этот метод не используют: их сценарий всегда неизменяем.
+        """
+        self.lines = tuple(lines)
+        self.content_hash = hashlib.sha256("\n".join(self.lines).encode("utf-8")).hexdigest()
         self._index_labels()
+        self.frames.clear()
+        self._build_resource_manifest()
+
+    def _build_resource_manifest(self) -> None:
+        """Лёгкий индекс ресурсов текущего файла, без открытия изображений."""
+        scenes = set()
+        shows = set()
+        for line in self.lines:
+            match = re.fullmatch(r"scene\s+(bg|cg)\s+([a-zA-Z0-9_]+)", line)
+            if match:
+                scenes.add(match.groups())
+            elif line.startswith("show "):
+                shows.add(line)
+        self.resource_manifest = {
+            "scenes": tuple(sorted(scenes)),
+            "show_lines": tuple(sorted(shows)),
+        }
+
+    def get_runtime_state(self) -> dict:
+        """Компактное, не зависящее от копии сценария состояние выполнения."""
+        return {
+            "filename": str(Path(self.filename).resolve()),
+            "content_hash": self.content_hash,
+            "pc": self.index,
+            "frames": [frame.to_save_data() for frame in self.frames],
+        }
+
+    def restore_runtime_state(self, state: dict) -> bool:
+        """Восстанавливает позицию и вложенные выбранные блоки save format 3."""
+        if not isinstance(state, dict):
+            return False
+        saved_hash = state.get("content_hash")
+        if saved_hash and saved_hash != self.content_hash:
+            self.app.sub_title = "[Load error] Script was changed since this save was created"
+            return False
+        pc = state.get("pc", 0)
+        frames_data = state.get("frames", [])
+        if not isinstance(pc, int) or not 0 <= pc <= len(self.lines):
+            return False
+        frames = []
+        if not isinstance(frames_data, list):
+            return False
+        for frame in frames_data:
+            if not isinstance(frame, dict):
+                return False
+            end = frame.get("end")
+            return_pc = frame.get("return_pc")
+            if not all(isinstance(value, int) and 0 <= value <= len(self.lines)
+                       for value in (end, return_pc)):
+                return False
+            frames.append(ExecutionFrame(end=end, return_pc=return_pc))
+        self.index = pc
+        self.frames = frames
+        return True
 
     def _index_labels(self) -> None:
         """Строит индекс меток для текущего набора строк."""
@@ -136,6 +225,8 @@ class ScriptParser:
 
     async def next_line(self):
         """Шаг вперёд"""
+        while self.frames and self.index >= self.frames[-1].end:
+            self.index = self.frames.pop().return_pc
         if self.index >= len(self.lines):
             return None
         self.backward = False
@@ -215,17 +306,19 @@ class ScriptParser:
             return
 
         self.index = target_index
+        # Переход по метке выходит из текущих структурных блоков так же,
+        # как это происходило при старой подмене общего массива строк.
+        self.frames.clear()
         if not self.backward:
             await self.next_line()
 
-    def _read_block(self, start: int) -> tuple[list[str], int]:
-        """Читает блок `{ ... }` и возвращает строки и индекс после него."""
+    def _read_block_range(self, start: int) -> tuple[int, int]:
+        """Возвращает полуоткрытый диапазон тела `{ ... }` в исходном сценарии."""
         if start >= len(self.lines) or self.lines[start] != "{":
             raise ValueError("Expected `{` after conditional")
 
         depth = 1
         index = start + 1
-        block = []
         while index < len(self.lines) and depth:
             line = self.lines[index]
             if line == "{":
@@ -233,11 +326,18 @@ class ScriptParser:
             elif line == "}":
                 depth -= 1
                 if depth == 0:
-                    return block, index + 1
-            block.append(line)
+                    return start + 1, index
             index += 1
 
         raise ValueError("Unclosed conditional block")
+
+    def _enter_range(self, start: int, end: int, return_pc: int) -> None:
+        """Переходит в неизменяемый диапазон, запоминая адрес продолжения."""
+        if start >= end:
+            self.index = return_pc
+            return
+        self.frames.append(ExecutionFrame(end=end, return_pc=return_pc))
+        self.index = start
 
     def _state_value(self, name: str):
         key = name.strip().lstrip("$")
@@ -276,11 +376,12 @@ class ScriptParser:
 
         while True:
             try:
-                block, cursor = self._read_block(cursor)
+                start, end = self._read_block_range(cursor)
             except ValueError as exc:
                 self.app.sub_title = f"[Script error] {exc}"
                 return
-            branches.append((condition, block))
+            cursor = end + 1
+            branches.append((condition, start, end))
 
             if cursor >= len(self.lines):
                 break
@@ -292,25 +393,25 @@ class ScriptParser:
             if next_line == "else":
                 cursor += 1
                 try:
-                    block, cursor = self._read_block(cursor)
+                    start, end = self._read_block_range(cursor)
                 except ValueError as exc:
                     self.app.sub_title = f"[Script error] {exc}"
                     return
-                branches.append((None, block))
+                cursor = end + 1
+                branches.append((None, start, end))
             break
 
         selected = None
-        for branch_condition, block in branches:
+        for branch_condition, start, end in branches:
             if branch_condition is None or self._evaluate_condition(branch_condition):
-                selected = block
+                selected = (start, end)
                 break
 
-        insertion_index = cursor
-        self.index = insertion_index
+        return_pc = cursor
         if selected:
-            self.lines[insertion_index:insertion_index] = selected
-            self._index_labels()
-            self.index = insertion_index
+            self._enter_range(*selected, return_pc)
+        else:
+            self.index = return_pc
 
         if not self.backward:
             await self.next_line()
@@ -341,8 +442,7 @@ class ScriptParser:
             self.app.current_scene = ""
             self.app.current_scene_category = ""
             self.app.clear_active_sprites()
-            bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
-            bg_cg.update("")
+            self.app.scene_dirty = True
             if not self.backward:
                 await self.next_line()
             return
@@ -357,10 +457,7 @@ class ScriptParser:
             self.app.current_scene_category = category
             self.app.clear_active_sprites()
 
-            ansi_art = self.app.generate_scene_with_sprites_ansi()
-
-            bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
-            bg_cg.update(ansi_art)
+            self.app.scene_dirty = True
     
             if not self.backward:
                 await self.next_line()
@@ -368,10 +465,8 @@ class ScriptParser:
 
     async def _handle_show(self, line):
         """Обработка show: собрать спрайт, добавить/заменить его на сцене."""
-        ansi_art = self.app.show_sprite_from_script_line(line)
-        if ansi_art is not None:
-            bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
-            bg_cg.update(ansi_art)
+        self.app.show_sprite_from_script_line(line)
+        self.app.scene_dirty = True
 
         if not self.backward:
             await self.next_line()
@@ -382,9 +477,8 @@ class ScriptParser:
         match = re.search(r'hide\s+([a-zA-Z0-9_]+)', line)
         if match:
             character_id = match.group(1)
-            ansi_art = self.app.hide_sprite_by_id(character_id)
-            bg_cg = self.app.query_one("#bg-cg", expect_type=Widget)
-            bg_cg.update(ansi_art)
+            self.app.hide_sprite_by_id(character_id)
+            self.app.scene_dirty = True
 
         if not self.backward:
             await self.next_line()
@@ -408,39 +502,45 @@ class ScriptParser:
         """Обработка строки menu и логика выбора"""
 
         options = {}
-        self.index += 1  # пропускаем "menu"
+        cursor = self.index  # строка после "menu"
 
-        while self.index < len(self.lines):
-            line = self.lines[self.index].strip()
+        while cursor < len(self.lines):
+            line = self.lines[cursor].strip()
 
             # конец всего блока меню
             if line == "}":
-                self.index += 1
+                cursor += 1
                 break
 
             # начало варианта
             if line.startswith('"'):
                 choice_match = re.match(r'"(.+?)"(?:\s+if\s+(.+))?$', line)
                 if not choice_match:
-                    self.index += 1
+                    cursor += 1
                     continue
                 choice_text, condition = choice_match.groups()
-                self.index += 1
-                block_lines = []
+                cursor += 1
 
                 if condition and not self._evaluate_condition(condition):
                     # Пропускаем тело недоступного пункта.
-                    if self.index < len(self.lines) and self.lines[self.index] == "{":
-                        _, self.index = self._read_block(self.index)
+                    if cursor < len(self.lines) and self.lines[cursor] == "{":
+                        _, cursor = self._read_block_range(cursor)
+                        cursor += 1
                     continue
 
-                # собираем строки внутри { ... }
-                if self.index < len(self.lines) and self.lines[self.index] == "{":
-                    block_lines, self.index = self._read_block(self.index)
-
-                options[choice_text] = block_lines
+                if cursor < len(self.lines) and self.lines[cursor] == "{":
+                    start, end = self._read_block_range(cursor)
+                    cursor = end + 1
+                    options[choice_text] = ChoiceTarget(start, end, 0)
             else:
-                self.index += 1
+                cursor += 1
+
+        # Выполнение продолжится после закрывающей скобки выбранного меню.
+        options = {
+            text: ChoiceTarget(target.start, target.end, cursor)
+            for text, target in options.items()
+        }
+        self.index = cursor
 
         # показать ChoiceBar
         choice_bar = self.app.query_one("#choice-bar")
@@ -452,6 +552,8 @@ class ScriptParser:
 
         # сохранить варианты в app
         self.app.pending_choices = options
+
+        await self.app.flush_scene_render()
 
         # отобразить ChoiceBar и скрыть фон
         choice_bar.remove_class("hidden")
@@ -473,6 +575,10 @@ class ScriptParser:
             list_view.index = 0
             list_view.focus() 
 
+    def select_choice(self, choice: ChoiceTarget) -> None:
+        """Выполняет выбранный пользователем неизменяемый диапазон меню."""
+        self._enter_range(choice.start, choice.end, choice.return_pc)
+
 
     @staticmethod
     def _normalize_log_text(text: str) -> str:
@@ -484,6 +590,7 @@ class ScriptParser:
 
     async def _handle_dialogue(self, line):
         """Обработка строки диалога с анимацией текста"""
+        await self.app.flush_scene_render()
         widget = self.app.query_one("#text-bar", expect_type=Widget)
         btn = self.app.query_one("#btn-next")
 
@@ -650,5 +757,6 @@ class ScriptParser:
             return
 
         self.load_script(target_path)
+        self.app.start_script_preload(self)
         if not self.backward:
             await self.next_line()

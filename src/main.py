@@ -1,5 +1,8 @@
 import os
 import sys
+import asyncio
+import hashlib
+from collections import OrderedDict
 from pathlib import Path
 
 # --- ЛОГИКА ПУТЕЙ ---
@@ -120,7 +123,7 @@ from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.widgets import Button, Label, Footer, Header, Static, ListView, ListItem, Log
+from textual.widgets import Button, Label, Footer, Header, Static, ListView, ListItem, Log, LoadingIndicator
 from textual.widget import Widget
 from textual.binding import Binding
 
@@ -244,6 +247,14 @@ class MainMenu(Static):
     def compose(self):
         yield MainMenuMiddleBtns()
         yield MainMenuBottomBtns()
+
+
+class ScriptLoadingOverlay(Static):
+    """Оверлей подготовки ресурсов сценария."""
+
+    def compose(self):
+        yield LoadingIndicator(id="script-loading-indicator")
+        yield Label("Подготовка сценария…", id="script-loading-text")
     
 class MainMenuMiddleBtns(HorizontalGroup):
     """Виджет-контейнер для центарльных кнопок"""
@@ -609,6 +620,16 @@ class TerminalSummer(App):
         self._space_last_event_at = 0.0
         self._space_idle_gap = 0.12
         self._space_require_idle = False
+        self.scene_dirty = False
+        self._scene_render_cache: OrderedDict[tuple, Text] = OrderedDict()
+        self._sprite_build_cache: OrderedDict[str, str] = OrderedDict()
+        self._script_preload_task = None
+        self._preload_generation = 0
+        self._preload_filename = None
+        self._loading_restore_novel = False
+        self._preload_after_settings = False
+        self._render_cache_limit = 96
+        self._sprite_cache_limit = 256
 
     text_speed = "0.025" # Скорость текста 0.04 | 0.025 | 0.01 | 0
 
@@ -641,6 +662,7 @@ class TerminalSummer(App):
         yield SettingsMenu(id="settings-menu", classes="hidden")
         yield GalleryMenu( id="gallery-menu",  classes="hidden")
         yield SaveMenu(    id="save-menu",     classes="hidden")
+        yield ScriptLoadingOverlay(id="script-loading", classes="hidden")
 
     def set_text_mode(self, mode: str) -> None:
         """Сохраняет режим текста и обновляет его отображение."""
@@ -853,6 +875,7 @@ class TerminalSummer(App):
             # Отображение NovelMenu
             self.query_one("#novel-menu").remove_class("hidden")
             self.query_one("#novel-window").remove_class("hidden")
+            self.start_script_preload(self.script)
 
             # Фокус на кнопке "Вперёд" в игровом меню
             self.query_one("#btn-next", Button).focus()
@@ -967,14 +990,11 @@ class TerminalSummer(App):
 
         choice_label = event.item.query_one(Label)
         choice_text = str(choice_label.content).strip()
-        block = pending_choices.get(choice_text)
-        if block is None:
+        choice = pending_choices.get(choice_text)
+        if choice is None:
             return
 
-        if block:
-            # Вставляем блок в runtime-сценарий, сохраняемый вместе с игрой.
-            self.script.lines[self.script.index:self.script.index] = block
-            self.script._index_labels()
+        self.script.select_choice(choice)
 
         # Очищаем pending_choices до продолжения сценария.
         self.pending_choices = None
@@ -984,7 +1004,7 @@ class TerminalSummer(App):
         self.query_one("#novel-menu").remove_class("hidden")
         self.sync_text_mode_display()
 
-        # продолжаем сценарий
+        # Продолжаем сценарий с выбранного неизменяемого диапазона.
         await self._advance_script_line()
 
 
@@ -1119,6 +1139,10 @@ class TerminalSummer(App):
                 novel_window.remove_class("hidden")
                 self.sync_text_mode_display()
 
+                if self._preload_after_settings and hasattr(self, "script"):
+                    self._preload_after_settings = False
+                    self.start_script_preload(self.script)
+
                 # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
                 self.query_one("#btn-next", Button).focus()
         else: pass # Не открывать в главном меню
@@ -1183,6 +1207,10 @@ class TerminalSummer(App):
                 novel_menu.remove_class("hidden")
                 novel_window.remove_class("hidden")
                 self.sync_text_mode_display()
+
+                if self._preload_after_settings and hasattr(self, "script"):
+                    self._preload_after_settings = False
+                    self.start_script_preload(self.script)
 
                 # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
                 self.query_one("#btn-next", Button).focus()
@@ -1472,18 +1500,26 @@ class TerminalSummer(App):
         )
 
         # Загрузка сценария
-        script_filename = game_state.get("script_filename", "")
-        script_index = game_state.get("script_index", 0)
+        script_runtime = game_state.get("script", {})
+        is_format_3 = game_state.get("save_format") == 3 and isinstance(script_runtime, dict)
+        script_filename = script_runtime.get("filename", "") if is_format_3 else game_state.get("script_filename", "")
+        script_index = script_runtime.get("pc", 0) if is_format_3 else game_state.get("script_index", 0)
 
         if script_filename:
+            if is_format_3 and not Path(script_filename).is_absolute():
+                script_filename = str(self.ts_path / script_filename)
             self.script = ScriptParser(script_filename, self)
-            runtime_lines = game_state.get("runtime_lines")
-            if isinstance(runtime_lines, list) and all(
-                isinstance(line, str) for line in runtime_lines
-            ):
-                self.script.restore_runtime_lines(runtime_lines)
-            self.script.index = script_index
-
+            if is_format_3:
+                if not self.script.restore_runtime_state(script_runtime):
+                    return
+            else:
+                # Совместимость с format 2: старый движок изменял список строк.
+                runtime_lines = game_state.get("runtime_lines")
+                if isinstance(runtime_lines, list) and all(
+                    isinstance(line, str) for line in runtime_lines
+                ):
+                    self.script.restore_runtime_lines(runtime_lines)
+                self.script.index = script_index
             # Скрытие главного меню (если загрузка из главного меню)
             if save_menu.opened_from == "menu":
                 self.query_one("#main-menu").add_class("hidden")
@@ -1546,11 +1582,19 @@ class TerminalSummer(App):
         speaker_id = speaker_classes[0] if speaker_classes else None
 
         # Сбор состояния игры
+        script_runtime = self.script.get_runtime_state() if hasattr(self, "script") else {}
+        if script_runtime:
+            try:
+                script_runtime["filename"] = str(
+                    Path(script_runtime["filename"]).resolve().relative_to(self.ts_path.resolve())
+                )
+            except ValueError:
+                # Внешний сценарий сохраняем абсолютным путём как крайний случай.
+                pass
+
         game_state = {
-            "save_format": 2,
-            "script_filename": str(self.script.filename) if hasattr(self, "script") else "",
-            "script_index": self.script.index if hasattr(self, "script") else 0,
-            "runtime_lines": self.script.lines.copy() if hasattr(self, "script") else [],
+            "save_format": 3,
+            "script": script_runtime,
             "variables": {
                 "state": script_parser.get_script_state(),
             },
@@ -1690,6 +1734,123 @@ class TerminalSummer(App):
 
         return sprites
 
+    def _scene_render_key(self) -> tuple:
+        """Ключ видимого состояния; пути временных PNG в него не входят."""
+        sprites = tuple(
+            (
+                sprite.get("character"), sprite.get("show_line"), sprite.get("at"),
+                sprite.get("size"), sprite.get("behind"), sprite.get("order"),
+            )
+            for sprite in self._sorted_active_sprites()
+        )
+        return (
+            self.current_scene_category, self.current_scene, sprites,
+            self.settings.get("quality"), self.settings.get("style"), 1,
+        )
+
+    def _remember_render(self, key: tuple, art: Text) -> Text:
+        self._scene_render_cache[key] = art
+        self._scene_render_cache.move_to_end(key)
+        while len(self._scene_render_cache) > self._render_cache_limit:
+            self._scene_render_cache.popitem(last=False)
+        return art
+
+    async def flush_scene_render(self) -> None:
+        """Рендерит сцену только в момент, когда её действительно увидит игрок."""
+        if not self.scene_dirty:
+            return
+        if not getattr(self, "current_scene", ""):
+            self.query_one("#bg-cg", Widget).update("")
+            self.scene_dirty = False
+            return
+        art = self.generate_scene_with_sprites_ansi()
+        self.query_one("#bg-cg", Widget).update(art)
+        self.scene_dirty = False
+
+    def start_script_preload(self, script: ScriptParser) -> None:
+        """Неблокирующе прогревает чистые фоны активного сценарного файла."""
+        filename = str(Path(script.filename).resolve())
+        # Сначала инвалидируем старый worker: поток, закончившийся после
+        # отмены задачи, не должен вернуть старые данные в очищенный кэш.
+        self._preload_generation += 1
+        generation = self._preload_generation
+        if self._script_preload_task and not self._script_preload_task.done():
+            self._script_preload_task.cancel()
+        if filename != self._preload_filename:
+            # Кэш ограничен текущим файлом сценария, а не всей игрой.
+            self._scene_render_cache.clear()
+            self._sprite_build_cache.clear()
+            self._preload_filename = filename
+        self._script_preload_task = asyncio.create_task(
+            self._preload_script_scenes(script, generation)
+        )
+
+    def clear_script_cache(self) -> None:
+        """Останавливает прогрев и освобождает кэш при выходе из игры."""
+        self._preload_generation += 1
+        if self._script_preload_task and not self._script_preload_task.done():
+            self._script_preload_task.cancel()
+        self._script_preload_task = None
+        self._preload_filename = None
+        self._scene_render_cache.clear()
+        self._sprite_build_cache.clear()
+        self._loading_restore_novel = False
+        try:
+            self.query_one("#script-loading", Widget).add_class("hidden")
+        except Exception:
+            pass
+
+    async def _preload_script_scenes(self, script: ScriptParser, generation: int) -> None:
+        overlay = self.query_one("#script-loading", Widget)
+        label = self.query_one("#script-loading-text", Label)
+        scenes = script.resource_manifest.get("scenes", ())
+        show_lines = script.resource_manifest.get("show_lines", ())
+        novel_menu = self.query_one("#novel-menu", Widget)
+        novel_window = self.query_one("#novel-window", Widget)
+        self._loading_restore_novel = (
+            not novel_menu.has_class("hidden") or not novel_window.has_class("hidden")
+        )
+        if self._loading_restore_novel:
+            novel_menu.add_class("hidden")
+            novel_window.add_class("hidden")
+        overlay.remove_class("hidden")
+        try:
+            total = len(scenes) + len(show_lines)
+            for number, (category, name) in enumerate(scenes, start=1):
+                if generation != self._preload_generation:
+                    return
+                label.update(f"Подготовка сценария: {number}/{total}")
+                await asyncio.to_thread(self._cache_plain_scene, category, name, generation)
+                # Даём Textual отрисовать индикатор и обработать ввод.
+                await asyncio.sleep(0)
+            for offset, show_line in enumerate(show_lines, start=len(scenes) + 1):
+                if generation != self._preload_generation:
+                    return
+                label.update(f"Подготовка спрайтов: {offset}/{total}")
+                await asyncio.to_thread(self._build_sprite_png, show_line, generation)
+                await asyncio.sleep(0)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            if generation == self._preload_generation:
+                overlay.add_class("hidden")
+                if self._loading_restore_novel:
+                    novel_menu.remove_class("hidden")
+                    novel_window.remove_class("hidden")
+                    self.sync_text_mode_display()
+                    self.query_one("#btn-next", Button).focus()
+                self._loading_restore_novel = False
+
+    def _cache_plain_scene(
+        self, category: str, name: str, generation: int | None = None
+    ) -> None:
+        key = (category, name, (), self.settings.get("quality"), self.settings.get("style"), 1)
+        if key in self._scene_render_cache:
+            return
+        art = self.generate_scene_ansi(category, name)
+        if generation is None or generation == self._preload_generation:
+            self._remember_render(key, art)
+
     def generate_scene_ansi(self, category: str, scene_name: str):
         """Конвертирует только сцену (без спрайтов) в ANSI/ASCII."""
         img_path = self._get_scene_image_path(category, scene_name)
@@ -1713,8 +1874,17 @@ class TerminalSummer(App):
         if not hasattr(self, "current_scene_category") or not self.current_scene_category:
             return Text("")
 
+        key = self._scene_render_key()
+        cached = self._scene_render_cache.get(key)
+        if cached is not None:
+            self._scene_render_cache.move_to_end(key)
+            return cached
+
         if not self._active_sprites:
-            return self.generate_scene_ansi(self.current_scene_category, self.current_scene)
+            return self._remember_render(
+                key,
+                self.generate_scene_ansi(self.current_scene_category, self.current_scene),
+            )
 
         scene_path = self._get_scene_image_path(self.current_scene_category, self.current_scene)
         if scene_path is None:
@@ -1754,37 +1924,16 @@ class TerminalSummer(App):
                 composed.alpha_composite(sprite_img, dest=(x, y))
 
             ansi_art = convert_img(composed, width=width, alpha=False, palette=palette)
-            return Text.from_ansi(ansi_art)
+            return self._remember_render(key, Text.from_ansi(ansi_art))
         except Exception as e:
             return Text.from_markup(f"[Ошибка сборки сцены со спрайтами: {e}]")
 
     def show_sprite_from_script_line(self, show_line: str):
         """Собирает PNG спрайта из show-строки и обновляет активный набор спрайтов."""
-        resources = self._load_sprite_resources()
-        if not resources:
+        built = self._build_sprite_png(show_line)
+        if built is None:
             return None
-
-        try:
-            request = parse_show_like(show_line)
-            resolved = resolve_sprite(resources, request, self._sprite_assets_root)
-            sprite_img = compose_layers(resolved.picks)
-        except Exception as e:
-            self.sub_title = f"Sprite build error: {e}"
-            return None
-
-        runtime_dir = self._sprite_runtime_dir
-        try:
-            runtime_dir.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            runtime_dir = Path("/tmp/terminal-summer-sprites/generated_runtime")
-            runtime_dir.mkdir(parents=True, exist_ok=True)
-
-        try:
-            out_path = runtime_dir / f"{request.character}.png"
-            sprite_img.save(out_path, format="PNG")
-        except Exception as e:
-            self.sub_title = f"Sprite save error: {e}"
-            return None
+        request, out_path = built
 
         previous = self._active_sprites.get(request.character)
         if previous is None:
@@ -1803,7 +1952,41 @@ class TerminalSummer(App):
             "order": order,
         }
 
-        return self.generate_scene_with_sprites_ansi()
+        return None
+
+    def _build_sprite_png(self, show_line: str, generation: int | None = None):
+        """Собирает или получает из кэша PNG, не изменяя состояние сцены."""
+        resources = self._load_sprite_resources()
+        if not resources:
+            return None
+
+        try:
+            request = parse_show_like(show_line)
+            cached_path = self._sprite_build_cache.get(show_line)
+            if cached_path and os.path.exists(cached_path):
+                out_path = Path(cached_path)
+            else:
+                digest = hashlib.sha256(show_line.encode("utf-8")).hexdigest()[:16]
+                runtime_dir = self._sprite_runtime_dir
+                try:
+                    runtime_dir.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    runtime_dir = Path("/tmp/terminal-summer-sprites/generated_runtime")
+                    runtime_dir.mkdir(parents=True, exist_ok=True)
+                out_path = runtime_dir / f"{request.character}_{digest}.png"
+                if not out_path.exists():
+                    resolved = resolve_sprite(resources, request, self._sprite_assets_root)
+                    sprite_img = compose_layers(resolved.picks)
+                    sprite_img.save(out_path, format="PNG")
+                if generation is None or generation == self._preload_generation:
+                    self._sprite_build_cache[show_line] = str(out_path)
+                    self._sprite_build_cache.move_to_end(show_line)
+                    while len(self._sprite_build_cache) > self._sprite_cache_limit:
+                        self._sprite_build_cache.popitem(last=False)
+        except Exception as e:
+            self.sub_title = f"Sprite build error: {e}"
+            return None
+        return request, out_path
 
     def restore_active_sprites(
         self,
@@ -1843,7 +2026,7 @@ class TerminalSummer(App):
     def hide_sprite_by_id(self, character_id: str):
         """Удаляет персонажа со сцены."""
         self._active_sprites.pop(character_id, None)
-        return self.generate_scene_with_sprites_ansi()
+        return None
 
     def clear_active_sprites(self):
         """Очищает активные спрайты сцены."""
@@ -1968,6 +2151,14 @@ class TerminalSummer(App):
         except Exception:
             pass
 
+        # Для новых параметров ANSI/ASCII прогреваем только активный файл.
+        if hasattr(self, "script"):
+            settings_menu = self.query_one("#settings-menu", Widget)
+            if settings_menu.has_class("hidden"):
+                self.start_script_preload(self.script)
+            else:
+                self._preload_after_settings = True
+
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
         # Получаем элементы
@@ -1984,6 +2175,7 @@ class TerminalSummer(App):
         # Очистка ASCII-фона
         bg_cg.update("")
         self.clear_active_sprites()
+        self.clear_script_cache()
 
         # Очистка pending_choices
         if hasattr(self, "pending_choices"):
