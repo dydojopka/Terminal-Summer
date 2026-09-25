@@ -476,6 +476,10 @@ class ScriptParser:
                 break
             if line.startswith("load"):
                 break
+            # Пауза — граница видимого кадра. Команды перед ней должны быть
+            # показаны игроку, а не слиты с визуальными командами после неё.
+            if line.startswith("pause"):
+                break
             if line.startswith("$"):
                 self._predict_change_state(line, state)
                 continue
@@ -551,6 +555,11 @@ class ScriptParser:
         if match:
             seconds = float(match.group(2))
             if not self.backward:
+                # В сценариях встречаются короткие pause между scene cg:
+                # фиксируем текущий кадр до ожидания, иначе отложенный рендер
+                # покажет только последний фон из всей последовательности.
+                await self.app.flush_scene_render()
+                self.app.prefetch_next_scene(self)
                 self.app._space_require_idle = True
                 await self.app.wait_script_delay(seconds, "pause")
                 await self.next_line()
