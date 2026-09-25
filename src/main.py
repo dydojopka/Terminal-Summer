@@ -662,6 +662,7 @@ class TerminalSummer(App):
         self._script_advance_task: asyncio.Task | None = None
         self._script_delay_event: asyncio.Event | None = None
         self._script_delay_kind: str | None = None
+        self._script_delay_skippable = False
         self._script_delay_generation = 0
         self.scene_dirty = False
         self._scene_generation = 0
@@ -2578,7 +2579,9 @@ class TerminalSummer(App):
             # Исключение уже извлечено из Task и не останется незамеченным.
             self.sub_title = f"[Script error] {exc}"
 
-    async def wait_script_delay(self, seconds: float, kind: str) -> bool:
+    async def wait_script_delay(
+        self, seconds: float, kind: str, *, skippable: bool = True
+    ) -> bool:
         """Ждёт сценарную задержку или её пропуск действием «Далее»."""
         if seconds <= 0:
             return False
@@ -2588,6 +2591,7 @@ class TerminalSummer(App):
         generation = self._script_delay_generation
         self._script_delay_event = delay_event
         self._script_delay_kind = kind
+        self._script_delay_skippable = skippable
         self._input_blocked = True
         self._input_blocked_since = _time.get_time()
         self._input_blocked_until = self._input_blocked_since
@@ -2606,13 +2610,18 @@ class TerminalSummer(App):
             ):
                 self._script_delay_event = None
                 self._script_delay_kind = None
+                self._script_delay_skippable = False
                 self._input_blocked = False
                 self._input_blocked_until = _time.get_time()
 
     def skip_script_delay(self) -> bool:
         """Завершает только активную сценарную задержку."""
         delay_event = self._script_delay_event
-        if delay_event is None or delay_event.is_set():
+        if (
+            delay_event is None
+            or not self._script_delay_skippable
+            or delay_event.is_set()
+        ):
             return False
         delay_event.set()
         return True
@@ -2623,6 +2632,7 @@ class TerminalSummer(App):
         self._script_delay_generation += 1
         self._script_delay_event = None
         self._script_delay_kind = None
+        self._script_delay_skippable = False
         self._input_blocked = False
         self._input_blocked_since = None
         self._input_blocked_until = _time.get_time()

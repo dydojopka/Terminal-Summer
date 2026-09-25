@@ -553,6 +553,7 @@ class ScriptParser:
         """Обработка строки pause"""
         match = re.search(r'pause\s+(hard\s+)?(\d+(?:\.\d+)?)', line)
         if match:
+            is_hard_pause = bool(match.group(1))
             seconds = float(match.group(2))
             if not self.backward:
                 # В сценариях встречаются короткие pause между scene cg:
@@ -561,7 +562,11 @@ class ScriptParser:
                 await self.app.flush_scene_render()
                 self.app.prefetch_next_scene(self)
                 self.app._space_require_idle = True
-                await self.app.wait_script_delay(seconds, "pause")
+                await self.app.wait_script_delay(
+                    seconds,
+                    "hard_pause" if is_hard_pause else "pause",
+                    skippable=not is_hard_pause,
+                )
                 await self.next_line()
 
 
