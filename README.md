@@ -22,20 +22,20 @@
 
 
 ## Технологии
-- [Python 3.8+](https://www.python.org/)
+- [Python 3.10+](https://www.python.org/)
 - [Textual](https://textual.textualize.io/) - фреймворк для построения Rich TUI.
 - [Pillow](https://pypi.org/project/pillow/) - обработка изображений и спрайтов.
-- [pil2ansi](https://github.com/lostways/pil2ansi) - конвертация PNG в ANSI/SCII-арт.
+- [pil2ansi](https://github.com/lostways/pil2ansi) - конвертация PNG в ANSI/ASCII-арт.
 
 ## Требования
-- **Python** версии 3.8 или выше
+- **Python** версии 3.10 или выше
 - **Git** для клонирования репозитория
 - Терминал с поддержкой **True Color** (Windows Terminal, kitty или другие).
 
 ## Использование
 Скачайте архив со [страницы последнего релиза](https://github.com/dydojopka/Terminal-Summer/releases/latest), разархивируйте и запустите из корня:
 
-Linux (проверенно на Arch):
+Linux (проверено на Arch):
 ```bash
 ./terminal-summer
 ```
