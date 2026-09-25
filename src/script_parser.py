@@ -551,15 +551,8 @@ class ScriptParser:
         if match:
             seconds = float(match.group(2))
             if not self.backward:
-                self.app._input_blocked = True
-                self.app._input_blocked_since = _time.get_time()
-                self.app._input_blocked_until = self.app._input_blocked_since
                 self.app._space_require_idle = True
-                try:
-                    await asyncio.sleep(seconds)
-                finally:
-                    self.app._input_blocked = False
-                    self.app._input_blocked_until = _time.get_time()
+                await self.app.wait_script_delay(seconds, "pause")
                 await self.next_line()
 
 
@@ -785,18 +778,36 @@ class ScriptParser:
                     )
 
                 if i < len(parts) - 1:
-                    await asyncio.sleep(1)
+                    # В отличие от посимвольной печати, пауза <w> может быть
+                    # пропущена пробелом или кнопкой «Продолжить».
+                    show_skip_button = not self.app.query_one(
+                        "#novel-menu", expect_type=Widget
+                    ).has_class("invisible")
+                    if show_skip_button:
+                        btn.remove_class("invisible")
+                    try:
+                        await self.app.wait_script_delay(1, "w")
+                    finally:
+                        if (
+                            show_skip_button
+                            and getattr(self.app, "script", None) is self
+                        ):
+                            btn.add_class("invisible")
         finally:
-            self.app._text_animating = False
-            self.app._text_animating_until = _time.get_time()
+            # При сбросе/загрузке app.script заменяется или удаляется до
+            # отмены старой задачи. Не позволяем её finally-блоку менять UI
+            # уже нового сценария.
+            if getattr(self.app, "script", None) is self:
+                self.app._text_animating = False
+                self.app._text_animating_until = _time.get_time()
 
-            # Показать кнопку обратно
-            btn.remove_class("invisible")
+                # Показать кнопку обратно
+                btn.remove_class("invisible")
 
-            # Фокусируем кнопку только если меню выбора НЕ открыто
-            choice_bar = self.app.query_one("#choice-bar")
-            if choice_bar.has_class("hidden"):
-                btn.focus()
+                # Фокусируем кнопку только если меню выбора НЕ открыто
+                choice_bar = self.app.query_one("#choice-bar")
+                if choice_bar.has_class("hidden"):
+                    btn.focus()
 
 
     async def _handle_changeLP(self, line):

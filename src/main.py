@@ -659,6 +659,10 @@ class TerminalSummer(App):
         self._space_last_event_at = 0.0
         self._space_idle_gap = 0.12
         self._space_require_idle = False
+        self._script_advance_task: asyncio.Task | None = None
+        self._script_delay_event: asyncio.Event | None = None
+        self._script_delay_kind: str | None = None
+        self._script_delay_generation = 0
         self.scene_dirty = False
         self._scene_generation = 0
         self._cache_epoch = 0
@@ -906,6 +910,8 @@ class TerminalSummer(App):
 
         # Кнопки в MainMenu:
         elif button_id == "btn-start-game":       # Кнопка "Начать игру"
+            self.cancel_script_advance()
+
             # Скрытие главного меню
             self.action_open_menu()
             self.clear_log()
@@ -1052,15 +1058,14 @@ class TerminalSummer(App):
         self.query_one("#novel-menu").remove_class("hidden")
         self.sync_text_mode_display()
 
-        # Продолжаем сценарий с выбранного неизменяемого диапазона.
+        # Продолжаем сценарий с выбранного неизменяемого диапазона. Само
+        # выполнение уходит в отдельную задачу, чтобы не задерживать очередь UI.
         await self._advance_script_line()
 
 
     # ============ Функции - action_ ============
     async def action_next_scene(self) -> None:
         """Переключение по bind(space)."""
-        if not self.can_advance_scene():
-            return
         await self._advance_script_line()
 
     def action_log(self) -> None:
@@ -1318,6 +1323,10 @@ class TerminalSummer(App):
         if self._text_animating:
             return False
         if self._input_blocked:
+            return False
+        if self._script_delay_event is not None:
+            return False
+        if self._next_scene_in_progress:
             return False
         if not hasattr(self, "script") or not self.script:
             return False
@@ -1678,6 +1687,14 @@ class TerminalSummer(App):
         now = getattr(event, "time", None) or _time.get_time()
         idle_for = now - self._space_last_event_at
         self._space_last_event_at = now
+
+        # Пропуск задержки всегда имеет приоритет над фильтром анимации:
+        # <w> находится внутри показа реплики, а pause помечается блокировкой.
+        if self.skip_script_delay():
+            # Не позволяем автоповтору того же удерживаемого пробела перейти
+            # дальше после того, как фоновая задача продолжит сценарий.
+            self._space_require_idle = True
+            return
 
         if self._space_require_idle:
             if idle_for < self._space_idle_gap:
@@ -2433,6 +2450,12 @@ class TerminalSummer(App):
 
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
+        self.cancel_script_advance()
+        # Отменённый парсер больше не считается активным: его finally-блоки
+        # не смогут восстановить элементы UI уже сброшенной или новой игры.
+        if hasattr(self, "script"):
+            del self.script
+
         # Получаем элементы
         text_bar = self.query_one("#text-bar", Widget)
         bg_cg = self.query_one("#bg-cg", Widget)
@@ -2494,8 +2517,6 @@ class TerminalSummer(App):
     
     async def _advance_from_button(self) -> None:
         """Переключение по кнопке (без анти-repeat логики клавиатуры)."""
-        if not self.can_advance_scene():
-            return
         await self._advance_script_line()
 
     def _is_space_event_during_animation(self, event: events.Key) -> bool:
@@ -2522,17 +2543,100 @@ class TerminalSummer(App):
         return False
 
     async def _advance_script_line(self) -> None:
-        """Серийный вызов парсера без параллельных переходов."""
+        """Запрашивает выполнение следующей строки без блокировки очереди UI."""
+        if self.skip_script_delay():
+            return
+        self._start_script_advance()
+
+    def _start_script_advance(self) -> bool:
+        """Запускает единственную фоновую цепочку выполнения сценария."""
         if self._next_scene_in_progress:
-            return
+            return False
         if not hasattr(self, "script"):
-            return
+            return False
+        if not self.can_advance_scene():
+            return False
 
         self._next_scene_in_progress = True
-        try:
-            await self.script.next_line()
-        finally:
+        task = asyncio.create_task(self.script.next_line())
+        self._script_advance_task = task
+        task.add_done_callback(self._on_script_advance_done)
+        return True
+
+    def _on_script_advance_done(self, task: asyncio.Task) -> None:
+        """Освобождает переход после завершения только актуальной задачи."""
+        if self._script_advance_task is task:
+            self._script_advance_task = None
             self._next_scene_in_progress = False
+
+        if task.cancelled():
+            return
+
+        try:
+            task.result()
+        except Exception as exc:
+            # Исключение уже извлечено из Task и не останется незамеченным.
+            self.sub_title = f"[Script error] {exc}"
+
+    async def wait_script_delay(self, seconds: float, kind: str) -> bool:
+        """Ждёт сценарную задержку или её пропуск действием «Далее»."""
+        if seconds <= 0:
+            return False
+
+        delay_event = asyncio.Event()
+        self._script_delay_generation += 1
+        generation = self._script_delay_generation
+        self._script_delay_event = delay_event
+        self._script_delay_kind = kind
+        self._input_blocked = True
+        self._input_blocked_since = _time.get_time()
+        self._input_blocked_until = self._input_blocked_since
+
+        try:
+            try:
+                await asyncio.wait_for(delay_event.wait(), timeout=seconds)
+                return True
+            except asyncio.TimeoutError:
+                return False
+        finally:
+            # Старая отменённая задача не должна очищать состояние новой паузы.
+            if (
+                self._script_delay_event is delay_event
+                and self._script_delay_generation == generation
+            ):
+                self._script_delay_event = None
+                self._script_delay_kind = None
+                self._input_blocked = False
+                self._input_blocked_until = _time.get_time()
+
+    def skip_script_delay(self) -> bool:
+        """Завершает только активную сценарную задержку."""
+        delay_event = self._script_delay_event
+        if delay_event is None or delay_event.is_set():
+            return False
+        delay_event.set()
+        return True
+
+    def cancel_script_delay(self) -> None:
+        """Сбрасывает ожидание при отмене или смене сценария."""
+        delay_event = self._script_delay_event
+        self._script_delay_generation += 1
+        self._script_delay_event = None
+        self._script_delay_kind = None
+        self._input_blocked = False
+        self._input_blocked_since = None
+        self._input_blocked_until = _time.get_time()
+        if delay_event is not None:
+            delay_event.set()
+
+    def cancel_script_advance(self) -> None:
+        """Отменяет старое выполнение сценария и его активную задержку."""
+        task = self._script_advance_task
+        self._script_advance_task = None
+        self._next_scene_in_progress = False
+        self.cancel_script_delay()
+        if task is not None and not task.done():
+            task.cancel()
 
     def add_log_entry(
         self,
