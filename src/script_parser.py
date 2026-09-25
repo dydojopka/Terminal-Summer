@@ -68,6 +68,25 @@ SL = UN = DV = US = PROLOGUE = 0
 D1_KEYS = False
 
 
+def format_script_state(
+    state: dict | None = None,
+    *,
+    include_lp_points: bool = True,
+    include_flags: bool = True,
+) -> str:
+    """Формирует Header, разделяя LP-поинты и прочее состояние сценария."""
+    values = SCRIPT_STATE if state is None else state
+    visible_values = (
+        (key, value)
+        for key, value in values.items()
+        if (
+            (include_lp_points and key.startswith("lp_"))
+            or (include_flags and not key.startswith("lp_"))
+        )
+    )
+    return " ".join(f"[{key}:{value}]" for key, value in visible_values)
+
+
 def _sync_legacy_globals() -> None:
     global SL, UN, DV, US, PROLOGUE, D1_KEYS
     SL = SCRIPT_STATE["lp_sl"]
@@ -81,6 +100,29 @@ def _sync_legacy_globals() -> None:
 def get_script_state() -> dict:
     """Возвращает копию сериализуемого состояния прохождения."""
     return SCRIPT_STATE.copy()
+
+
+def get_persistent_state() -> dict:
+    """Возвращает переменные, которые должны переживать начало новой игры."""
+    return {
+        key: value
+        for key, value in SCRIPT_STATE.items()
+        if key.startswith("persistent.")
+    }
+
+
+def update_persistent_state(state: dict) -> None:
+    """Применяет только известные persistent-переменные из внешнего хранилища."""
+    if not isinstance(state, dict):
+        return
+    updated = SCRIPT_STATE.copy()
+    for key, default in DEFAULT_SCRIPT_STATE.items():
+        if not key.startswith("persistent.") or key not in state:
+            continue
+        value = state[key]
+        if isinstance(value, type(default)):
+            updated[key] = value
+    set_script_state(updated)
 
 
 def set_script_state(state: dict) -> None:
@@ -98,9 +140,10 @@ def ensure_day2_state() -> None:
             SCRIPT_STATE.setdefault(key, DEFAULT_SCRIPT_STATE[key])
 
 
-def reset_globals():
-    """Сброс всех очков и флагов"""
-    set_script_state({})
+def reset_globals(*, preserve_persistent: bool = True):
+    """Сбрасывает прохождение, при необходимости сохраняя persistent-флаги."""
+    persistent = get_persistent_state() if preserve_persistent else {}
+    set_script_state(persistent)
 
 
 @dataclass(frozen=True)
@@ -135,6 +178,14 @@ class ScriptParser:
         self.resource_manifest = {"scenes": (), "show_lines": ()}
         self.backward = False
         self.load_script()
+
+    def _update_script_header(self) -> None:
+        """Обновляет Header с учётом пользовательских фильтров приложения."""
+        updater = getattr(self.app, "update_script_header", None)
+        if updater is not None:
+            updater()
+        else:
+            self.app.sub_title = format_script_state()
 
 
     def load_script(self, filename=None):
@@ -225,6 +276,9 @@ class ScriptParser:
 
     async def next_line(self):
         """Шаг вперёд"""
+        wait_until_resumed = getattr(self.app, "wait_until_game_resumed", None)
+        if wait_until_resumed is not None:
+            await wait_until_resumed()
         while self.frames and self.index >= self.frames[-1].end:
             self.index = self.frames.pop().return_pc
         if self.index >= len(self.lines):
@@ -237,10 +291,9 @@ class ScriptParser:
     async def parse_line(self, line):
         """Считывание строки сценария (асинхронно)"""
 
-        # Формируем строку статуса поинтов
-        lp_status = f"[SL:{SL}] [UN:{UN}] [DV:{DV}] [US:{US}] [PROLOGUE:{PROLOGUE}] [D1_KEYS:{D1_KEYS}]"
-
-        self.app.sub_title = lp_status
+        # Header строится динамически, поэтому новые флаги сценария не нужно
+        # вручную добавлять сюда при каждом расширении состояния.
+        self._update_script_header()
 
         # ---- Логика обработки строк ----
         if line.startswith("label"):
@@ -756,6 +809,9 @@ class ScriptParser:
                 text = line.strip().strip('"')
                 id_to_set = None
 
+            # В исходных Ren'Py-сценариях литерал процента экранирован как %%.
+            text = text.replace("%%", "%")
+
             self.app.add_log_entry(
                 text=self._normalize_log_text(text),
                 speaker=speaker,
@@ -882,6 +938,11 @@ class ScriptParser:
         # Обновляем единое состояние и совместимые поля UI.
         SCRIPT_STATE[state_key] = current
         _sync_legacy_globals()
+        self._update_script_header()
+        if state_key.startswith("persistent."):
+            save_persistent = getattr(self.app, "save_persistent_state", None)
+            if save_persistent is not None:
+                save_persistent()
 
         # Продолжаем выполнение
         if not self.backward:

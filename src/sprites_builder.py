@@ -33,7 +33,15 @@ MANUAL_COMMANDS = [
     "sl normal_pioneer_far size normal at center with dissolve",
 ]
 
-KEYWORDS = {"size", "at", "with", "behind", "xalign", "yalign", "zorder", "alpha"}
+KEYWORDS = {
+    "size", "at", "with", "behind", "xalign", "yalign", "zorder", "alpha",
+    "spritecolor",
+}
+
+SPRITE_COLOR_FACTORS = {
+    "sunset": (0.94, 0.82, 1.0),
+    "night": (0.63, 0.78, 0.82),
+}
 
 
 @dataclass
@@ -263,7 +271,9 @@ def resolve_sprite(
     )
 
 
-def compose_layers(picks: list[LayerPick]) -> Image.Image:
+def compose_layers(
+    picks: list[LayerPick], sprite_color: str | None = None
+) -> Image.Image:
     loaded: list[tuple[LayerPick, Image.Image]] = []
     max_w = 0
     max_h = 0
@@ -282,6 +292,22 @@ def compose_layers(picks: list[LayerPick]) -> Image.Image:
     canvas = Image.new("RGBA", (max_w, max_h), (0, 0, 0, 0))
     for _, img in loaded:
         canvas.alpha_composite(img, dest=(0, 0))
+        img.close()
+
+    factors = SPRITE_COLOR_FACTORS.get((sprite_color or "").lower())
+    if factors:
+        red, green, blue, alpha = canvas.split()
+        channels = []
+        for channel, factor in zip((red, green, blue), factors):
+            lut = [min(255, round(value * factor)) for value in range(256)]
+            channels.append(channel.point(lut))
+            channel.close()
+        tinted = Image.merge("RGBA", (*channels, alpha))
+        for channel in channels:
+            channel.close()
+        alpha.close()
+        canvas.close()
+        canvas = tinted
 
     return canvas
 
@@ -345,11 +371,14 @@ def build_one(
 ) -> Path:
     req = parse_show_like(line)
     resolved = resolve_sprite(resources, req, assets_root)
-    image = compose_layers(resolved.picks)
+    image = compose_layers(resolved.picks, req.extras.get("spritecolor"))
 
     name = sanitize_filename(line)
     out_path = out_dir / f"{index:03d}_{name}.png"
-    image.save(out_path, format="PNG")
+    try:
+        image.save(out_path, format="PNG")
+    finally:
+        image.close()
 
     print(f"[OK] {line}")
     print(

@@ -1670,7 +1670,7 @@ label demo_play_after_loop
 #     $ ui.gotosoutofcontext("day_2_cards_continue")
 
 label day_2_cards_continue
-    #$persistent.CardsDemo = True
+    $persistent.CardsDemo = true
     #$ persistent.sprite_time = "sunset"
     scene bg int_dining_hall_sunset with dissolve
     window show
@@ -2135,7 +2135,7 @@ label day2_main3
         }
         "Пляж"
         {
-            day2_beach_eve
+            goto day2_beach_eve
         }
         "Спортивная площадка"
         {
@@ -2271,11 +2271,11 @@ label day2_football_eve
     }
     #$ persistent.sprite_time = "night"
     scene bg ext_playground_night with dissolve
-    window hide
+    window show
     "Для футбола время было позднее, поэтому ни на поле, ни на спортивной площадке никого не оказалось."
     "Я постоял там пару минут, тщетно вслушиваясь в тишину, и пошёл назад."
     "..."
-    window show
+    window hide
     goto day2_main4
 label day2_dv
     scene cg lvl_4_semen_win with dissolve
@@ -2392,7 +2392,7 @@ label day2_dv
     window show
     "Было уже поздно, но я решил ещё некоторое время полежать и посмотреть на звёзды."
     window hide
-    scene cg stars with dissolve
+    scene cg stars_1 with dissolve
     window show
     "В конце концов, раньше мне редко представлялась такая возможность."
     "Или просто я сам редко себе её создавал."
@@ -2472,6 +2472,7 @@ label day2_sl
     window hide
     scene cg d2_slavya_forest with dissolve
     play music forest_maiden fadein 5
+    window show
     "И тут я увидел Славю…<w> Она шла по берегу вприпрыжку, даже не шла – порхала, на ходу стягивая пионерский галстук и расправляя рубашку."
     "Всё это зрелище показалось даже более фантастическим, чем само моё пребывание в этом лагере."
     "Славя виделась мне каким-то духом леса, может быть, нимфой."

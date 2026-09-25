@@ -43,9 +43,18 @@ def get_saves_path() -> Path:
     return SRC_DIR / "saves"
 
 
+def get_persistent_path() -> Path:
+    """Путь к persistent-флагам, общим для всех прохождений."""
+    if IS_FROZEN:
+        return PROJECT_ROOT / "persistent.json"
+    return SRC_DIR / "persistent.json"
+
+
 CSS_PATH = get_resource_path("gameUI.tcss")
 SETTINGS_PATH = get_settings_path()
 SAVES_PATH = get_saves_path()
+PERSISTENT_PATH = get_persistent_path()
+APP_VERSION = "0.2.0"
 
 
 # ============ Сохранения ============
@@ -134,7 +143,7 @@ from rich.style import Style
 from rich.segment import Segment
 from rich.text import Text
 
-from script_parser import ScriptParser
+from script_parser import ScriptParser, format_script_state
 from sprites_builder import (
     parse_show_like,
     load_yaml_dict as load_sprite_resources_yaml,
@@ -262,6 +271,24 @@ class AnsiView(Static):
         self.auto_links = False
         self.disable_messages(events.MouseMove, events.Enter, events.Leave)
 
+
+class ScriptStateHeader(Header):
+    """Header, переносящий длинное состояние сценария на несколько строк."""
+
+    DEFAULT_CSS = """
+    ScriptStateHeader {
+        height: auto;
+        max-height: 8;
+    }
+
+    ScriptStateHeader HeaderTitle {
+        height: auto;
+        text-wrap: wrap;
+        text-overflow: fold;
+        padding: 0 1;
+    }
+    """
+
 class PerformanceScreen(Screen):
     """Экран с облегчённой обработкой мыши для больших ANSI-артов."""
 
@@ -306,7 +333,7 @@ class MainMenuMiddleBtns(HorizontalGroup):
 class MainMenuBottomBtns(HorizontalGroup):
     """Виджет-контейнер для нижних кнопок"""
     def compose(self):
-        yield Button("Достижения 🏅", id="btn-achievements")
+        yield Button("Достижения (скоро) 🏅", id="btn-achievements", disabled=True)
         yield Button("Настройки 🪛", id="btn-settings-menu")
         yield Button("Выход 🚪", id="btn-exit-menu")
 
@@ -463,16 +490,22 @@ class SettingHeader(Widget):
     """Виджет с настройкой Header"""
     BORDER_TITLE = "Верхняя панель(Header)"
     def compose(self):
-        with HorizontalGroup():
-            yield Button("Включить", variant="default", id="btn-header-on")
-            yield Button("Выключить", variant="error", id="btn-header-off")
-            yield DescriptionSettingHeader()
+        with Vertical(id="header-controls"):
+            with HorizontalGroup(classes="header-setting-row"):
+                yield Button("Включить", variant="default", id="btn-header-on")
+                yield Button("Выключить", variant="error", id="btn-header-off")
+            yield Label("Показывать в Header:", id="header-content-label")
+            with HorizontalGroup(classes="header-setting-row"):
+                yield Button("LP-поинты", id="btn-header-lp-points")
+                yield Button("Флаги", id="btn-header-flags")
+        yield DescriptionSettingHeader()
 
 class DescriptionSettingHeader(Widget):
     """Описание настройки 'Верхняя панель(Header)'"""
     def render(self):
-        return """Верхняя панель будет отображать: 
-название программы, текущие поинты, и системное время\n
+        return """Верхняя панель будет отображать:
+название программы, выбранные группы переменных и системное время.\n
+LP-поинты и флаги можно включать независимо.
 (может слегка уменьшить обзор)"""
 
 class SettingQuality(Widget):
@@ -562,6 +595,7 @@ class TextBar(Widget):
             self.refresh()
 
         for char in new_text:
+            await self.app.wait_until_game_resumed()
             self.text += char
             self.refresh()
             await asyncio.sleep(speed)
@@ -625,17 +659,24 @@ class LogMenu(Log):
 class TerminalSummer(App):
     """Основное приложение новеллы"""
     CSS_PATH = str(CSS_PATH)
+    TITLE = f"Terminal Summer {APP_VERSION}"
+    SUB_TITLE = format_script_state()
 
     CONFIG_FILE = SETTINGS_PATH
+    PERSISTENT_FILE = PERSISTENT_PATH
+
+    DEFAULT_SETTINGS = {
+        "header": False,
+        "header_lp_points": True,
+        "header_flags": True,
+        "quality": "150",
+        "style": "ANSI",
+        "text_speed": "0.025",
+    }
 
     def __init__(self):
         super().__init__()
-        self.settings = {
-            "header": False,
-            "quality": "150",
-            "style": "ANSI",
-            "text_speed": "0.025",
-        }
+        self.settings = self.DEFAULT_SETTINGS.copy()
 
         self.ts_path = get_ts_path()
 
@@ -664,6 +705,8 @@ class TerminalSummer(App):
         self._script_delay_kind: str | None = None
         self._script_delay_skippable = False
         self._script_delay_generation = 0
+        self._game_paused = False
+        self._game_pause_changed_event = asyncio.Event()
         self.scene_dirty = False
         self._scene_generation = 0
         self._cache_epoch = 0
@@ -704,7 +747,7 @@ class TerminalSummer(App):
         return PerformanceScreen(id="_default")
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True, classes="hidden")
+        yield ScriptStateHeader(show_clock=True, classes="hidden")
         yield Footer(classes="hidden")
 
         yield MainMenu(    id="main-menu")
@@ -799,6 +842,21 @@ class TerminalSummer(App):
 
             # Сохранение в файл настроек
             self.settings["header"] = False
+            self.save_settings()
+
+        elif button_id == "btn-header-lp-points":
+            self.settings["header_lp_points"] = not self.settings.get(
+                "header_lp_points", True
+            )
+            self.sync_header_filter_buttons()
+            self.update_script_header()
+            self.save_settings()
+        elif button_id == "btn-header-flags":
+            self.settings["header_flags"] = not self.settings.get(
+                "header_flags", True
+            )
+            self.sync_header_filter_buttons()
+            self.update_script_header()
             self.save_settings()
 
         # Quality
@@ -922,6 +980,7 @@ class TerminalSummer(App):
             # Сброс всех глобальных переменных
             from script_parser import reset_globals
             reset_globals()
+            self.update_script_header()
 
             # Запуск новой игры (всегда пролог)
             prologue_path = self.ts_path / "text" / "prologue.txt"
@@ -1033,6 +1092,7 @@ class TerminalSummer(App):
 
     def on_mount(self) -> None:
         """Загрузка настроек при запуске"""
+        self.load_persistent_state()
         self.load_settings()
         self.apply_settings()
 
@@ -1134,6 +1194,12 @@ class TerminalSummer(App):
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
+        # Preload временно скрывает игровой интерфейс и затем самостоятельно
+        # восстанавливает его. Не позволяем Escape открыть PauseMenu под
+        # полноэкранным оверлеем и получить два конкурирующих состояния UI.
+        if not self.query_one("#script-loading", Widget).has_class("hidden"):
+            return
+
         pause_menu = self.query_one("#pause-menu")
         novel_menu = self.query_one("#novel-menu")
         novel_window = self.query_one("#novel-window")
@@ -1164,6 +1230,7 @@ class TerminalSummer(App):
             elif settings_menu.has_class("hidden"): # Если НЕ открыто меню настроек
                 # Переключение видимости элементов
                 if pause_menu.has_class("hidden"):
+                    self.set_game_paused(True)
                     # Cкрытие диологового окна, кнопок перемотки и задника
                     novel_menu.add_class("hidden")
                     novel_window.add_class("hidden")
@@ -1174,6 +1241,7 @@ class TerminalSummer(App):
                     # Фокус на первую кнопку в меню паузы
                     self.query_one("#btn-continue", Button).focus()
                 else:
+                    self.set_game_paused(False)
                     # Выключаем паузу: скрытие меню паузы
                     pause_menu.add_class("hidden")
 
@@ -1185,6 +1253,7 @@ class TerminalSummer(App):
                     # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
                     self.query_one("#btn-next", Button).focus()
             else:
+                self.set_game_paused(False)
                 # Скрытие меню настроек
                 settings_menu.add_class("hidden")
 
@@ -1254,6 +1323,7 @@ class TerminalSummer(App):
             settings_menu.add_class("hidden")
 
             if settings_menu.has_class("open-from-pause"): # Если открыто из паузы
+                self.set_game_paused(False)
                 # Удаление класса-флага
                 settings_menu.remove_class("open-from-pause")
 
@@ -1388,6 +1458,7 @@ class TerminalSummer(App):
         opened_from = save_menu.opened_from
 
         if opened_from == "pause":
+            self.set_game_paused(False)
             self.query_one("#novel-menu").remove_class("hidden")
             self.query_one("#novel-window").remove_class("hidden")
             self.sync_text_mode_display()
@@ -1541,6 +1612,9 @@ class TerminalSummer(App):
                 "prologue": variables.get("PROLOGUE", 0),
                 "d1_keys": variables.get("D1_KEYS", False),
             })
+        # Persistent-флаги не должны откатываться загрузкой старого слота.
+        self.load_persistent_state()
+        self.update_script_header()
 
         # Восстановление сцены
         scene = game_state.get("scene", {})
@@ -2260,7 +2334,9 @@ class TerminalSummer(App):
             if cached_path and os.path.exists(cached_path):
                 out_path = Path(cached_path)
             else:
-                digest = hashlib.sha256(show_line.encode("utf-8")).hexdigest()[:16]
+                digest = hashlib.sha256(
+                    f"sprite-v2\0{show_line}".encode("utf-8")
+                ).hexdigest()[:16]
                 runtime_dir = self._sprite_runtime_dir
                 try:
                     runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -2270,8 +2346,13 @@ class TerminalSummer(App):
                 out_path = runtime_dir / f"{request.character}_{digest}.png"
                 if not out_path.exists():
                     resolved = resolve_sprite(resources, request, self._sprite_assets_root)
-                    sprite_img = compose_layers(resolved.picks)
-                    sprite_img.save(out_path, format="PNG")
+                    sprite_img = compose_layers(
+                        resolved.picks, request.extras.get("spritecolor")
+                    )
+                    try:
+                        sprite_img.save(out_path, format="PNG")
+                    finally:
+                        sprite_img.close()
                 if generation is None or generation == self._preload_generation:
                     self._sprite_build_cache[show_line] = str(out_path)
                     self._sprite_build_cache.move_to_end(show_line)
@@ -2327,12 +2408,74 @@ class TerminalSummer(App):
         self._active_sprites.clear()
         self._sprite_order_seq = 0
 
+    def load_persistent_state(self) -> bool:
+        """Загружает общие для всех прохождений сценарные флаги."""
+        if not self.PERSISTENT_FILE.exists():
+            return False
+        try:
+            with self.PERSISTENT_FILE.open("r", encoding="utf-8") as file:
+                state = json.load(file)
+            from script_parser import update_persistent_state
+
+            update_persistent_state(state)
+            self.update_script_header()
+            return True
+        except (OSError, ValueError, TypeError) as exc:
+            self.sub_title = f"[Persistent state error] {exc}"
+            return False
+
+    def save_persistent_state(self) -> None:
+        """Атомарно сохраняет persistent-флаги рядом с настройками."""
+        from script_parser import get_persistent_state
+
+        state = get_persistent_state()
+        temporary_path = self.PERSISTENT_FILE.with_suffix(".json.tmp")
+        try:
+            self.PERSISTENT_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with temporary_path.open("w", encoding="utf-8") as file:
+                json.dump(state, file, indent=2, ensure_ascii=False)
+            temporary_path.replace(self.PERSISTENT_FILE)
+        except OSError as exc:
+            self.sub_title = f"[Persistent state error] {exc}"
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def update_script_header(self) -> None:
+        """Обновляет Header согласно выбранным группам сценарных переменных."""
+        self.sub_title = format_script_state(
+            include_lp_points=bool(
+                self.settings.get("header_lp_points", True)
+            ),
+            include_flags=bool(self.settings.get("header_flags", True)),
+        )
+
+    def sync_header_filter_buttons(self) -> None:
+        """Синхронизирует вид кнопок фильтра с сохранёнными настройками."""
+        self.query_one("#btn-header-lp-points", Button).variant = (
+            "success" if self.settings.get("header_lp_points", True) else "default"
+        )
+        self.query_one("#btn-header-flags", Button).variant = (
+            "success" if self.settings.get("header_flags", True) else "default"
+        )
+
     def load_settings(self):
         """Загрузка настроек"""
         if self.CONFIG_FILE.exists():
             with self.CONFIG_FILE.open("r", encoding="utf-8") as f:
-                self.settings = json.load(f)
+                loaded_settings = json.load(f)
+            if isinstance(loaded_settings, dict):
+                self.settings = {
+                    **self.DEFAULT_SETTINGS,
+                    **loaded_settings,
+                }
+                if any(
+                    key not in loaded_settings for key in self.DEFAULT_SETTINGS
+                ):
+                    self.save_settings()
         else:
+            self.settings = self.DEFAULT_SETTINGS.copy()
             self.save_settings()
     
     def save_settings(self):
@@ -2352,6 +2495,8 @@ class TerminalSummer(App):
             self.query_one("Header").add_class("hidden")
             self.query_one("#btn-header-on", Button).variant = "default"
             self.query_one("#btn-header-off", Button).variant = "error"
+        self.sync_header_filter_buttons()
+        self.update_script_header()
 
         # Quality
         quality = self.settings["quality"]
@@ -2451,6 +2596,7 @@ class TerminalSummer(App):
 
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
+        self.set_game_paused(False)
         self.cancel_script_advance()
         # Отменённый парсер больше не считается активным: его finally-блоки
         # не смогут восстановить элементы UI уже сброшенной или новой игры.
@@ -2462,11 +2608,18 @@ class TerminalSummer(App):
         bg_cg = self.query_one("#bg-cg", Widget)
         novel_menu = self.query_one("#novel-menu", Widget)
         novel_window = self.query_one("#novel-window", Widget)
+        next_button = self.query_one("#btn-next", Button)
 
         # Очистка текста и имени персонажа
         text_bar.text = ""
         text_bar.border_title = ""
         text_bar.refresh()
+
+        # Во время анимации реплики кнопка скрыта. Отменённый старый parser-task
+        # не должен менять UI загруженного сценария, поэтому нормализуем кнопку
+        # здесь явно до восстановления сохранения или запуска новой игры.
+        next_button.remove_class("invisible")
+        next_button.disabled = False
 
         # Очистка ASCII-фона
         bg_cg.update("")
@@ -2579,6 +2732,22 @@ class TerminalSummer(App):
             # Исключение уже извлечено из Task и не останется незамеченным.
             self.sub_title = f"[Script error] {exc}"
 
+    def set_game_paused(self, paused: bool) -> None:
+        """Меняет состояние паузы и будит ожидающие сценарные задачи."""
+        paused = bool(paused)
+        if self._game_paused == paused:
+            return
+        self._game_paused = paused
+        previous_event = self._game_pause_changed_event
+        self._game_pause_changed_event = asyncio.Event()
+        previous_event.set()
+
+    async def wait_until_game_resumed(self) -> None:
+        """Не даёт сценарию и анимации текста идти под меню паузы."""
+        while self._game_paused:
+            pause_changed = self._game_pause_changed_event
+            await pause_changed.wait()
+
     async def wait_script_delay(
         self, seconds: float, kind: str, *, skippable: bool = True
     ) -> bool:
@@ -2596,12 +2765,35 @@ class TerminalSummer(App):
         self._input_blocked_since = _time.get_time()
         self._input_blocked_until = self._input_blocked_since
 
+        remaining = seconds
         try:
-            try:
-                await asyncio.wait_for(delay_event.wait(), timeout=seconds)
-                return True
-            except asyncio.TimeoutError:
-                return False
+            while remaining > 0:
+                await self.wait_until_game_resumed()
+                started_at = _time.get_time()
+                pause_changed = self._game_pause_changed_event
+                delay_task = asyncio.create_task(delay_event.wait())
+                pause_task = asyncio.create_task(pause_changed.wait())
+                try:
+                    done, pending = await asyncio.wait(
+                        (delay_task, pause_task),
+                        timeout=remaining,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                finally:
+                    for task in (delay_task, pause_task):
+                        if not task.done():
+                            task.cancel()
+                    await asyncio.gather(
+                        delay_task, pause_task, return_exceptions=True
+                    )
+
+                elapsed = max(0.0, _time.get_time() - started_at)
+                remaining = max(0.0, remaining - elapsed)
+                if delay_event.is_set():
+                    return True
+                if not done:
+                    return False
+            return False
         finally:
             # Старая отменённая задача не должна очищать состояние новой паузы.
             if (
