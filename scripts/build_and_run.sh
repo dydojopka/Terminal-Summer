@@ -16,6 +16,11 @@ if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! "${PYTHON_BIN}" -c 'import sys; raise SystemExit(sys.version_info < (3, 10))'; then
+    echo "Ошибка: требуется Python 3.10 или новее."
+    exit 1
+fi
+
 if ! "${PYTHON_BIN}" -m PyInstaller --version >/dev/null 2>&1; then
     echo "Ошибка: модуль PyInstaller не найден в текущем окружении"
     echo "Установи его вручную: ${PYTHON_BIN} -m pip install pyinstaller"
@@ -24,6 +29,9 @@ fi
 
 # Подготовка ассетов в корне проекта
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/assets_manager.py"
+
+# Проверка сценария и ресурсов второго дня до дорогостоящей сборки
+"${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_release.py" --day 2
 
 # Сборка
 "${PYTHON_BIN}" -m PyInstaller --onefile \

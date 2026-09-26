@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0\.."
 
-set "PYTHON_BIN=python"
+if not defined PYTHON_BIN set "PYTHON_BIN=python"
 set "APP_NAME=Terminal-Summer-Windows"
 set "PYI_BUILD_DIR=build\pyinstaller"
 set "ROOT_DIR=%cd%"
@@ -14,6 +14,11 @@ REM Проверка окружения
     exit /b 1
 )
 
+"%PYTHON_BIN%" -c "import sys; raise SystemExit(sys.version_info.major != 3 or sys.version_info.minor not in range(10, 100))" >nul 2>&1 || (
+    echo Ошибка: требуется Python 3.10 или новее.
+    exit /b 1
+)
+
 "%PYTHON_BIN%" -m PyInstaller --version >nul 2>&1 || (
     echo Ошибка: модуль PyInstaller не найден в текущем окружении
     echo Установите его вручную: %PYTHON_BIN% -m pip install pyinstaller
@@ -22,6 +27,9 @@ REM Проверка окружения
 
 REM Подготовка ассетов в корне проекта
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\assets_manager.py" || exit /b 1
+
+REM Проверка сценария и ресурсов второго дня до дорогостоящей сборки
+"%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_release.py" --day 2 || exit /b 1
 
 "%PYTHON_BIN%" -m PyInstaller --onefile ^
                       --name "%APP_NAME%" ^

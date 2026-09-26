@@ -19,8 +19,10 @@ TextBar.mt{border-title-color: rgb(0,234,50)}             # Ольга Дмит�
 TextBar.mtp{border-title-color: rgb(0,234,50)}            # Вожатая
 TextBar.mt_voice{border-title-color: rgb(0,234,50)}       # Голос
 TextBar.cs{border-title-color: rgb(165,165,255)}          # Виола
+TextBar.csp{border-title-color: rgb(165,165,255)}         # Медсестра
 TextBar.mz{border-title-color: rgb(114,160,255)}          # Женя
 TextBar.mi{border-title-color: rgb(0,252,255)}            # Мику
+TextBar.mip{border-title-color: rgb(0,252,255)}           # Пионерка
 TextBar.ma{border-title-color: rgb(0,252,255)}            # Маша
 TextBar.uv{border-title-color: rgb(78,255,0)}             # Юля
 TextBar.uvp{border-title-color: rgb(78,255,0)}            # Странная девочка
@@ -36,6 +38,29 @@ TextBar.all{border-title-color: rgb(227,58,58)}           # Пионеры
 # Центрирование всего и вся
 Screen {
     align: center middle;
+    layers: base loading;
+}
+
+#script-loading {
+    layer: loading;
+    position: absolute;
+    offset: 0 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    background: $boost;
+    layout: vertical;
+    align: center middle;
+
+    LoadingIndicator {
+        height: 3;
+        width: 34;
+    }
+
+    Label {
+        width: 34;
+        text-align: center;
+    }
 }
 
 # Окно новеллы
@@ -74,32 +99,67 @@ NovelMenu {
     margin-bottom: 1;
     padding: 0;
 
+    .novel-control {
+        width: 27;
+        height: 100%;
+    }
+
+    #novel-log-control {
+        dock: none;
+        align: left bottom;
+    }
+
+    #novel-next-control {
+        dock: none;
+        align: right bottom;
+    }
+
     # Кнопки "Назад" и "Вперёд" 
     #btn-log {
-        dock: left;
+        dock: none;
         margin-left: 10;
-        margin-top: 1;
+        margin-bottom: 1;
         margin-right: 1;
         height: 4;
-        width: 4;
+        min-width: 16;
+        width: 16;
     }
     #btn-next{
-        dock: right;
+        dock: none;
         margin-right: 10;
-        margin-top: 1;
+        margin-bottom: 1;
         margin-left: 1;
         height: 4;
-        width: 4;
+        min-width: 16;
+        width: 16;
     }
     
     # Нижнее окно с текстом + имя персонажа
     TextBar {
+        width: 1fr;
         padding: 0;
         background: $boost;
         min-height: 6;
         border: round white;
         border-title-style: b;
         color: $text;
+    }
+}
+
+# Режим NVL: высокая нижняя панель с обычными элементами управления.
+NovelMenu.nvl-mode {
+    layout: horizontal;
+    dock: bottom;
+    height: 99%; # что бы было видно header
+    margin-bottom: 1; # что бы было видно footer
+    padding: 0;
+
+    TextBar {
+        height: 100%;
+        min-height: 6;
+        background: $boost;
+        border: round white;
+        overflow-y: auto;
     }
 }
 
@@ -115,12 +175,93 @@ PauseMenu {
         border-title-align: center;
         border-title-style: b;
         max-width: 40;
-        max-height: 27;
+        max-height: 25;
     }
 
     Button {
         margin: 1;
         width: 30;
+    }
+}
+
+# Меню сохранений
+SaveMenu {
+    height: 100%;
+    border: round white;
+    border-title-align: center;
+    border-title-style: b;
+
+    SaveMenuLeftBtns {
+        height: 100%;
+
+        #btn-close-save-menu {
+            height: 3;
+            min-width: 9;
+            width: 9;
+            margin: 1 0 0 2;
+        }
+
+        #container-save-page-btns {
+            align: center middle;
+            margin: 2 0 2 0;
+            Button {
+                max-width: 7;
+                # width: 1;
+                height: 3;
+                margin: 0 1;
+            }
+        }
+    }
+
+    SaveMenuMidBtns {
+        width: 94%;
+        height: 100%;
+        border: outer #CAD06B;
+        border-title-align: center;
+        border-bottom: none;
+        border-right: none;
+        border-top: none;
+
+        SaveMenuSlots {
+            height: auto;
+
+            HorizontalGroup {
+                height: auto;
+            }
+
+            .save-slot {
+                width: 23%;
+                height: 8;
+                margin: 1;
+                text-align: center;
+            }
+
+            .save-slot-empty {
+                background: $boost;
+            }
+
+            .save-slot-filled {
+                background: $surface;
+            }
+
+            .save-slot-selected {
+                border: tall $accent;
+            }
+        }
+
+        SaveMenuActionBtns {
+            dock: bottom;
+            align: center middle;
+            width: 100%;
+            height: 5;
+            padding: 1 0;
+
+            .save-action-btn {
+                width: 20;
+                height: 3;
+                margin: 0 2;
+            }
+        }
     }
 }
 
@@ -160,14 +301,30 @@ SettingsMenu {
         padding: 1 0 1 1;
         align: left middle;
         width: 100;
-        height: 7;
+        height: 13;
         margin: 1;
         border: round white;
         border-title-style: b;
 
+        #header-controls {
+            width: 38;
+            height: auto;
+        }
+
+        .header-setting-row {
+            width: 36;
+            height: 3;
+        }
+
+        #header-content-label {
+            width: 36;
+            height: 2;
+            margin-top: 1;
+        }
+
         DescriptionSettingHeader {
             dock: right;
-            max-width: 60;
+            width: 56;
             margin-right: 1;
             background: $boost;
         }
@@ -284,6 +441,7 @@ MainMenu {
             margin-left: 2;
         }
         #btn-settings-menu {
+            dock: none;
             width: 25;
         }
         #btn-exit-menu {
