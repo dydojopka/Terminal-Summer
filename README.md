@@ -1,4 +1,7 @@
 # Terminal-Summer
+
+![Terminal Summer](https://github.com/user-attachments/assets/a52ad4a2-6112-4c32-8003-bffb74473f79)
+
 Перенос легендарной визуальной новеллы ["Бесконечное лето"](https://store.steampowered.com/app/331470/Beskonechnoe_Leto/) в консольное окружение.  
 Все сцены, спрайты и задники преобразуются в ANSI/ASCII-арты, а сам проект сделан на Python-фреймворке [textual](https://textual.textualize.io/).
 
