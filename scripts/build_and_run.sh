@@ -38,6 +38,10 @@ fi
                        --name "${APP_NAME}" \
                        --add-data "${ROOT_DIR}/src/gameUI.tcss:." \
                        --add-data "${ROOT_DIR}/src/menu_logo.ansi:." \
+                       --add-data "${ROOT_DIR}/TS/text/prologue.txt:TS/text" \
+                       --add-data "${ROOT_DIR}/TS/text/day*.txt:TS/text" \
+                       --add-data "${ROOT_DIR}/TS/text/epilogue*.txt:TS/text" \
+                       --add-data "${ROOT_DIR}/TS/text/endings.txt:TS/text" \
                        --paths "${ROOT_DIR}/src" \
                        --paths "${ROOT_DIR}/scripts" \
                        --distpath "${ROOT_DIR}" \

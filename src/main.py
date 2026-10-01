@@ -189,6 +189,9 @@ class SceneRenderSnapshot:
         return self.category, self.name, sprite_key, str(self.width), self.style, 2
 
 def main():
+    if IS_FROZEN:
+        from scripts.assets_manager import restore_bundled_scripts
+        restore_bundled_scripts()
     ts_dir = get_ts_path()
     required_paths = [
         ts_dir / "gallery",
