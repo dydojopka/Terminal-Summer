@@ -159,6 +159,31 @@ def reset_globals(*, preserve_persistent: bool = True):
     set_script_state(persistent)
 
 
+SCRIPT_ASSIGNMENT_RE = re.compile(
+    r'\$([a-zA-Z0-9_.]+)\s*([+\-]?=)\s*(true|false|null|-?\d+)\s*$',
+    re.IGNORECASE,
+)
+
+
+def parse_script_assignment(line: str) -> tuple[str, str, object]:
+    """Разбирает безопасное присваивание DSL без выполнения выражений."""
+    match = SCRIPT_ASSIGNMENT_RE.fullmatch(line.strip())
+    if not match:
+        raise ValueError(f"Invalid assignment: {line}")
+
+    key, operation, raw_value = match.groups()
+    value_lower = raw_value.lower()
+    if value_lower == "true":
+        value = True
+    elif value_lower == "false":
+        value = False
+    elif value_lower == "null":
+        value = None
+    else:
+        value = int(raw_value)
+    return key, operation, value
+
+
 @dataclass(frozen=True)
 class ExecutionFrame:
     """Диапазон исходного сценария, выполняемый вместо вставки строк."""
@@ -323,7 +348,7 @@ class ScriptParser:
             await self._handle_show(line)
         elif line.startswith("hide"):
             await self._handle_hide(line)
-        elif line.startswith("play"):
+        elif line.startswith(("play", "stop", "volume", "with")):
             await self._handle_play(line)
         elif line.startswith("window"):
             await self._handle_window(line)
@@ -444,24 +469,10 @@ class ScriptParser:
     @staticmethod
     def _predict_change_state(line: str, state: dict) -> None:
         """Применяет простое присваивание к копии состояния для look-ahead."""
-        match = re.match(
-            r'\$(lp_)?([a-zA-Z0-9_.]+)\s*([+\-]?=)\s*(true|false|null|-?\d+)\s*$',
-            line,
-            re.IGNORECASE,
-        )
-        if not match:
+        try:
+            key, operation, value = parse_script_assignment(line)
+        except ValueError:
             return
-        prefix, target, operation, raw_value = match.groups()
-        value_lower = raw_value.lower()
-        if value_lower == "true":
-            value = True
-        elif value_lower == "false":
-            value = False
-        elif value_lower == "null":
-            value = None
-        else:
-            value = int(raw_value)
-        key = f"lp_{target}" if prefix == "lp_" else target
         if key not in state:
             return
         if operation == "=":
@@ -685,7 +696,7 @@ class ScriptParser:
 
 
     async def _handle_play(self, line):
-        """Обработка строки play"""
+        """Явно поддерживаемые заглушки аудио и визуальных переходов."""
         if not self.backward:
             await self.next_line()
 
@@ -899,32 +910,15 @@ class ScriptParser:
         global PROLOGUE, D1_KEYS # Флаги
 
         # Парсим строку ($lp_sl += 1, $day2_flag = true, $persistent.flag = false)
-        match = re.match(
-            r'\$(lp_)?([a-zA-Z0-9_.]+)\s*([+\-]?=)\s*(true|false|null|-?\d+)\s*$',
-            line,
-            re.IGNORECASE,
-        )
-        if not match:
-            if not self.backward:
-                await self.next_line()
+        try:
+            state_key, operation, value = parse_script_assignment(line)
+        except ValueError as exc:
+            self.app.sub_title = f"[Script error] {exc}"
+            # Не стираем диагностику немедленным автоматическим переходом
+            # к следующей строке. Продолжить можно явным действием «Далее».
             return
-
-        prefix, target, operation, raw_value = match.groups()
-        value_lower = raw_value.lower()
-        if value_lower == "true":
-            value = True
-        elif value_lower == "false":
-            value = False
-        elif value_lower == "null":
-            value = None
-        else:
-            value = int(raw_value)
-
-        state_key = f"lp_{target}" if prefix == "lp_" else target
         if state_key not in SCRIPT_STATE:
             self.app.sub_title = f"[Script error] Unknown script variable: ${state_key}"
-            if not self.backward:
-                await self.next_line()
             return
 
         # Извлекаем текущее значение
