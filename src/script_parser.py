@@ -60,6 +60,19 @@ DEFAULT_SCRIPT_STATE = {
     "persistent.CardsDemo": False, "persistent.CardsWon1": False,
     "persistent.CardsWon2": False, "persistent.CardsWon3": False,
     "persistent.CardsFail": False,
+    # День 3. Числовые флаги оставлены числами, поскольку сценарий
+    # сравнивает их с 0/1; dumped и переходы в day4 являются bool.
+    "day3_breakfast_with_un": 0, "day3_un_help_accept": 0,
+    "day3_house_of_mt": 0, "day3_sl_cleaned": 0,
+    "day3_us_football": 0, "day3_sl_library": 0,
+    "day3_us_cleaned": 0, "day3_dv_accept": 0,
+    "day3_got_fail": 0, "day3_sl_evening": 0,
+    "day3_un_evening": 0, "day3_us_evening": 0,
+    "day3_dv_evening": 0,
+    "day3_dv_dumped": False, "day3_un_dumped": False,
+    "goto_day4_std_morning": False,
+    "goto_day4_fail_morning": False,
+    "goto_day4_us_morning": False,
 }
 SCRIPT_STATE = DEFAULT_SCRIPT_STATE.copy()
 
