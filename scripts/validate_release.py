@@ -515,6 +515,220 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
     return errors
 
 
+def validate_route_reduction(
+    lines: tuple[str, ...], entry_states: list[dict], control_keys: tuple[str, ...]
+) -> list[str]:
+    """Доказывает применимость группировки входов и переноса LP-дельт."""
+    errors = []
+    condition_variables = set()
+    for line in lines:
+        if line.startswith(("if ", "if(", "else if ")) or re.fullmatch(
+            r'".+?"\s+if\s+.+', line
+        ):
+            condition_variables.update(VARIABLE_RE.findall(line))
+        if line.startswith("$"):
+            try:
+                key, operation, value = parse_script_assignment(line)
+            except ValueError as exc:
+                errors.append(str(exc))
+                continue
+            if key in control_keys:
+                errors.append(f"обход day3: управляющий вход ${key} изменяется в сценарии")
+            if key.startswith("lp_") and (
+                operation == "=" or type(value) is not int
+            ):
+                errors.append(f"обход day3: перенос LP-дельт невозможен для {line}")
+    for key in sorted(condition_variables):
+        if key.startswith("lp_"):
+            errors.append(f"обход day3: условие зависит от ${key}; перенос LP-дельт небезопасен")
+        elif key not in control_keys and len({state.get(key) for state in entry_states}) > 1:
+            errors.append(f"обход day3: группировка не учитывает переменный вход ${key}")
+    return errors
+
+
+def validate_day3_routes() -> list[str]:
+    """Проверяет все развилки day3 и контракт входа в day4_main1."""
+    errors: list[str] = []
+    prologue_path = ROOT_DIR / "TS" / "text" / "prologue.txt"
+    day3_path = ROOT_DIR / "TS" / "text" / "day3.txt"
+    day4_path = ROOT_DIR / "TS" / "text" / "day4.txt"
+    errors.extend(validate_day(4, stop_at="day4_main1"))
+    if errors:
+        return errors
+
+    predecessor_results = explore_routes(
+        prologue_path,
+        [DEFAULT_SCRIPT_STATE],
+        stop_at=(day3_path, "day3_main1"),
+        max_steps=30000,
+        deduplicate_states=True,
+    )
+    predecessor_failures = [
+        result for result in predecessor_results if result.status != "stop"
+    ]
+    for result in predecessor_failures[:20]:
+        errors.append(f"предыстория day3: {result.status}: {result.detail}")
+    if predecessor_failures:
+        return errors
+
+    entry_states_by_key = {
+        tuple(sorted(result.variables.items())): result.variables
+        for result in predecessor_results
+    }
+    entry_states = list(entry_states_by_key.values())
+    if not entry_states:
+        return ["day3: не найдено ни одного достижимого входного состояния"]
+    control_keys = ("d1_keys", "d2_gave_keys", "day2_un")
+    day3_document = _route_document(day3_path, {})
+    day4_document = _route_document(day4_path, {})
+    checked_lines = day3_document.lines + day4_document.lines[
+        :day4_document.labels["day4_main1"]
+    ]
+    errors.extend(validate_route_reduction(checked_lines, entry_states, control_keys))
+    if errors:
+        return errors
+    representatives: dict[tuple, dict] = {}
+    for state in entry_states:
+        key = tuple(state[name] for name in control_keys)
+        representatives.setdefault(key, state)
+
+    route_results = explore_routes(
+        day3_path,
+        list(representatives.values()),
+        stop_at=(day4_path, "day4_main1"),
+        max_steps=30000,
+    )
+    route_failures = [result for result in route_results if result.status != "stop"]
+    for result in route_failures[:20]:
+        errors.append(f"маршрут day3: {result.status}: {result.detail}")
+    if route_failures:
+        return errors
+
+    choice_traces = {result.choices for result in route_results}
+    if len(choice_traces) != 52:
+        errors.append(
+            f"day3: ожидалось 52 маршрута выбора, получено {len(choice_traces)}"
+        )
+    routes_by_control: dict[tuple, list[RouteResult]] = {}
+    for result in route_results:
+        control = tuple(result.variables[name] for name in control_keys)
+        routes_by_control.setdefault(control, []).append(result)
+    for control, results in routes_by_control.items():
+        traces = {result.choices for result in results}
+        if len(traces) != 52:
+            errors.append(
+                f"day3: вход {control!r} даёт {len(traces)} маршрутов вместо 52"
+            )
+
+    day3_labels = set(_route_document(day3_path, {}).labels)
+    visited_day3_labels = {
+        label
+        for result in route_results
+        for path, label in result.visited_labels
+        if path == day3_path.resolve()
+    }
+    unreachable = sorted(day3_labels - visited_day3_labels)
+    if unreachable:
+        errors.append(f"day3: недостижимые метки: {', '.join(unreachable)}")
+
+    evening_flags = (
+        "day3_sl_evening",
+        "day3_un_evening",
+        "day3_us_evening",
+        "day3_dv_evening",
+        "day3_got_fail",
+    )
+    morning_flags = (
+        "goto_day4_std_morning",
+        "goto_day4_fail_morning",
+        "goto_day4_us_morning",
+    )
+    for result in route_results:
+        state = result.variables
+        active_evenings = [name for name in evening_flags if state[name]]
+        active_mornings = [name for name in morning_flags if state[name]]
+        if len(active_evenings) != 1:
+            errors.append(
+                f"day3: маршрут {result.choices!r} выставил вечерние флаги "
+                f"{active_evenings!r}"
+            )
+            continue
+        if len(active_mornings) != 1:
+            errors.append(
+                f"day3: маршрут {result.choices!r} выставил morning-флаги "
+                f"{active_mornings!r}"
+            )
+            continue
+
+        evening = active_evenings[0]
+        expected_morning = (
+            "day4_us_morning"
+            if evening == "day3_us_evening"
+            else "day4_fail_morning"
+            if evening == "day3_got_fail"
+            else "day4_std_morning"
+        )
+        if (day4_path.resolve(), expected_morning) not in result.visited_labels:
+            errors.append(
+                f"day3: маршрут {result.choices!r} не вошёл в {expected_morning}"
+            )
+
+    # Полные состояния отличаются persistent/card-флагами, которые day3 не
+    # читает и не меняет. LP влияют на результат, но не на выбор ветки, поэтому
+    # управляющий граф достаточно исполнить для шести проекций. Затем каждую
+    # реально достижимую LP-комбинацию прогоняем через рассчитанные дельты всех
+    # 52 маршрутов.
+    active_day3_variables = set()
+    for raw_line in day3_path.read_text(encoding="utf-8").splitlines():
+        stripped = raw_line.strip()
+        if stripped and not stripped.startswith("#"):
+            active_day3_variables.update(VARIABLE_RE.findall(stripped))
+    relevant_entry_states = {
+        tuple((name, state[name]) for name in sorted(active_day3_variables))
+        for state in entry_states
+    }
+    representative_by_control = {
+        tuple(state[name] for name in control_keys): state
+        for state in representatives.values()
+    }
+    checked_state_routes = 0
+    for projection in relevant_entry_states:
+        values = dict(projection)
+        for lp_name in ("lp_sl", "lp_un", "lp_dv", "lp_us"):
+            if not isinstance(values[lp_name], int):
+                errors.append(
+                    f"day3: входное значение {lp_name} не является int: "
+                    f"{values[lp_name]!r}"
+                )
+        control = tuple(values[name] for name in control_keys)
+        representative = representative_by_control[control]
+        for result in routes_by_control.get(control, []):
+            for lp_name in ("lp_sl", "lp_un", "lp_dv", "lp_us"):
+                delta = result.variables[lp_name] - representative[lp_name]
+                final_value = values[lp_name] + delta
+                if not isinstance(final_value, int):
+                    errors.append(
+                        f"day3: маршрут {result.choices!r} дал нечисловой "
+                        f"{lp_name}: {final_value!r}"
+                    )
+            checked_state_routes += 1
+
+    if any(name.startswith("persistent.") for name in active_day3_variables):
+        errors.append("day3: маршрут не должен менять persistent-переменные")
+
+    print(
+        "Обход day3: "
+        f"{len(entry_states)} полных входных состояний, "
+        f"{len(relevant_entry_states)} значимых проекций, "
+        f"{len(representatives)} комбинаций управления, "
+        f"{len(choice_traces)} маршрута; "
+        f"композиционно проверено {checked_state_routes} значимых и "
+        f"{len(entry_states) * len(choice_traces)} полных пар "
+        "состояние/маршрут."
+    )
+    return errors
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -533,6 +747,8 @@ def main() -> int:
         errors = []
         for day in args.day:
             errors.extend(validate_day(day))
+        if 3 in args.day:
+            errors.extend(validate_day3_routes())
     except Exception as exc:
         print(f"Ошибка валидатора: {exc}", file=sys.stderr)
         return 1

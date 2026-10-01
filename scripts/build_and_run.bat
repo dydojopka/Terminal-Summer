@@ -28,8 +28,8 @@ REM Проверка окружения
 REM Подготовка ассетов в корне проекта
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\assets_manager.py" || exit /b 1
 
-REM Проверка сценария и ресурсов второго дня до дорогостоящей сборки
-"%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_release.py" --day 2 || exit /b 1
+REM Проверка выпущенных сценариев и ресурсов до дорогостоящей сборки
+"%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_release.py" --day 2 --day 3 || exit /b 1
 
 "%PYTHON_BIN%" -m PyInstaller --onefile ^
                       --name "%APP_NAME%" ^

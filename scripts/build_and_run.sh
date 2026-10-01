@@ -30,8 +30,8 @@ fi
 # Подготовка ассетов в корне проекта
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/assets_manager.py"
 
-# Проверка сценария и ресурсов второго дня до дорогостоящей сборки
-"${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_release.py" --day 2
+# Проверка выпущенных сценариев и ресурсов до дорогостоящей сборки
+"${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_release.py" --day 2 --day 3
 
 # Сборка
 "${PYTHON_BIN}" -m PyInstaller --onefile \
