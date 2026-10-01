@@ -2185,7 +2185,7 @@ class TerminalSummer(App):
         self.query_one("#bg-cg", Widget).update(art)
         self.scene_dirty = False
 
-    def start_script_preload(self, script: ScriptParser) -> None:
+    def start_script_preload(self, script: ScriptParser) -> asyncio.Task:
         """Неблокирующе прогревает чистые фоны активного сценарного файла."""
         filename = str(Path(script.filename).resolve())
         # Сначала инвалидируем старый worker: поток, закончившийся после
@@ -2201,6 +2201,7 @@ class TerminalSummer(App):
         self._script_preload_task = asyncio.create_task(
             self._preload_script_scenes(script, generation)
         )
+        return self._script_preload_task
 
     def _clear_render_caches(self) -> None:
         """Очищает RAM-кэши и запрещает старым worker возвращать результаты."""

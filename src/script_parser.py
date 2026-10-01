@@ -980,6 +980,8 @@ class ScriptParser:
             return
 
         self.load_script(target_path)
-        self.app.start_script_preload(self)
+        preload_task = self.app.start_script_preload(self)
+        if preload_task is not None:
+            await preload_task
         if not self.backward:
             await self.next_line()
