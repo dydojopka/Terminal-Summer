@@ -55,7 +55,7 @@ MENU_LOGO_PATH = get_resource_path("menu_logo.ansi")
 SETTINGS_PATH = get_settings_path()
 SAVES_PATH = get_saves_path()
 PERSISTENT_PATH = get_persistent_path()
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 
 
 # ============ Сохранения ============
@@ -342,6 +342,19 @@ class MainMenuBrand(AnsiView):
                 Text("Terminal Summer", style="bold #E3B778", justify="center")
             )
     
+class ReleaseEnd(Vertical):
+    """Конец доступного сюжета без изменения файлов сценария."""
+
+    def compose(self):
+        with VerticalScroll(id="release-end-dialog"):
+            yield Label("Спасибо за игру!", id="release-end-title")
+            yield Label(
+                "Вы прошли доступный сюжет Terminal Summer 0.3.0.\n"
+                "Четвёртый день появится в следующих версиях."
+            )
+            yield Button("В главное меню", id="btn-release-end-menu", variant="primary")
+
+
 class MainMenuMiddleBtns(HorizontalGroup):
     """Виджет-контейнер для центарльных кнопок"""
     BORDER_TITLE="Информация"
@@ -779,6 +792,7 @@ class TerminalSummer(App):
         yield GalleryMenu( id="gallery-menu",  classes="hidden")
         yield SaveMenu(    id="save-menu",     classes="hidden")
         yield ScriptLoadingOverlay(id="script-loading", classes="hidden")
+        yield ReleaseEnd(id="release-end", classes="hidden")
 
     def set_text_mode(self, mode: str) -> None:
         """Сохраняет режим текста и обновляет его отображение."""
@@ -1036,6 +1050,10 @@ class TerminalSummer(App):
             self.query_one("#settings-menu").remove_class("open-from-pause")
             self.query_one("#settings-menu").add_class("open-from-menu") # Класс-флаг что настройки открыты из MainMenu
             self.action_open_settings()
+        elif button_id == "btn-release-end-menu":
+            self.reset_game_view()
+            self.query_one("#release-end").add_class("hidden")
+            self.action_open_menu()
         elif button_id == "btn-exit-menu":        # Кнопка "Выход"
             self.app.exit()
 
@@ -1199,6 +1217,7 @@ class TerminalSummer(App):
         main_menu = self.query_one("#main-menu")
         choice_bar = self.query_one("#choice-bar")
         blocked_menus = (
+            self.query_one("#release-end"),
             self.query_one("#log-menu"),
             self.query_one("#pause-menu"),
             self.query_one("#settings-menu"),
@@ -1230,6 +1249,8 @@ class TerminalSummer(App):
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
+        if not self.query_one("#release-end").has_class("hidden"):
+            return
         # Preload временно скрывает игровой интерфейс и затем самостоятельно
         # восстанавливает его. Не позволяем Escape открыть PauseMenu под
         # полноэкранным оверлеем и получить два конкурирующих состояния UI.
@@ -1319,6 +1340,18 @@ class TerminalSummer(App):
             # Скрытие главного меню
             main_menu.add_class("hidden")
             self.query_one(Footer).remove_class("hidden")
+
+    def show_release_end(self) -> None:
+        """Останавливает сюжет перед загрузкой четвёртого дня."""
+        self.set_game_paused(True)
+        for widget_id in (
+            "main-menu", "novel-menu", "novel-window", "pause-menu",
+            "settings-menu", "save-menu", "choice-bar", "log-menu", "gallery-menu",
+        ):
+            self.query_one(f"#{widget_id}").add_class("hidden")
+        self.query_one(Footer).add_class("hidden")
+        self.query_one("#release-end").remove_class("hidden")
+        self.query_one("#btn-release-end-menu", Button).focus()
 
     def action_open_settings(self) -> None:
         """Открытие меню настроек"""
@@ -1415,6 +1448,8 @@ class TerminalSummer(App):
         Запрещает сохранение во время анимации текста, блокировки ввода,
         показа меню выбора или отсутствия запущенного сценария.
         """
+        if not self.query_one("#release-end").has_class("hidden"):
+            return False
         if self._text_animating:
             return False
         if self._input_blocked:
@@ -1655,6 +1690,10 @@ class TerminalSummer(App):
                 return
         except (OSError, TypeError, ValueError) as exc:
             self.sub_title = f"[Load error] {exc}"
+            return
+
+        if Path(script_filename).stem.lower() == "day4":
+            self.show_release_end()
             return
 
         # Закрытие меню сохранений

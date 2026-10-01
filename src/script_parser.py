@@ -944,6 +944,10 @@ class ScriptParser:
             target_path = current_dir / target_path
 
         target_path = target_path.resolve()
+        show_release_end = getattr(self.app, "show_release_end", None)
+        if target_path.stem.lower() == "day4" and show_release_end is not None:
+            show_release_end()
+            return
         if not target_path.exists():
             self.app.sub_title = f"[Load error] File not found: {target_path}"
             return
