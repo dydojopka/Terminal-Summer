@@ -763,9 +763,20 @@ class TerminalSummer(App):
     def set_text_mode(self, mode: str) -> None:
         """Сохраняет режим текста и обновляет его отображение."""
         normalized_mode = mode.lower().strip()
-        self.current_text_mode = (
+        next_mode = (
             normalized_mode if normalized_mode in self.TEXT_MODES else "adv"
         )
+        if next_mode != self.current_text_mode:
+            # Первая NVL-реплика не должна дописываться к последней ADV-реплике.
+            try:
+                text_bar = self.query_one("#text-bar", Widget)
+                text_bar.text = ""
+                text_bar.border_title = ""
+                text_bar.refresh()
+            except Exception:
+                # До mount виджеты ещё не существуют; режим всё равно сохраняем.
+                pass
+        self.current_text_mode = next_mode
         self.sync_text_mode_display()
 
     def sync_text_mode_display(self) -> None:
@@ -776,6 +787,8 @@ class TerminalSummer(App):
         choice_bar = self.query_one("#choice-bar", Widget)
         is_nvl = self.current_text_mode == "nvl"
 
+        if self._interface_hidden:
+            novel_menu.add_class("hidden")
         novel_menu.set_class(is_nvl, "nvl-mode")
         novel_window.set_class(
             is_nvl
@@ -784,7 +797,8 @@ class TerminalSummer(App):
             "hidden",
         )
         bg_cg.set_class(
-            is_nvl or self._interface_hidden or not choice_bar.has_class("hidden"),
+            (is_nvl and not self._interface_hidden)
+            or not choice_bar.has_class("hidden"),
             "hidden",
         )
 
@@ -808,6 +822,7 @@ class TerminalSummer(App):
         elif button_id == "btn-save":             # Кнопка "Сохранения"
             self.open_save_menu("pause")
         elif button_id == "btn-settings-pause":   # Кнопка "Настройки"
+            self.query_one("#settings-menu").remove_class("open-from-menu")
             self.query_one("#settings-menu").add_class("open-from-pause") # Класс-флаг что настройки открыты из PauseMenu
             self.action_open_settings()
         elif button_id == "btn-menu":             # Кнопка "В главное меню"
@@ -998,6 +1013,7 @@ class TerminalSummer(App):
         elif button_id == "btn-gallery":          # Кнопка "Галерея"
             self.action_open_gallery()
         elif button_id == "btn-settings-menu":    # Кнопка "Настройки"
+            self.query_one("#settings-menu").remove_class("open-from-pause")
             self.query_one("#settings-menu").add_class("open-from-menu") # Класс-флаг что настройки открыты из MainMenu
             self.action_open_settings()
         elif button_id == "btn-exit-menu":        # Кнопка "Выход"
@@ -1253,21 +1269,9 @@ class TerminalSummer(App):
                     # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
                     self.query_one("#btn-next", Button).focus()
             else:
-                self.set_game_paused(False)
-                # Скрытие меню настроек
-                settings_menu.add_class("hidden")
-
-                # Показ диологового окна, кнопок перемотки и задника
-                novel_menu.remove_class("hidden")
-                novel_window.remove_class("hidden")
-                self.sync_text_mode_display()
-
-                if self._preload_after_settings and hasattr(self, "script"):
-                    self._preload_after_settings = False
-                    self.start_script_preload(self.script)
-
-                # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
-                self.query_one("#btn-next", Button).focus()
+                # Escape и кнопка «Назад» должны одинаково очищать источник
+                # открытия настроек и восстанавливать игровой интерфейс.
+                self.action_open_settings()
         else: pass # Не открывать в главном меню
 
     def action_open_menu(self) -> None:
@@ -2625,6 +2629,9 @@ class TerminalSummer(App):
         novel_menu = self.query_one("#novel-menu", Widget)
         novel_window = self.query_one("#novel-window", Widget)
         next_button = self.query_one("#btn-next", Button)
+        self.query_one("#settings-menu").remove_class(
+            "open-from-pause", "open-from-menu"
+        )
 
         # Очистка текста и имени персонажа
         text_bar.text = ""
@@ -2826,7 +2833,8 @@ class TerminalSummer(App):
         """Завершает только активную сценарную задержку."""
         delay_event = self._script_delay_event
         if (
-            delay_event is None
+            self._game_paused
+            or delay_event is None
             or not self._script_delay_skippable
             or delay_event.is_set()
         ):
