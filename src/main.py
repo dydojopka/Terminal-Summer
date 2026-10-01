@@ -1594,6 +1594,48 @@ class TerminalSummer(App):
         game_state = load_game_state(page, slot_index)
         if game_state is None:
             return
+        if not isinstance(game_state, dict):
+            self.sub_title = "[Load error] Invalid game state"
+            return
+        if game_state.get("save_format") != 3:
+            self.sub_title = "[Load error] Unsupported save format; expected 3"
+            return
+
+        variables = game_state.get("variables", {})
+        scene = game_state.get("scene", {})
+        sprites_data = game_state.get("sprites", {})
+        dialogue = game_state.get("dialogue", {})
+        if not all(
+            isinstance(section, dict)
+            for section in (variables, scene, sprites_data, dialogue)
+        ):
+            self.sub_title = "[Load error] Invalid save section"
+            return
+        if not isinstance(variables.get("state"), dict):
+            self.sub_title = "[Load error] Invalid script variables"
+            return
+
+        # До изменения текущей игры полностью проверяем файл и runtime-state.
+        # Иначе несовпавший hash оставлял новый parser на pc=0 и позволял
+        # повторно выполнить уже начисленные поинты.
+        script_runtime = game_state.get("script", {})
+        if not isinstance(script_runtime, dict):
+            self.sub_title = "[Load error] Invalid script runtime"
+            return
+        script_filename = script_runtime.get("filename", "")
+        if not script_filename:
+            self.sub_title = "[Load error] Save has no script filename"
+            return
+        if not Path(script_filename).is_absolute():
+            script_filename = str(self.ts_path / script_filename)
+
+        try:
+            loaded_script = ScriptParser(script_filename, self)
+            if not loaded_script.restore_runtime_state(script_runtime):
+                return
+        except (OSError, TypeError, ValueError) as exc:
+            self.sub_title = f"[Load error] {exc}"
+            return
 
         # Закрытие меню сохранений
         self.close_save_menu()
@@ -1603,25 +1645,12 @@ class TerminalSummer(App):
 
         # Восстановление состояния сценария.
         from script_parser import set_script_state
-        variables = game_state.get("variables", {})
-        if "state" in variables:
-            set_script_state(variables["state"])
-        else:
-            # Формат сохранений до единого состояния.
-            set_script_state({
-                "lp_sl": variables.get("SL", 0),
-                "lp_un": variables.get("UN", 0),
-                "lp_dv": variables.get("DV", 0),
-                "lp_us": variables.get("US", 0),
-                "prologue": variables.get("PROLOGUE", 0),
-                "d1_keys": variables.get("D1_KEYS", False),
-            })
+        set_script_state(variables["state"])
         # Persistent-флаги не должны откатываться загрузкой старого слота.
         self.load_persistent_state()
         self.update_script_header()
 
         # Восстановление сцены
-        scene = game_state.get("scene", {})
         self.current_scene = scene.get("current_scene", "")
         self.current_scene_category = scene.get("current_scene_category", "")
         self.current_time = scene.get("current_time", "day")
@@ -1629,67 +1658,47 @@ class TerminalSummer(App):
         self.set_text_mode(scene.get("current_text_mode", "adv"))
 
         # Восстановление спрайтов
-        sprites_data = game_state.get("sprites", {})
         self.restore_active_sprites(
             sprites_data.get("active_sprites", {}),
             sprites_data.get("sprite_order_seq", 0),
         )
 
-        # Загрузка сценария
-        script_runtime = game_state.get("script", {})
-        is_format_3 = game_state.get("save_format") == 3 and isinstance(script_runtime, dict)
-        script_filename = script_runtime.get("filename", "") if is_format_3 else game_state.get("script_filename", "")
-        script_index = script_runtime.get("pc", 0) if is_format_3 else game_state.get("script_index", 0)
+        # Проверенный выше parser становится активным только после сброса.
+        self.script = loaded_script
 
-        if script_filename:
-            if is_format_3 and not Path(script_filename).is_absolute():
-                script_filename = str(self.ts_path / script_filename)
-            self.script = ScriptParser(script_filename, self)
-            if is_format_3:
-                if not self.script.restore_runtime_state(script_runtime):
-                    return
-            else:
-                # Совместимость с format 2: старый движок изменял список строк.
-                runtime_lines = game_state.get("runtime_lines")
-                if isinstance(runtime_lines, list) and all(
-                    isinstance(line, str) for line in runtime_lines
-                ):
-                    self.script.restore_runtime_lines(runtime_lines)
-                self.script.index = script_index
-            # Скрытие главного меню (если загрузка из главного меню)
-            if save_menu.opened_from == "menu":
-                self.query_one("#main-menu").add_class("hidden")
-                self.query_one(Footer).remove_class("hidden")
+        # Скрытие главного меню (если загрузка из главного меню)
+        if save_menu.opened_from == "menu":
+            self.query_one("#main-menu").add_class("hidden")
+            self.query_one(Footer).remove_class("hidden")
 
-            # Показ игровых элементов
-            self.query_one("#novel-menu").remove_class("hidden")
-            self.query_one("#novel-window").remove_class("hidden")
-            self.sync_text_mode_display()
+        # Показ игровых элементов и точное восстановление window show/hide.
+        novel_menu = self.query_one("#novel-menu", Widget)
+        novel_menu.remove_class("hidden")
+        self.query_one("#novel-window").remove_class("hidden")
+        novel_menu.set_class(
+            not bool(scene.get("window_visible", True)),
+            "invisible",
+        )
+        self.sync_text_mode_display()
 
-            # Восстановление текста и имени персонажа
-            dialogue = game_state.get("dialogue", {})
-            text_bar = self.query_one("#text-bar", Widget)
+        # Восстановление текста и имени персонажа
+        text_bar = self.query_one("#text-bar", Widget)
+        text_bar.remove_class(*[
+            cls for cls in text_bar.classes if cls != "text-bar"
+        ])
+        text_bar.border_title = dialogue.get("speaker", "")
+        text_bar.text = dialogue.get("text", "")
+        saved_speaker_id = dialogue.get("speaker_id")
+        if saved_speaker_id:
+            text_bar.add_class(saved_speaker_id)
+        text_bar.refresh()
 
-            # Очистка старых CSS-классов персонажа
-            text_bar.remove_class(*[cls for cls in text_bar.classes if cls != "text-bar"])
+        # Отрисовка и прогрев выполняются под полноэкранным оверлеем.
+        self.mark_scene_dirty()
+        self.start_script_preload(self.script)
 
-            # Установка имени и текста
-            text_bar.border_title = dialogue.get("speaker", "")
-            text_bar.text = dialogue.get("text", "")
-
-            # Восстановление CSS-класса персонажа для цвета имени
-            saved_speaker_id = dialogue.get("speaker_id")
-            if saved_speaker_id:
-                text_bar.add_class(saved_speaker_id)
-
-            text_bar.refresh()
-
-            # Отрисовка и прогрев выполняются под полноэкранным оверлеем.
-            self.mark_scene_dirty()
-            self.start_script_preload(self.script)
-
-            # Фокус на кнопку "Вперёд"
-            self.query_one("#btn-next", Button).focus()
+        # Фокус на кнопку "Вперёд"
+        self.query_one("#btn-next", Button).focus()
 
     def save_to_selected_slot(self) -> None:
         """Сохранение в выбранный слот"""
@@ -1740,6 +1749,9 @@ class TerminalSummer(App):
                 "current_scene_category": getattr(self, "current_scene_category", ""),
                 "current_time": getattr(self, "current_time", "day"),
                 "current_text_mode": getattr(self, "current_text_mode", "adv"),
+                "window_visible": not self.query_one(
+                    "#novel-menu", Widget
+                ).has_class("invisible"),
             },
             "sprites": {
                 "active_sprites": self._active_sprites,
@@ -2409,10 +2421,6 @@ class TerminalSummer(App):
                             restored_sprite[key] = saved_sprite[key]
                 continue
 
-            # Старые сохранения не содержат show-команд. Оставляем прежний fallback.
-            if isinstance(character, str):
-                self._active_sprites[character] = saved_sprite.copy()
-
         self._sprite_order_seq = max(
             saved_order_seq if isinstance(saved_order_seq, int) else 0,
             max((sprite.get("order", 0) for sprite in self._active_sprites.values()), default=0),
@@ -2671,6 +2679,7 @@ class TerminalSummer(App):
         self._space_require_idle = False
         self._interface_hidden = False
         self.set_text_mode("adv")
+        novel_menu.remove_class("invisible")
         novel_menu.add_class("hidden")
         novel_window.add_class("hidden")
 

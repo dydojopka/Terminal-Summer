@@ -76,11 +76,6 @@ DEFAULT_SCRIPT_STATE = {
 }
 SCRIPT_STATE = DEFAULT_SCRIPT_STATE.copy()
 
-# Совместимые поля для текущего UI и старых сохранений.
-SL = UN = DV = US = PROLOGUE = 0
-D1_KEYS = False
-
-
 def format_script_state(
     state: dict | None = None,
     *,
@@ -98,16 +93,6 @@ def format_script_state(
         )
     )
     return " ".join(f"[{key}:{value}]" for key, value in visible_values)
-
-
-def _sync_legacy_globals() -> None:
-    global SL, UN, DV, US, PROLOGUE, D1_KEYS
-    SL = SCRIPT_STATE["lp_sl"]
-    UN = SCRIPT_STATE["lp_un"]
-    DV = SCRIPT_STATE["lp_dv"]
-    US = SCRIPT_STATE["lp_us"]
-    PROLOGUE = SCRIPT_STATE["prologue"]
-    D1_KEYS = SCRIPT_STATE["d1_keys"]
 
 
 def get_script_state() -> dict:
@@ -143,7 +128,6 @@ def set_script_state(state: dict) -> None:
     SCRIPT_STATE.clear()
     SCRIPT_STATE.update(DEFAULT_SCRIPT_STATE)
     SCRIPT_STATE.update(state)
-    _sync_legacy_globals()
 
 
 def ensure_day2_state() -> None:
@@ -238,17 +222,6 @@ class ScriptParser:
         self.content_hash = hashlib.sha256("\n".join(self.lines).encode("utf-8")).hexdigest()
         self._index_labels()
         self.index = 0
-        self.frames.clear()
-        self._build_resource_manifest()
-
-    def restore_runtime_lines(self, lines: list[str]) -> None:
-        """Поддержка save format 2 с ранее вставленными строками.
-
-        Новые сохранения этот метод не используют: их сценарий всегда неизменяем.
-        """
-        self.lines = tuple(lines)
-        self.content_hash = hashlib.sha256("\n".join(self.lines).encode("utf-8")).hexdigest()
-        self._index_labels()
         self.frames.clear()
         self._build_resource_manifest()
 
@@ -907,9 +880,6 @@ class ScriptParser:
 
     async def _handle_changeLP(self, line):
         """Обработка изменения поинтов и флагов"""
-        global SL, UN, DV, US  # Поинты
-        global PROLOGUE, D1_KEYS # Флаги
-
         # Парсим строку ($lp_sl += 1, $day2_flag = true, $persistent.flag = false)
         try:
             state_key, operation, value = parse_script_assignment(line)
@@ -943,9 +913,8 @@ class ScriptParser:
         else:
             return
 
-        # Обновляем единое состояние и совместимые поля UI.
+        # Обновляем единое состояние и Header.
         SCRIPT_STATE[state_key] = current
-        _sync_legacy_globals()
         self._update_script_header()
         if state_key.startswith("persistent."):
             save_persistent = getattr(self.app, "save_persistent_state", None)
