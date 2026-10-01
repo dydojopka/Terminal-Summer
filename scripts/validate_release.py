@@ -14,7 +14,12 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from script_parser import DEFAULT_SCRIPT_STATE, DISPLAY_NAMES, ScriptParser
+from script_parser import (
+    DEFAULT_SCRIPT_STATE,
+    DISPLAY_NAMES,
+    ScriptParser,
+    parse_script_assignment,
+)
 from sprites_builder import load_yaml_dict, parse_show_like, resolve_sprite
 
 
@@ -26,7 +31,7 @@ VARIABLE_RE = re.compile(r"\$([a-zA-Z0-9_.]+)")
 SUPPORTED_PREFIXES = (
     "label ", "goto ", "if ", "if(", "else if ", "pause ",
     "scene ", "show ", "hide ", "play ", "stop ", "window ",
-    "time ", "mode ", "menu", "load ", "with ",
+    "time ", "mode ", "menu", "load ", "with ", "volume ",
 )
 
 
@@ -45,7 +50,7 @@ def _load_target(script_path: Path, line: str) -> Path | None:
     return target if target.is_absolute() else script_path.parent / target
 
 
-def validate_day(day: int) -> list[str]:
+def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
     errors: list[str] = []
     script_path = ROOT_DIR / "TS" / "text" / f"day{day}.txt"
     resources_path = ROOT_DIR / "TS" / "resources.yaml"
@@ -65,6 +70,15 @@ def validate_day(day: int) -> list[str]:
         )
         if (stripped := raw_line.strip()) and not stripped.startswith("#")
     ]
+    if stop_at is not None:
+        if stop_at not in parser.labels:
+            return [f"{script_path.name}: отсутствует целевая метка {stop_at}"]
+        lines = lines[:parser.labels[stop_at] + 1]
+        cutoff = next(
+            number for number, line in source_lines
+            if (match := LABEL_RE.fullmatch(line)) and match.group(1) == stop_at
+        )
+        source_lines = [(number, line) for number, line in source_lines if number <= cutoff]
     resources = load_yaml_dict(resources_path)
 
     labels: dict[str, int] = {}
@@ -90,12 +104,45 @@ def validate_day(day: int) -> list[str]:
                 errors.append(f"{script_path.name}:{number}: повторная метка {label}")
             labels[label] = number
 
+        if line.startswith("$"):
+            try:
+                variable, _, _ = parse_script_assignment(line)
+                if variable not in DEFAULT_SCRIPT_STATE:
+                    errors.append(
+                        f"{script_path.name}:{number}: неизвестная переменная "
+                        f"${variable}"
+                    )
+            except ValueError as exc:
+                errors.append(f"{script_path.name}:{number}: {exc}")
+
+        if line.startswith("pause") and not re.fullmatch(
+            r"pause\s+(?:hard\s+)?\d+(?:\.\d+)?", line
+        ):
+            errors.append(f"{script_path.name}:{number}: некорректная команда pause: {line}")
+
+        if line.startswith("scene") and not re.fullmatch(
+            r"scene\s+(?:(?:bg|cg)\s+[a-zA-Z0-9_]+|color\s+(?:black|white))"
+            r"(?:\s+with\s+\w+(?:\s+(?:skip|\d+(?:\.\d+)?))?)?", line
+        ):
+            errors.append(f"{script_path.name}:{number}: некорректная команда scene: {line}")
+
+        for command, arguments in (
+            ("window", {"show", "hide"}),
+            ("mode", {"adv", "nvl"}),
+            ("time", {"day", "sunset", "night"}),
+        ):
+            if line.startswith(command + " ") and line.split(maxsplit=1)[1] not in arguments:
+                errors.append(f"{script_path.name}:{number}: некорректная команда {command}: {line}")
+
         goto_match = GOTO_RE.fullmatch(line)
         if goto_match:
             gotos.append((goto_match.group(1), number))
 
         for variable in VARIABLE_RE.findall(line):
             if variable not in DEFAULT_SCRIPT_STATE:
+                if line.startswith("$"):
+                    # Для присваиваний сообщение выше точнее и не дублируется.
+                    continue
                 errors.append(
                     f"{script_path.name}:{number}: неизвестная переменная ${variable}"
                 )
@@ -169,14 +216,22 @@ def validate_day(day: int) -> list[str]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--day", type=int, required=True, help="Номер проверяемого дня")
+    parser.add_argument(
+        "--day",
+        type=int,
+        action="append",
+        required=True,
+        help="Номер проверяемого дня; параметр можно повторять",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     try:
-        errors = validate_day(args.day)
+        errors = []
+        for day in args.day:
+            errors.extend(validate_day(day))
     except Exception as exc:
         print(f"Ошибка валидатора: {exc}", file=sys.stderr)
         return 1
