@@ -649,9 +649,10 @@ class ScriptParser:
 
     async def _handle_scene(self, line):
         """Обработка строки scene cg/bg"""
-        if "scene color" in line:
-            self.app.current_scene = ""
-            self.app.current_scene_category = ""
+        color_match = re.search(r'scene\s+color\s+([a-zA-Z0-9_#]+)', line)
+        if color_match:
+            self.app.current_scene = color_match.group(1).lower()
+            self.app.current_scene_category = "color"
             self.app.clear_active_sprites()
             self.app.mark_scene_dirty()
             if not self.backward:

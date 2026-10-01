@@ -1979,15 +1979,26 @@ class TerminalSummer(App):
         if not snapshot.name or not snapshot.category:
             return Text("")
 
-        scene_path = self._get_scene_image_path(snapshot.category, snapshot.name)
-        if scene_path is None:
-            return Text.from_markup(
-                f"[Файл не найден: TS/game/{snapshot.category}/{snapshot.name}.*]"
-            )
-
         palette = Palettes.color if snapshot.style == "ANSI" else Palettes.ascii
         try:
-            composed = self._load_rgba_cached(scene_path, snapshot.cache_epoch)
+            if snapshot.category == "color":
+                colors = {
+                    "black": (0, 0, 0, 255),
+                    "white": (255, 255, 255, 255),
+                }
+                rgba = colors.get(snapshot.name.lower())
+                if rgba is None:
+                    return Text.from_markup(
+                        f"[Неизвестный цвет сцены: {snapshot.name}]"
+                    )
+                composed = Image.new("RGBA", (1920, 1080), rgba)
+            else:
+                scene_path = self._get_scene_image_path(snapshot.category, snapshot.name)
+                if scene_path is None:
+                    return Text.from_markup(
+                        f"[Файл не найден: TS/game/{snapshot.category}/{snapshot.name}.*]"
+                    )
+                composed = self._load_rgba_cached(scene_path, snapshot.cache_epoch)
             for sprite in snapshot.sprites:
                 if not sprite.image_path or not os.path.exists(sprite.image_path):
                     continue
@@ -2006,7 +2017,8 @@ class TerminalSummer(App):
                     sprite_img.close()
                     sprite_img = resized
                 max_sprite_height = max(1, int(composed.height * 0.98))
-                if sprite_img.height > max_sprite_height:
+                is_full_canvas_overlay = sprite_img.size == composed.size
+                if sprite_img.height > max_sprite_height and not is_full_canvas_overlay:
                     resized = sprite_img.resize(
                         (
                             max(
@@ -2070,9 +2082,12 @@ class TerminalSummer(App):
         order_seq = self._sprite_order_seq
 
         for line in commands:
-            if line.startswith("scene color"):
-                category = ""
-                name = ""
+            color_match = re.search(
+                r"scene\s+color\s+([a-zA-Z0-9_#]+)", line
+            )
+            if color_match:
+                category = "color"
+                name = color_match.group(1).lower()
                 active.clear()
                 order_seq = 0
                 continue
