@@ -34,6 +34,7 @@ REM Проверка сценария и ресурсов второго дня 
 "%PYTHON_BIN%" -m PyInstaller --onefile ^
                       --name "%APP_NAME%" ^
                       --add-data "%ROOT_DIR%\src\gameUI.tcss;." ^
+                      --add-data "%ROOT_DIR%\src\menu_logo.ansi;." ^
                       --paths "%ROOT_DIR%\src" ^
                       --paths "%ROOT_DIR%\scripts" ^
                       --distpath "." ^

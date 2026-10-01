@@ -51,6 +51,7 @@ def get_persistent_path() -> Path:
 
 
 CSS_PATH = get_resource_path("gameUI.tcss")
+MENU_LOGO_PATH = get_resource_path("menu_logo.ansi")
 SETTINGS_PATH = get_settings_path()
 SAVES_PATH = get_saves_path()
 PERSISTENT_PATH = get_persistent_path()
@@ -311,6 +312,7 @@ class MainMenu(Static):
     """Виджет главного меню"""
     BORDER_TITLE="Главное меню"
     def compose(self):
+        yield MainMenuBrand(classes="mouse-passive-art")
         yield MainMenuMiddleBtns()
         yield MainMenuBottomBtns()
 
@@ -321,6 +323,21 @@ class ScriptLoadingOverlay(Static):
     def compose(self):
         yield LoadingIndicator(id="script-loading-indicator")
         yield Label("Подготовка сценария…", id="script-loading-text")
+
+
+class MainMenuBrand(AnsiView):
+    """Готовый ANSI-логотип главного меню."""
+
+    def on_mount(self) -> None:
+        super().on_mount()
+        try:
+            ansi_logo = MENU_LOGO_PATH.read_text(encoding="utf-8")
+            self.update(Text.from_ansi(ansi_logo))
+        except (OSError, UnicodeError):
+            # Логотип не должен мешать запуску игры при повреждённом ассете.
+            self.update(
+                Text("Terminal Summer", style="bold #E3B778", justify="center")
+            )
     
 class MainMenuMiddleBtns(HorizontalGroup):
     """Виджет-контейнер для центарльных кнопок"""

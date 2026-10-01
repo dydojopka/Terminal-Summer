@@ -387,11 +387,21 @@ MainMenu {
     height: 100%;
     width: 100%;
     align: center middle;
+    overflow: auto auto;
 
 
     border: round white;
     border-title-align: center;
     border-title-style: b;
+
+    MainMenuBrand {
+        width: 120;
+        height: 11;
+        align: center middle;
+        margin-bottom: 1;
+        padding: 0;
+        content-align: center middle;
+    }
 
     MainMenuMiddleBtns{
         align: center middle;

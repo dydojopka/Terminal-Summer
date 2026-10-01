@@ -37,6 +37,7 @@ fi
 "${PYTHON_BIN}" -m PyInstaller --onefile \
                        --name "${APP_NAME}" \
                        --add-data "${ROOT_DIR}/src/gameUI.tcss:." \
+                       --add-data "${ROOT_DIR}/src/menu_logo.ansi:." \
                        --paths "${ROOT_DIR}/src" \
                        --paths "${ROOT_DIR}/scripts" \
                        --distpath "${ROOT_DIR}" \
