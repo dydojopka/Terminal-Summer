@@ -51,10 +51,11 @@ def get_persistent_path() -> Path:
 
 
 CSS_PATH = get_resource_path("gameUI.tcss")
+MENU_LOGO_PATH = get_resource_path("menu_logo.ansi")
 SETTINGS_PATH = get_settings_path()
 SAVES_PATH = get_saves_path()
 PERSISTENT_PATH = get_persistent_path()
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 
 
 # ============ Сохранения ============
@@ -188,6 +189,9 @@ class SceneRenderSnapshot:
         return self.category, self.name, sprite_key, str(self.width), self.style, 2
 
 def main():
+    if IS_FROZEN:
+        from scripts.assets_manager import restore_bundled_scripts
+        restore_bundled_scripts()
     ts_dir = get_ts_path()
     required_paths = [
         ts_dir / "gallery",
@@ -311,6 +315,7 @@ class MainMenu(Static):
     """Виджет главного меню"""
     BORDER_TITLE="Главное меню"
     def compose(self):
+        yield MainMenuBrand(classes="mouse-passive-art")
         yield MainMenuMiddleBtns()
         yield MainMenuBottomBtns()
 
@@ -321,7 +326,35 @@ class ScriptLoadingOverlay(Static):
     def compose(self):
         yield LoadingIndicator(id="script-loading-indicator")
         yield Label("Подготовка сценария…", id="script-loading-text")
+
+
+class MainMenuBrand(AnsiView):
+    """Готовый ANSI-логотип главного меню."""
+
+    def on_mount(self) -> None:
+        super().on_mount()
+        try:
+            ansi_logo = MENU_LOGO_PATH.read_text(encoding="utf-8")
+            self.update(Text.from_ansi(ansi_logo))
+        except (OSError, UnicodeError):
+            # Логотип не должен мешать запуску игры при повреждённом ассете.
+            self.update(
+                Text("Terminal Summer", style="bold #E3B778", justify="center")
+            )
     
+class ReleaseEnd(Vertical):
+    """Конец доступного сюжета без изменения файлов сценария."""
+
+    def compose(self):
+        with VerticalScroll(id="release-end-dialog"):
+            yield Label("Спасибо за игру!", id="release-end-title")
+            yield Label(
+                "Вы прошли доступный сюжет Terminal Summer 0.3.0.\n"
+                "Четвёртый день появится в следующих версиях."
+            )
+            yield Button("В главное меню", id="btn-release-end-menu", variant="primary")
+
+
 class MainMenuMiddleBtns(HorizontalGroup):
     """Виджет-контейнер для центарльных кнопок"""
     BORDER_TITLE="Информация"
@@ -759,13 +792,25 @@ class TerminalSummer(App):
         yield GalleryMenu( id="gallery-menu",  classes="hidden")
         yield SaveMenu(    id="save-menu",     classes="hidden")
         yield ScriptLoadingOverlay(id="script-loading", classes="hidden")
+        yield ReleaseEnd(id="release-end", classes="hidden")
 
     def set_text_mode(self, mode: str) -> None:
         """Сохраняет режим текста и обновляет его отображение."""
         normalized_mode = mode.lower().strip()
-        self.current_text_mode = (
+        next_mode = (
             normalized_mode if normalized_mode in self.TEXT_MODES else "adv"
         )
+        if next_mode != self.current_text_mode:
+            # Первая NVL-реплика не должна дописываться к последней ADV-реплике.
+            try:
+                text_bar = self.query_one("#text-bar", Widget)
+                text_bar.text = ""
+                text_bar.border_title = ""
+                text_bar.refresh()
+            except Exception:
+                # До mount виджеты ещё не существуют; режим всё равно сохраняем.
+                pass
+        self.current_text_mode = next_mode
         self.sync_text_mode_display()
 
     def sync_text_mode_display(self) -> None:
@@ -776,6 +821,8 @@ class TerminalSummer(App):
         choice_bar = self.query_one("#choice-bar", Widget)
         is_nvl = self.current_text_mode == "nvl"
 
+        if self._interface_hidden:
+            novel_menu.add_class("hidden")
         novel_menu.set_class(is_nvl, "nvl-mode")
         novel_window.set_class(
             is_nvl
@@ -784,7 +831,8 @@ class TerminalSummer(App):
             "hidden",
         )
         bg_cg.set_class(
-            is_nvl or self._interface_hidden or not choice_bar.has_class("hidden"),
+            (is_nvl and not self._interface_hidden)
+            or not choice_bar.has_class("hidden"),
             "hidden",
         )
 
@@ -808,6 +856,7 @@ class TerminalSummer(App):
         elif button_id == "btn-save":             # Кнопка "Сохранения"
             self.open_save_menu("pause")
         elif button_id == "btn-settings-pause":   # Кнопка "Настройки"
+            self.query_one("#settings-menu").remove_class("open-from-menu")
             self.query_one("#settings-menu").add_class("open-from-pause") # Класс-флаг что настройки открыты из PauseMenu
             self.action_open_settings()
         elif button_id == "btn-menu":             # Кнопка "В главное меню"
@@ -998,8 +1047,13 @@ class TerminalSummer(App):
         elif button_id == "btn-gallery":          # Кнопка "Галерея"
             self.action_open_gallery()
         elif button_id == "btn-settings-menu":    # Кнопка "Настройки"
+            self.query_one("#settings-menu").remove_class("open-from-pause")
             self.query_one("#settings-menu").add_class("open-from-menu") # Класс-флаг что настройки открыты из MainMenu
             self.action_open_settings()
+        elif button_id == "btn-release-end-menu":
+            self.reset_game_view()
+            self.query_one("#release-end").add_class("hidden")
+            self.action_open_menu()
         elif button_id == "btn-exit-menu":        # Кнопка "Выход"
             self.app.exit()
 
@@ -1163,6 +1217,7 @@ class TerminalSummer(App):
         main_menu = self.query_one("#main-menu")
         choice_bar = self.query_one("#choice-bar")
         blocked_menus = (
+            self.query_one("#release-end"),
             self.query_one("#log-menu"),
             self.query_one("#pause-menu"),
             self.query_one("#settings-menu"),
@@ -1194,6 +1249,8 @@ class TerminalSummer(App):
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
+        if not self.query_one("#release-end").has_class("hidden"):
+            return
         # Preload временно скрывает игровой интерфейс и затем самостоятельно
         # восстанавливает его. Не позволяем Escape открыть PauseMenu под
         # полноэкранным оверлеем и получить два конкурирующих состояния UI.
@@ -1253,21 +1310,9 @@ class TerminalSummer(App):
                     # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
                     self.query_one("#btn-next", Button).focus()
             else:
-                self.set_game_paused(False)
-                # Скрытие меню настроек
-                settings_menu.add_class("hidden")
-
-                # Показ диологового окна, кнопок перемотки и задника
-                novel_menu.remove_class("hidden")
-                novel_window.remove_class("hidden")
-                self.sync_text_mode_display()
-
-                if self._preload_after_settings and hasattr(self, "script"):
-                    self._preload_after_settings = False
-                    self.start_script_preload(self.script)
-
-                # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
-                self.query_one("#btn-next", Button).focus()
+                # Escape и кнопка «Назад» должны одинаково очищать источник
+                # открытия настроек и восстанавливать игровой интерфейс.
+                self.action_open_settings()
         else: pass # Не открывать в главном меню
 
     def action_open_menu(self) -> None:
@@ -1295,6 +1340,18 @@ class TerminalSummer(App):
             # Скрытие главного меню
             main_menu.add_class("hidden")
             self.query_one(Footer).remove_class("hidden")
+
+    def show_release_end(self) -> None:
+        """Останавливает сюжет перед загрузкой четвёртого дня."""
+        self.set_game_paused(True)
+        for widget_id in (
+            "main-menu", "novel-menu", "novel-window", "pause-menu",
+            "settings-menu", "save-menu", "choice-bar", "log-menu", "gallery-menu",
+        ):
+            self.query_one(f"#{widget_id}").add_class("hidden")
+        self.query_one(Footer).add_class("hidden")
+        self.query_one("#release-end").remove_class("hidden")
+        self.query_one("#btn-release-end-menu", Button).focus()
 
     def action_open_settings(self) -> None:
         """Открытие меню настроек"""
@@ -1391,6 +1448,8 @@ class TerminalSummer(App):
         Запрещает сохранение во время анимации текста, блокировки ввода,
         показа меню выбора или отсутствия запущенного сценария.
         """
+        if not self.query_one("#release-end").has_class("hidden"):
+            return False
         if self._text_animating:
             return False
         if self._input_blocked:
@@ -1590,6 +1649,52 @@ class TerminalSummer(App):
         game_state = load_game_state(page, slot_index)
         if game_state is None:
             return
+        if not isinstance(game_state, dict):
+            self.sub_title = "[Load error] Invalid game state"
+            return
+        if game_state.get("save_format") != 3:
+            self.sub_title = "[Load error] Unsupported save format; expected 3"
+            return
+
+        variables = game_state.get("variables", {})
+        scene = game_state.get("scene", {})
+        sprites_data = game_state.get("sprites", {})
+        dialogue = game_state.get("dialogue", {})
+        if not all(
+            isinstance(section, dict)
+            for section in (variables, scene, sprites_data, dialogue)
+        ):
+            self.sub_title = "[Load error] Invalid save section"
+            return
+        if not isinstance(variables.get("state"), dict):
+            self.sub_title = "[Load error] Invalid script variables"
+            return
+
+        # До изменения текущей игры полностью проверяем файл и runtime-state.
+        # Иначе несовпавший hash оставлял новый parser на pc=0 и позволял
+        # повторно выполнить уже начисленные поинты.
+        script_runtime = game_state.get("script", {})
+        if not isinstance(script_runtime, dict):
+            self.sub_title = "[Load error] Invalid script runtime"
+            return
+        script_filename = script_runtime.get("filename", "")
+        if not script_filename:
+            self.sub_title = "[Load error] Save has no script filename"
+            return
+        if not Path(script_filename).is_absolute():
+            script_filename = str(self.ts_path / script_filename)
+
+        try:
+            loaded_script = ScriptParser(script_filename, self)
+            if not loaded_script.restore_runtime_state(script_runtime):
+                return
+        except (OSError, TypeError, ValueError) as exc:
+            self.sub_title = f"[Load error] {exc}"
+            return
+
+        if Path(script_filename).stem.lower() == "day4":
+            self.show_release_end()
+            return
 
         # Закрытие меню сохранений
         self.close_save_menu()
@@ -1599,25 +1704,12 @@ class TerminalSummer(App):
 
         # Восстановление состояния сценария.
         from script_parser import set_script_state
-        variables = game_state.get("variables", {})
-        if "state" in variables:
-            set_script_state(variables["state"])
-        else:
-            # Формат сохранений до единого состояния.
-            set_script_state({
-                "lp_sl": variables.get("SL", 0),
-                "lp_un": variables.get("UN", 0),
-                "lp_dv": variables.get("DV", 0),
-                "lp_us": variables.get("US", 0),
-                "prologue": variables.get("PROLOGUE", 0),
-                "d1_keys": variables.get("D1_KEYS", False),
-            })
+        set_script_state(variables["state"])
         # Persistent-флаги не должны откатываться загрузкой старого слота.
         self.load_persistent_state()
         self.update_script_header()
 
         # Восстановление сцены
-        scene = game_state.get("scene", {})
         self.current_scene = scene.get("current_scene", "")
         self.current_scene_category = scene.get("current_scene_category", "")
         self.current_time = scene.get("current_time", "day")
@@ -1625,67 +1717,47 @@ class TerminalSummer(App):
         self.set_text_mode(scene.get("current_text_mode", "adv"))
 
         # Восстановление спрайтов
-        sprites_data = game_state.get("sprites", {})
         self.restore_active_sprites(
             sprites_data.get("active_sprites", {}),
             sprites_data.get("sprite_order_seq", 0),
         )
 
-        # Загрузка сценария
-        script_runtime = game_state.get("script", {})
-        is_format_3 = game_state.get("save_format") == 3 and isinstance(script_runtime, dict)
-        script_filename = script_runtime.get("filename", "") if is_format_3 else game_state.get("script_filename", "")
-        script_index = script_runtime.get("pc", 0) if is_format_3 else game_state.get("script_index", 0)
+        # Проверенный выше parser становится активным только после сброса.
+        self.script = loaded_script
 
-        if script_filename:
-            if is_format_3 and not Path(script_filename).is_absolute():
-                script_filename = str(self.ts_path / script_filename)
-            self.script = ScriptParser(script_filename, self)
-            if is_format_3:
-                if not self.script.restore_runtime_state(script_runtime):
-                    return
-            else:
-                # Совместимость с format 2: старый движок изменял список строк.
-                runtime_lines = game_state.get("runtime_lines")
-                if isinstance(runtime_lines, list) and all(
-                    isinstance(line, str) for line in runtime_lines
-                ):
-                    self.script.restore_runtime_lines(runtime_lines)
-                self.script.index = script_index
-            # Скрытие главного меню (если загрузка из главного меню)
-            if save_menu.opened_from == "menu":
-                self.query_one("#main-menu").add_class("hidden")
-                self.query_one(Footer).remove_class("hidden")
+        # Скрытие главного меню (если загрузка из главного меню)
+        if save_menu.opened_from == "menu":
+            self.query_one("#main-menu").add_class("hidden")
+            self.query_one(Footer).remove_class("hidden")
 
-            # Показ игровых элементов
-            self.query_one("#novel-menu").remove_class("hidden")
-            self.query_one("#novel-window").remove_class("hidden")
-            self.sync_text_mode_display()
+        # Показ игровых элементов и точное восстановление window show/hide.
+        novel_menu = self.query_one("#novel-menu", Widget)
+        novel_menu.remove_class("hidden")
+        self.query_one("#novel-window").remove_class("hidden")
+        novel_menu.set_class(
+            not bool(scene.get("window_visible", True)),
+            "invisible",
+        )
+        self.sync_text_mode_display()
 
-            # Восстановление текста и имени персонажа
-            dialogue = game_state.get("dialogue", {})
-            text_bar = self.query_one("#text-bar", Widget)
+        # Восстановление текста и имени персонажа
+        text_bar = self.query_one("#text-bar", Widget)
+        text_bar.remove_class(*[
+            cls for cls in text_bar.classes if cls != "text-bar"
+        ])
+        text_bar.border_title = dialogue.get("speaker", "")
+        text_bar.text = dialogue.get("text", "")
+        saved_speaker_id = dialogue.get("speaker_id")
+        if saved_speaker_id:
+            text_bar.add_class(saved_speaker_id)
+        text_bar.refresh()
 
-            # Очистка старых CSS-классов персонажа
-            text_bar.remove_class(*[cls for cls in text_bar.classes if cls != "text-bar"])
+        # Отрисовка и прогрев выполняются под полноэкранным оверлеем.
+        self.mark_scene_dirty()
+        self.start_script_preload(self.script)
 
-            # Установка имени и текста
-            text_bar.border_title = dialogue.get("speaker", "")
-            text_bar.text = dialogue.get("text", "")
-
-            # Восстановление CSS-класса персонажа для цвета имени
-            saved_speaker_id = dialogue.get("speaker_id")
-            if saved_speaker_id:
-                text_bar.add_class(saved_speaker_id)
-
-            text_bar.refresh()
-
-            # Отрисовка и прогрев выполняются под полноэкранным оверлеем.
-            self.mark_scene_dirty()
-            self.start_script_preload(self.script)
-
-            # Фокус на кнопку "Вперёд"
-            self.query_one("#btn-next", Button).focus()
+        # Фокус на кнопку "Вперёд"
+        self.query_one("#btn-next", Button).focus()
 
     def save_to_selected_slot(self) -> None:
         """Сохранение в выбранный слот"""
@@ -1736,6 +1808,9 @@ class TerminalSummer(App):
                 "current_scene_category": getattr(self, "current_scene_category", ""),
                 "current_time": getattr(self, "current_time", "day"),
                 "current_text_mode": getattr(self, "current_text_mode", "adv"),
+                "window_visible": not self.query_one(
+                    "#novel-menu", Widget
+                ).has_class("invisible"),
             },
             "sprites": {
                 "active_sprites": self._active_sprites,
@@ -1979,15 +2054,26 @@ class TerminalSummer(App):
         if not snapshot.name or not snapshot.category:
             return Text("")
 
-        scene_path = self._get_scene_image_path(snapshot.category, snapshot.name)
-        if scene_path is None:
-            return Text.from_markup(
-                f"[Файл не найден: TS/game/{snapshot.category}/{snapshot.name}.*]"
-            )
-
         palette = Palettes.color if snapshot.style == "ANSI" else Palettes.ascii
         try:
-            composed = self._load_rgba_cached(scene_path, snapshot.cache_epoch)
+            if snapshot.category == "color":
+                colors = {
+                    "black": (0, 0, 0, 255),
+                    "white": (255, 255, 255, 255),
+                }
+                rgba = colors.get(snapshot.name.lower())
+                if rgba is None:
+                    return Text.from_markup(
+                        f"[Неизвестный цвет сцены: {snapshot.name}]"
+                    )
+                composed = Image.new("RGBA", (1920, 1080), rgba)
+            else:
+                scene_path = self._get_scene_image_path(snapshot.category, snapshot.name)
+                if scene_path is None:
+                    return Text.from_markup(
+                        f"[Файл не найден: TS/game/{snapshot.category}/{snapshot.name}.*]"
+                    )
+                composed = self._load_rgba_cached(scene_path, snapshot.cache_epoch)
             for sprite in snapshot.sprites:
                 if not sprite.image_path or not os.path.exists(sprite.image_path):
                     continue
@@ -2006,7 +2092,8 @@ class TerminalSummer(App):
                     sprite_img.close()
                     sprite_img = resized
                 max_sprite_height = max(1, int(composed.height * 0.98))
-                if sprite_img.height > max_sprite_height:
+                is_full_canvas_overlay = sprite_img.size == composed.size
+                if sprite_img.height > max_sprite_height and not is_full_canvas_overlay:
                     resized = sprite_img.resize(
                         (
                             max(
@@ -2070,9 +2157,12 @@ class TerminalSummer(App):
         order_seq = self._sprite_order_seq
 
         for line in commands:
-            if line.startswith("scene color"):
-                category = ""
-                name = ""
+            color_match = re.search(
+                r"scene\s+color\s+([a-zA-Z0-9_#]+)", line
+            )
+            if color_match:
+                category = "color"
+                name = color_match.group(1).lower()
                 active.clear()
                 order_seq = 0
                 continue
@@ -2170,7 +2260,7 @@ class TerminalSummer(App):
         self.query_one("#bg-cg", Widget).update(art)
         self.scene_dirty = False
 
-    def start_script_preload(self, script: ScriptParser) -> None:
+    def start_script_preload(self, script: ScriptParser) -> asyncio.Task:
         """Неблокирующе прогревает чистые фоны активного сценарного файла."""
         filename = str(Path(script.filename).resolve())
         # Сначала инвалидируем старый worker: поток, закончившийся после
@@ -2186,6 +2276,7 @@ class TerminalSummer(App):
         self._script_preload_task = asyncio.create_task(
             self._preload_script_scenes(script, generation)
         )
+        return self._script_preload_task
 
     def _clear_render_caches(self) -> None:
         """Очищает RAM-кэши и запрещает старым worker возвращать результаты."""
@@ -2388,10 +2479,6 @@ class TerminalSummer(App):
                         if key in saved_sprite:
                             restored_sprite[key] = saved_sprite[key]
                 continue
-
-            # Старые сохранения не содержат show-команд. Оставляем прежний fallback.
-            if isinstance(character, str):
-                self._active_sprites[character] = saved_sprite.copy()
 
         self._sprite_order_seq = max(
             saved_order_seq if isinstance(saved_order_seq, int) else 0,
@@ -2609,6 +2696,9 @@ class TerminalSummer(App):
         novel_menu = self.query_one("#novel-menu", Widget)
         novel_window = self.query_one("#novel-window", Widget)
         next_button = self.query_one("#btn-next", Button)
+        self.query_one("#settings-menu").remove_class(
+            "open-from-pause", "open-from-menu"
+        )
 
         # Очистка текста и имени персонажа
         text_bar.text = ""
@@ -2648,6 +2738,7 @@ class TerminalSummer(App):
         self._space_require_idle = False
         self._interface_hidden = False
         self.set_text_mode("adv")
+        novel_menu.remove_class("invisible")
         novel_menu.add_class("hidden")
         novel_window.add_class("hidden")
 
@@ -2810,7 +2901,8 @@ class TerminalSummer(App):
         """Завершает только активную сценарную задержку."""
         delay_event = self._script_delay_event
         if (
-            delay_event is None
+            self._game_paused
+            or delay_event is None
             or not self._script_delay_skippable
             or delay_event.is_set()
         ):

@@ -1259,7 +1259,7 @@ label day3_main4
     mt "И кто всё это должен убирать теперь?!"
     "Так и произошло."
     mt "Кто, я спрашиваю, кто?!"
-    show us surp3_sport size normal at us_d3 with dspr await
+    show us surp3_sport size normal at cleft with dspr
         #linear 0.2 xalign 0.4
         #linear 0.2 xalign 0.5
     show us surp3_sport size normal at center with dspr
@@ -1282,7 +1282,7 @@ label day3_main4
     mt "Семён, иди возьми швабру, совочек, тряпку и так далее в кладовке, а ты!!!"
     show mt rage_pioneer size normal at right with dspr
     "Она посмотрела на Ульяну таким взглядом, что мне стало жалко девочку."
-    show us fear_sport size normal at us_d3 with dspr
+    show us fear_sport size normal at cleft with dspr
         #parallel:
         #    linear 0.5 yalign -0.2
         #parallel:
@@ -2003,7 +2003,7 @@ label day3_main5
                 "Пойти на дискотеку"
                 {
                     $day3_dv_dumped = true
-                    $lp_dv = lp_dv - 5
+                    $lp_dv -= 5
                 }
             }
         }

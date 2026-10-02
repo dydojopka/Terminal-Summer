@@ -30,13 +30,18 @@ fi
 # Подготовка ассетов в корне проекта
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/assets_manager.py"
 
-# Проверка сценария и ресурсов второго дня до дорогостоящей сборки
-"${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_release.py" --day 2
+# Проверка выпущенных сценариев и ресурсов до дорогостоящей сборки
+"${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_release.py" --day 2 --day 3
 
 # Сборка
 "${PYTHON_BIN}" -m PyInstaller --onefile \
                        --name "${APP_NAME}" \
                        --add-data "${ROOT_DIR}/src/gameUI.tcss:." \
+                       --add-data "${ROOT_DIR}/src/menu_logo.ansi:." \
+                       --add-data "${ROOT_DIR}/TS/text/prologue.txt:TS/text" \
+                       --add-data "${ROOT_DIR}/TS/text/day*.txt:TS/text" \
+                       --add-data "${ROOT_DIR}/TS/text/epilogue*.txt:TS/text" \
+                       --add-data "${ROOT_DIR}/TS/text/endings.txt:TS/text" \
                        --paths "${ROOT_DIR}/src" \
                        --paths "${ROOT_DIR}/scripts" \
                        --distpath "${ROOT_DIR}" \

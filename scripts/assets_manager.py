@@ -1,4 +1,5 @@
 import sys
+import shutil
 import zipfile
 from pathlib import Path
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn
@@ -27,6 +28,19 @@ def _required_asset_paths() -> list[Path]:
 def check_assets() -> bool:
     """Проверяет наличие необходимых папок и файлов"""
     return all(path.exists() for path in _required_asset_paths())
+
+
+def restore_bundled_scripts() -> None:
+    """Восстанавливает отсутствующие сценарии onefile, не затирая внешние."""
+    if not hasattr(sys, "_MEIPASS"):
+        return
+    source = Path(sys._MEIPASS) / "TS" / "text"
+    target = get_project_root() / "TS" / "text"
+    for script in source.glob("*.txt"):
+        destination = target / script.name
+        if not destination.exists():
+            target.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(script, destination)
 
 
 def _safe_extract(zip_ref: zipfile.ZipFile, target_dir: Path) -> None:
@@ -91,6 +105,7 @@ def download_assets():
 
 def ensure_assets() -> None:
     """Гарантирует наличие ассетов в рабочем корне"""
+    restore_bundled_scripts()
     if check_assets():
         print("Ассеты уже есть. Скачивание не требуется")
         return

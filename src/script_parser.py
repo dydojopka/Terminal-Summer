@@ -60,13 +60,21 @@ DEFAULT_SCRIPT_STATE = {
     "persistent.CardsDemo": False, "persistent.CardsWon1": False,
     "persistent.CardsWon2": False, "persistent.CardsWon3": False,
     "persistent.CardsFail": False,
+    # День 3. Числовые флаги оставлены числами, поскольку сценарий
+    # сравнивает их с 0/1; dumped и переходы в day4 являются bool.
+    "day3_breakfast_with_un": 0, "day3_un_help_accept": 0,
+    "day3_house_of_mt": 0, "day3_sl_cleaned": 0,
+    "day3_us_football": 0, "day3_sl_library": 0,
+    "day3_us_cleaned": 0, "day3_dv_accept": 0,
+    "day3_got_fail": 0, "day3_sl_evening": 0,
+    "day3_un_evening": 0, "day3_us_evening": 0,
+    "day3_dv_evening": 0,
+    "day3_dv_dumped": False, "day3_un_dumped": False,
+    "goto_day4_std_morning": False,
+    "goto_day4_fail_morning": False,
+    "goto_day4_us_morning": False,
 }
 SCRIPT_STATE = DEFAULT_SCRIPT_STATE.copy()
-
-# Совместимые поля для текущего UI и старых сохранений.
-SL = UN = DV = US = PROLOGUE = 0
-D1_KEYS = False
-
 
 def format_script_state(
     state: dict | None = None,
@@ -85,16 +93,6 @@ def format_script_state(
         )
     )
     return " ".join(f"[{key}:{value}]" for key, value in visible_values)
-
-
-def _sync_legacy_globals() -> None:
-    global SL, UN, DV, US, PROLOGUE, D1_KEYS
-    SL = SCRIPT_STATE["lp_sl"]
-    UN = SCRIPT_STATE["lp_un"]
-    DV = SCRIPT_STATE["lp_dv"]
-    US = SCRIPT_STATE["lp_us"]
-    PROLOGUE = SCRIPT_STATE["prologue"]
-    D1_KEYS = SCRIPT_STATE["d1_keys"]
 
 
 def get_script_state() -> dict:
@@ -130,7 +128,6 @@ def set_script_state(state: dict) -> None:
     SCRIPT_STATE.clear()
     SCRIPT_STATE.update(DEFAULT_SCRIPT_STATE)
     SCRIPT_STATE.update(state)
-    _sync_legacy_globals()
 
 
 def ensure_day2_state() -> None:
@@ -144,6 +141,31 @@ def reset_globals(*, preserve_persistent: bool = True):
     """Сбрасывает прохождение, при необходимости сохраняя persistent-флаги."""
     persistent = get_persistent_state() if preserve_persistent else {}
     set_script_state(persistent)
+
+
+SCRIPT_ASSIGNMENT_RE = re.compile(
+    r'\$([a-zA-Z0-9_.]+)\s*([+\-]?=)\s*(true|false|null|-?\d+)\s*$',
+    re.IGNORECASE,
+)
+
+
+def parse_script_assignment(line: str) -> tuple[str, str, object]:
+    """Разбирает безопасное присваивание DSL без выполнения выражений."""
+    match = SCRIPT_ASSIGNMENT_RE.fullmatch(line.strip())
+    if not match:
+        raise ValueError(f"Invalid assignment: {line}")
+
+    key, operation, raw_value = match.groups()
+    value_lower = raw_value.lower()
+    if value_lower == "true":
+        value = True
+    elif value_lower == "false":
+        value = False
+    elif value_lower == "null":
+        value = None
+    else:
+        value = int(raw_value)
+    return key, operation, value
 
 
 @dataclass(frozen=True)
@@ -200,17 +222,6 @@ class ScriptParser:
         self.content_hash = hashlib.sha256("\n".join(self.lines).encode("utf-8")).hexdigest()
         self._index_labels()
         self.index = 0
-        self.frames.clear()
-        self._build_resource_manifest()
-
-    def restore_runtime_lines(self, lines: list[str]) -> None:
-        """Поддержка save format 2 с ранее вставленными строками.
-
-        Новые сохранения этот метод не используют: их сценарий всегда неизменяем.
-        """
-        self.lines = tuple(lines)
-        self.content_hash = hashlib.sha256("\n".join(self.lines).encode("utf-8")).hexdigest()
-        self._index_labels()
         self.frames.clear()
         self._build_resource_manifest()
 
@@ -310,7 +321,7 @@ class ScriptParser:
             await self._handle_show(line)
         elif line.startswith("hide"):
             await self._handle_hide(line)
-        elif line.startswith("play"):
+        elif line.startswith(("play", "stop", "volume", "with")):
             await self._handle_play(line)
         elif line.startswith("window"):
             await self._handle_window(line)
@@ -431,24 +442,10 @@ class ScriptParser:
     @staticmethod
     def _predict_change_state(line: str, state: dict) -> None:
         """Применяет простое присваивание к копии состояния для look-ahead."""
-        match = re.match(
-            r'\$(lp_)?([a-zA-Z0-9_.]+)\s*([+\-]?=)\s*(true|false|null|-?\d+)\s*$',
-            line,
-            re.IGNORECASE,
-        )
-        if not match:
+        try:
+            key, operation, value = parse_script_assignment(line)
+        except ValueError:
             return
-        prefix, target, operation, raw_value = match.groups()
-        value_lower = raw_value.lower()
-        if value_lower == "true":
-            value = True
-        elif value_lower == "false":
-            value = False
-        elif value_lower == "null":
-            value = None
-        else:
-            value = int(raw_value)
-        key = f"lp_{target}" if prefix == "lp_" else target
         if key not in state:
             return
         if operation == "=":
@@ -625,9 +622,10 @@ class ScriptParser:
 
     async def _handle_scene(self, line):
         """Обработка строки scene cg/bg"""
-        if "scene color" in line:
-            self.app.current_scene = ""
-            self.app.current_scene_category = ""
+        color_match = re.search(r'scene\s+color\s+([a-zA-Z0-9_#]+)', line)
+        if color_match:
+            self.app.current_scene = color_match.group(1).lower()
+            self.app.current_scene_category = "color"
             self.app.clear_active_sprites()
             self.app.mark_scene_dirty()
             if not self.backward:
@@ -672,7 +670,7 @@ class ScriptParser:
 
 
     async def _handle_play(self, line):
-        """Обработка строки play"""
+        """Явно поддерживаемые заглушки аудио и визуальных переходов."""
         if not self.backward:
             await self.next_line()
 
@@ -882,36 +880,16 @@ class ScriptParser:
 
     async def _handle_changeLP(self, line):
         """Обработка изменения поинтов и флагов"""
-        global SL, UN, DV, US  # Поинты
-        global PROLOGUE, D1_KEYS # Флаги
-
         # Парсим строку ($lp_sl += 1, $day2_flag = true, $persistent.flag = false)
-        match = re.match(
-            r'\$(lp_)?([a-zA-Z0-9_.]+)\s*([+\-]?=)\s*(true|false|null|-?\d+)\s*$',
-            line,
-            re.IGNORECASE,
-        )
-        if not match:
-            if not self.backward:
-                await self.next_line()
+        try:
+            state_key, operation, value = parse_script_assignment(line)
+        except ValueError as exc:
+            self.app.sub_title = f"[Script error] {exc}"
+            # Не стираем диагностику немедленным автоматическим переходом
+            # к следующей строке. Продолжить можно явным действием «Далее».
             return
-
-        prefix, target, operation, raw_value = match.groups()
-        value_lower = raw_value.lower()
-        if value_lower == "true":
-            value = True
-        elif value_lower == "false":
-            value = False
-        elif value_lower == "null":
-            value = None
-        else:
-            value = int(raw_value)
-
-        state_key = f"lp_{target}" if prefix == "lp_" else target
         if state_key not in SCRIPT_STATE:
             self.app.sub_title = f"[Script error] Unknown script variable: ${state_key}"
-            if not self.backward:
-                await self.next_line()
             return
 
         # Извлекаем текущее значение
@@ -935,9 +913,8 @@ class ScriptParser:
         else:
             return
 
-        # Обновляем единое состояние и совместимые поля UI.
+        # Обновляем единое состояние и Header.
         SCRIPT_STATE[state_key] = current
-        _sync_legacy_globals()
         self._update_script_header()
         if state_key.startswith("persistent."):
             save_persistent = getattr(self.app, "save_persistent_state", None)
@@ -967,11 +944,17 @@ class ScriptParser:
             target_path = current_dir / target_path
 
         target_path = target_path.resolve()
+        show_release_end = getattr(self.app, "show_release_end", None)
+        if target_path.stem.lower() == "day4" and show_release_end is not None:
+            show_release_end()
+            return
         if not target_path.exists():
             self.app.sub_title = f"[Load error] File not found: {target_path}"
             return
 
         self.load_script(target_path)
-        self.app.start_script_preload(self)
+        preload_task = self.app.start_script_preload(self)
+        if preload_task is not None:
+            await preload_task
         if not self.backward:
             await self.next_line()

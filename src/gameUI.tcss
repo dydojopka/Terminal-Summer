@@ -1,3 +1,28 @@
+ReleaseEnd {
+    width: 100%;
+    height: 1fr;
+    align: center middle;
+}
+
+#release-end-dialog {
+    width: 70;
+    max-width: 100%;
+    height: auto;
+    max-height: 100%;
+    border: round $primary;
+    padding: 1 2;
+}
+
+#release-end-dialog Label {
+    width: 1fr;
+    margin-bottom: 1;
+    text-align: center;
+}
+
+#btn-release-end-menu {
+    width: 1fr;
+}
+
 # Цета имён персонажей
 TextBar.dreamgirl{border-title-color: rgb(192,192,192)}   # ...
 TextBar.sl{border-title-color: rgb(255,210,0)}            # Славя
@@ -387,11 +412,21 @@ MainMenu {
     height: 100%;
     width: 100%;
     align: center middle;
+    overflow: auto auto;
 
 
     border: round white;
     border-title-align: center;
     border-title-style: b;
+
+    MainMenuBrand {
+        width: 120;
+        height: 11;
+        align: center middle;
+        margin-bottom: 1;
+        padding: 0;
+        content-align: center middle;
+    }
 
     MainMenuMiddleBtns{
         align: center middle;
