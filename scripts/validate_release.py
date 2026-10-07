@@ -19,9 +19,12 @@ from script_parser import (
     DEFAULT_SCRIPT_STATE,
     DISPLAY_NAMES,
     ScriptParser,
+    SCRIPT_STATE_TYPES,
+    apply_script_assignment,
     parse_script_assignment,
 )
 from sprites_builder import load_yaml_dict, parse_show_like, resolve_sprite
+from script_conditions import evaluate_script_condition, parse_script_condition
 
 
 LABEL_RE = re.compile(r"label\s+([a-zA-Z0-9_]+):?$")
@@ -86,47 +89,11 @@ def _block_range(lines: tuple[str, ...], start: int) -> tuple[int, int]:
 
 
 def _evaluate_route_condition(expression: str, variables: dict) -> bool:
-    expression = expression.strip()
-    if expression.startswith("(") and expression.endswith(")"):
-        expression = expression[1:-1].strip()
-    expression = re.sub(
-        r"\$[a-zA-Z0-9_.]+",
-        lambda match: f'V("{match.group(0)[1:]}")',
-        expression,
-    )
-    expression = expression.replace("&&", " and ").replace("||", " or ")
-    expression = re.sub(r"!(?!=)", " not ", expression)
-    expression = re.sub(r"\btrue\b", "True", expression, flags=re.IGNORECASE)
-    expression = re.sub(r"\bfalse\b", "False", expression, flags=re.IGNORECASE)
-    expression = re.sub(r"\bnull\b", "None", expression, flags=re.IGNORECASE)
-
-    def value(name: str):
-        if name not in variables:
-            raise ValueError(f"неизвестная переменная ${name}")
-        return variables[name]
-
-    try:
-        return bool(eval(expression, {"__builtins__": {}}, {"V": value}))
-    except Exception as exc:
-        raise ValueError(f"некорректное условие: {exc}") from exc
+    return evaluate_script_condition(expression, variables, SCRIPT_STATE_TYPES)
 
 
 def _apply_route_assignment(line: str, variables: dict) -> None:
-    key, operation, value = parse_script_assignment(line)
-    if key not in variables:
-        raise ValueError(f"неизвестная переменная ${key}")
-    current = variables[key]
-    if operation == "=":
-        variables[key] = value
-        return
-    if isinstance(current, bool):
-        current = int(current)
-    if isinstance(value, bool):
-        value = int(value)
-    if operation == "+=":
-        variables[key] = current + value
-    elif operation == "-=":
-        variables[key] = current - value
+    apply_script_assignment(line, variables)
 
 
 def _route_load_target(document: RouteDocument, line: str) -> Path:
@@ -295,7 +262,7 @@ def explore_routes(
                             break
                     continue
 
-                if line == "menu":
+                if line in ("menu", "menu:"):
                     options, return_pc = _menu_options(document, pc, variables)
                     if not options:
                         raise ValueError("меню не содержит доступных вариантов")
@@ -336,8 +303,8 @@ def explore_routes(
     return results
 
 
-def _scene_exists(category: str, name: str) -> bool:
-    base = ROOT_DIR / "TS" / "game" / category / name
+def _scene_exists(category: str, name: str, assets_root: Path | None = None) -> bool:
+    base = (assets_root or ROOT_DIR / "TS" / "game") / category / name
     return any(base.with_suffix(f".{extension}").exists() for extension in ("jpg", "jpeg", "png", "webp"))
 
 
@@ -352,10 +319,19 @@ def _load_target(script_path: Path, line: str) -> Path | None:
 
 
 def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
+    return validate_script(
+        ROOT_DIR / "TS" / "text" / f"day{day}.txt", stop_at=stop_at
+    )
+
+
+def validate_script(
+    script_path: Path, *, stop_at: str | None = None, root_dir: Path | None = None
+) -> list[str]:
+    """Применяет существующие статические проверки к любому TXT, без обхода."""
     errors: list[str] = []
-    script_path = ROOT_DIR / "TS" / "text" / f"day{day}.txt"
-    resources_path = ROOT_DIR / "TS" / "resources.yaml"
-    assets_root = ROOT_DIR / "TS" / "game"
+    project_root = ROOT_DIR if root_dir is None else root_dir
+    resources_path = project_root / "TS" / "resources.yaml"
+    assets_root = project_root / "TS" / "game"
 
     if not script_path.is_file():
         return [f"Сценарий не найден: {script_path}"]
@@ -388,6 +364,18 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
     show_count = 0
 
     for number, line in source_lines:
+        condition = None
+        if line.startswith(("if ", "if(")):
+            condition = line[2:].strip()
+        elif line.startswith("else if "):
+            condition = line[len("else if "):].strip()
+        elif option := re.fullmatch(r'".+?"\s+if\s+(.+)', line):
+            condition = option.group(1)
+        if condition is not None:
+            try:
+                parse_script_condition(condition, SCRIPT_STATE_TYPES)
+            except ValueError as exc:
+                errors.append(f"{script_path.name}:{number}: {exc}; выражение: {condition}")
         if not (
             line in {"{", "}", "else", "clear"}
             or line.startswith("$")
@@ -413,6 +401,8 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
                         f"{script_path.name}:{number}: неизвестная переменная "
                         f"${variable}"
                     )
+                else:
+                    apply_script_assignment(line, DEFAULT_SCRIPT_STATE.copy())
             except ValueError as exc:
                 errors.append(f"{script_path.name}:{number}: {exc}")
 
@@ -423,7 +413,7 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
 
         if line.startswith("scene") and not re.fullmatch(
             r"scene\s+(?:(?:bg|cg)\s+[a-zA-Z0-9_]+|color\s+(?:black|white))"
-            r"(?:\s+with\s+\w+(?:\s+(?:skip|\d+(?:\.\d+)?))?)?", line
+            r"(?:\s+with\s+\w+(?:\s+\d+(?:\.\d+)?)?(?:\s+skip)?)?", line
         ):
             errors.append(f"{script_path.name}:{number}: некорректная команда scene: {line}")
 
@@ -452,7 +442,7 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
         if scene_match:
             scene_count += 1
             category, name = scene_match.groups()
-            if not _scene_exists(category, name):
+            if not _scene_exists(category, name, assets_root):
                 errors.append(
                     f"{script_path.name}:{number}: отсутствует сцена "
                     f"TS/game/{category}/{name}.*"
@@ -509,7 +499,7 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
         errors.append(f"{script_path.name}: незакрытых блоков: {depth}")
 
     print(
-        f"Проверен день {day}: {len(lines)} команд, {len(labels)} меток, "
+        f"Проверен {script_path.name}: {len(lines)} команд, {len(labels)} меток, "
         f"{scene_count} сцен, {show_count} команд show."
     )
     return errors
