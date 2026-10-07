@@ -8,7 +8,7 @@ Usage examples:
   python sprites_builder.py \
       --line "show sl normal_pioneer_far size normal at center with dissolve" \
       --line "show dv smile_pioneer size normal at right" \
-      --out-dir TS/game/sprites/generated
+      --out-dir TS/images/sprites/generated
 
 If no --line / --from-file is passed, commands are taken from MANUAL_COMMANDS.
 """
@@ -406,18 +406,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--resources",
-        default="resources.yaml",
-        help="Path to resources.yaml (default: resources.yaml)",
+        default="TS/resources.yaml",
+        help="Путь к файлу ресурсов (по умолчанию: TS/resources.yaml)",
     )
     parser.add_argument(
         "--assets-root",
-        default="TS",
-        help="Root folder for relative asset paths from resources.yaml (default: TS)",
+        default="TS/images",
+        help="Папка изображений для путей из resources.yaml (по умолчанию: TS/images)",
     )
     parser.add_argument(
         "--out-dir",
-        default="../TS/game/sprites/generated",
-        help="Output folder for generated PNG sprites",
+        default="TS/images/sprites/generated",
+        help="Папка для сгенерированных PNG-спрайтов",
     )
     parser.add_argument(
         "--line",
