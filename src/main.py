@@ -145,6 +145,7 @@ from rich.segment import Segment
 from rich.text import Text
 
 from script_parser import ScriptParser, format_script_state
+from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from sprites_builder import (
     parse_show_like,
     load_yaml_dict as load_sprite_resources_yaml,
@@ -189,39 +190,13 @@ class SceneRenderSnapshot:
         return self.category, self.name, sprite_key, str(self.width), self.style, 2
 
 def main():
-    if IS_FROZEN:
-        from scripts.assets_manager import restore_bundled_scripts
-        restore_bundled_scripts()
-    ts_dir = get_ts_path()
-    required_paths = [
-        ts_dir / "gallery",
-        ts_dir / "game",
-        ts_dir / "text",
-        ts_dir / "resources.yaml",
-    ]
-
-    missing_paths = [path for path in required_paths if not path.exists()]
-    if not missing_paths:
-        return
-
-    print("Ассеты не найдены. Запускаю загрузку...", file=sys.stderr)
-
-    scripts_dir = PROJECT_ROOT / "scripts"
-    if scripts_dir.exists():
-        sys.path.insert(0, str(scripts_dir))
-
+    if not IS_FROZEN:
+        sys.path.insert(0, str(PROJECT_ROOT))
     try:
         from scripts.assets_manager import ensure_assets
-        ensure_assets()
+        ensure_assets(quiet=True)
     except Exception as exc:
         print(f"Ошибка загрузки ассетов: {exc}", file=sys.stderr)
-        raise SystemExit(1)
-
-    missing_paths = [path for path in required_paths if not path.exists()]
-    if missing_paths:
-        print("Ошибка: ассеты после загрузки всё ещё отсутствуют.", file=sys.stderr)
-        for path in missing_paths:
-            print(f"  - {path}", file=sys.stderr)
         raise SystemExit(1)
 
 
@@ -705,7 +680,7 @@ class TerminalSummer(App):
 
         self._sprite_resources = None
         self._sprite_resources_loaded = False
-        self._sprite_assets_root = self.ts_path / "game"
+        self._sprite_assets_root = self.ts_path / "images"
         self._sprite_runtime_dir = self.ts_path / "game/sprites/generated_runtime"
         self._active_sprites = {}
         self._sprite_order_seq = 0
@@ -749,6 +724,9 @@ class TerminalSummer(App):
         self._preload_after_settings = False
         self._render_cache_limit = 96
         self._sprite_cache_limit = 256
+        self.gallery_images = []
+        self._gallery_catalog = None
+        self._gallery_error = None
 
     text_speed = "0.025" # Скорость текста 0.04 | 0.025 | 0.01 | 0
 
@@ -1857,7 +1835,7 @@ class TerminalSummer(App):
     def _get_scene_image_path(self, category: str, scene_name: str) -> str | None:
         """Возвращает путь до файла фона/CG."""
         for ext in ("jpg", "jpeg", "png", "webp"):
-            candidate = self.ts_path / "game" / category / f"{scene_name}.{ext}"
+            candidate = self.ts_path / "images" / category / f"{scene_name}.{ext}"
             if candidate.exists():
                 return str(candidate)
         return None
@@ -1869,8 +1847,8 @@ class TerminalSummer(App):
 
         self._sprite_resources_loaded = True
         resource_candidates = (
-            (self.ts_path / "resources.yaml", self.ts_path / "game"),
-            (Path("resources.yaml"), self.ts_path / "game"),
+            (self.ts_path / "resources.yaml", self.ts_path / "images"),
+            (Path("resources.yaml"), self.ts_path / "images"),
         )
         for candidate, assets_root in resource_candidates:
             if not candidate.exists():
@@ -2070,7 +2048,7 @@ class TerminalSummer(App):
                 scene_path = self._get_scene_image_path(snapshot.category, snapshot.name)
                 if scene_path is None:
                     return Text.from_markup(
-                        f"[Файл не найден: TS/game/{snapshot.category}/{snapshot.name}.*]"
+                        f"[Файл не найден: TS/images/{snapshot.category}/{snapshot.name}.*]"
                     )
                 composed = self._load_rgba_cached(scene_path, snapshot.cache_epoch)
             for sprite in snapshot.sprites:
@@ -2613,54 +2591,52 @@ class TerminalSummer(App):
             self.query_one("#btn-speed-instantly", Button).variant = "primary"
 
     def load_gallery_images(self):
-        """Загружает список JPG/PNG файлов из папки TS/game/bg или TS/game/cg"""
-        # Папка с изображениями
-        folder = self.ts_path / "gallery" / self.gallery_mode
-
-        previous_filename = (
-            self.gallery_images[self.gallery_index]
+        """Загружает явно выбранные изображения из общего каталога TS/images."""
+        previous_id = (
+            self.gallery_images[self.gallery_index].id
             if self.gallery_images and 0 <= self.gallery_index < len(self.gallery_images)
             else None
         )
-
-        if os.path.exists(folder):
-            # Берём JPG/PNG
-            self.gallery_images = sorted([
-                f for f in os.listdir(folder)
-                if f.lower().endswith((".jpg", ".jpeg", ".png"))
-            ])
-        else:
+        try:
+            if self._gallery_catalog is None:
+                self._gallery_catalog = load_gallery_catalog(
+                    get_resource_path("gallery_manifest.json")
+                )
+            self.gallery_images = list(self._gallery_catalog[self.gallery_mode])
+            self._gallery_error = None
+        except (OSError, ValueError, KeyError) as exc:
             self.gallery_images = []
-
-        # Восстанавливаем индекс, если файл существует
-        if previous_filename in self.gallery_images:
-            self.gallery_index = self.gallery_images.index(previous_filename)
-        else:
-            self.gallery_index = 0
+            self._gallery_error = f"Ошибка каталога галереи: {exc}"
+        self.gallery_index = next(
+            (index for index, image in enumerate(self.gallery_images) if image.id == previous_id),
+            0,
+        )
 
     def update_gallery_display(self):
-        """Конвертация JPG в ANSI арт и обновление отображения"""
+        """Конвертация общего изображения в ANSI арт и обновление отображения."""
+        static = self.query_one("#ansi-content", Static)
         if not self.gallery_images:
-            self.query_one("#bg-cg-gallery", Static).update("[Ничего не найдено]")
-            self.query_one(GalleryMenuMidBtns).border_title = "Пусто"
+            static.update(Text(self._gallery_error or "[Ничего не найдено]"))
+            self.query_one(GalleryMenuMidBtns).border_title = "Ошибка" if self._gallery_error else "Пусто"
             return
 
-        filename = self.gallery_images[self.gallery_index]
-        image_path = self.ts_path / "gallery" / self.gallery_mode / filename
-        img = Image.open(image_path)
-
-        # gallery_size = "50" / "150" / "200"
-        width = int(self.gallery_size)
-
+        image = self.gallery_images[self.gallery_index]
         try:
-            ansi_art = convert_img(img, width=width, alpha=True, palette=Palettes.color)
-        except Exception as e:
-            ansi_art = f"[Ошибка конвертации изображения: {e}]"
-
-        static = self.query_one("#ansi-content", Static)
-        static.update(Text.from_ansi(ansi_art))
-
-        self.query_one(GalleryMenuMidBtns).border_title = os.path.splitext(filename)[0]
+            image_path = resolve_gallery_image(self.ts_path / "images", image)
+            with Image.open(image_path) as img:
+                ansi_art = convert_img(
+                    img, width=int(self.gallery_size), alpha=True, palette=Palettes.color
+                )
+            static.update(Text.from_ansi(ansi_art))
+        except FileNotFoundError:
+            static.update(Text(f"[Ошибка изображения {image.id}: файл не найден]"))
+        except PermissionError:
+            static.update(Text(f"[Ошибка изображения {image.id}: нет доступа к файлу]"))
+        except OSError:
+            static.update(Text(f"[Ошибка изображения {image.id}: не удалось прочитать файл изображения]"))
+        except Exception:
+            static.update(Text(f"[Ошибка изображения {image.id}: не удалось загрузить или преобразовать изображение в ANSI-арт]"))
+        self.query_one(GalleryMenuMidBtns).border_title = image.id
 
     async def update_current_scene_art(self):
         """Перерисовывает текущий арт при смене качества."""

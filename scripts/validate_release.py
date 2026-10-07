@@ -304,7 +304,7 @@ def explore_routes(
 
 
 def _scene_exists(category: str, name: str, assets_root: Path | None = None) -> bool:
-    base = (assets_root or ROOT_DIR / "TS" / "game") / category / name
+    base = (assets_root or ROOT_DIR / "TS" / "images") / category / name
     return any(base.with_suffix(f".{extension}").exists() for extension in ("jpg", "jpeg", "png", "webp"))
 
 
@@ -331,7 +331,7 @@ def validate_script(
     errors: list[str] = []
     project_root = ROOT_DIR if root_dir is None else root_dir
     resources_path = project_root / "TS" / "resources.yaml"
-    assets_root = project_root / "TS" / "game"
+    assets_root = project_root / "TS" / "images"
 
     if not script_path.is_file():
         return [f"Сценарий не найден: {script_path}"]
@@ -445,7 +445,7 @@ def validate_script(
             if not _scene_exists(category, name, assets_root):
                 errors.append(
                     f"{script_path.name}:{number}: отсутствует сцена "
-                    f"TS/game/{category}/{name}.*"
+                    f"TS/images/{category}/{name}.*"
                 )
 
         if line.startswith("show "):
