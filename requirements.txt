@@ -16,6 +16,7 @@ msgpack==1.1.2
 multidict==6.7.1
 pil2ansi==1.0.0
 pillow==12.1.1
+pygame-ce==2.5.8
 platformdirs==4.9.2
 propcache==0.4.1
 Pygments==2.19.2
