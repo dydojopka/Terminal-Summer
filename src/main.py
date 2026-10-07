@@ -758,10 +758,34 @@ class TerminalSummer(App):
     gallery_images = []
 
     BINDINGS = [
-        Binding("escape", "pause_game", "Пауза",   show=True, id="bind-pause"),
-        Binding("space",  "",           "Далее",   show=True, id="bind-next"),
-        Binding("h",      "log",        "История", show=True, id="bind-log"),
-        Binding("f",      "toggle_interface", "Скрыть интерфейс", show=True, id="bind-toggle-interface"),
+        Binding(
+            "escape",
+            "pause_game",
+            "Пауза",
+            show=True,
+            key_display = "ESC",
+            id="bind-pause"),
+        Binding(
+            "space",
+            "",
+            "Далее",
+            show=True,
+            key_display = "SPACE",
+            id="bind-next"),
+        Binding(
+            "h, р",
+            "log",
+            "История",
+            show=True,
+            key_display = "H",
+            id="bind-log"),
+        Binding(
+            "f, а",
+            "toggle_interface",
+            "Скрыть интерфейс",
+            key_display = "F",
+            show=True,
+            id="bind-toggle-interface"),
     ]
 
     TEXT_MODES = {"adv", "nvl"}
