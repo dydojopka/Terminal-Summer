@@ -26,6 +26,7 @@
 - [Textual](https://textual.textualize.io/) - фреймворк для построения Rich TUI.
 - [Pillow](https://pypi.org/project/pillow/) - обработка изображений и спрайтов.
 - [pil2ansi](https://github.com/lostways/pil2ansi) - конвертация PNG в ANSI/ASCII-арт.
+- [pygame-ce](https://pyga.me/) - аудио без графического окна (SDL_mixer).
 
 ## Требования
 - **Python** версии 3.10 или выше
