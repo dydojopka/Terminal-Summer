@@ -73,8 +73,91 @@ DEFAULT_SCRIPT_STATE = {
     "goto_day4_std_morning": False,
     "goto_day4_fail_morning": False,
     "goto_day4_us_morning": False,
+    # Поздние дни: литеральные типы сохраняют числовую адаптацию TXT.
+    "day4_dv_compl": 0, "day4_sl_compl": 0,
+    "day4_un_compl": 0, "day4_us_compl": 0,
+    "day4_map_necessary_done": 0,
+    "day4_map_boathouse": False, "day4_map_busstop": False,
+    "day4_map_forest": False, "day4_map_house_of_mt": False,
+    "day4_mi_accept": 0, "day4_uv_apple": False, "day4_uv_mine": 0,
+    # Общий reset шахты соответствует ES/day4.rpy label mine.
+    # Единый runtime-вход в шахту будет восстановлен отдельно (F05).
+    "point": 1, "previous_point": 1, "direction": 0, "mine_route": 0,
+    "first_turn": True, "back_to_start": False,
+    "halt_visited": False, "coalface_visited": False,
+    "day5_map_necessary_done": 0,
+    "day5_map_aidpost": False, "day5_map_clubs": False,
+    "day5_map_library": False,
+    "day5_sl_helped": 0, "day5_us_wire_accept": 0,
+    "day6_map": 0, "day6_map_aidpost": False, "day6_map_dinner": False,
+    "sl_root": False, "dv_root": False, "un_root": False, "us_root": False,
+    "fail_root": False, "mi_root": False, "uv_root": False, "harem_root": False,
+    "sl_good": False, "sl_bad": False,
+    "dv_good": 0, "dv_bad": 0,
+    "un_good": False, "un_bad": False,
+    "us_good": False, "us_bad": False,
+    "fail_good": False, "fail_bad": False,
+    "epilogue_uv_chosen": 0,
+    # Q05: окончания — bool; старый null мигрирует в False.
+    "persistent.endings_main_good": False, "persistent.endings_main_bad": False,
+    "persistent.endings_sl_good": False, "persistent.endings_sl_bad": False,
+    "persistent.endings_dv_good": False, "persistent.endings_dv_bad": False,
+    "persistent.endings_un_good": False, "persistent.endings_un_bad": False,
+    "persistent.endings_us_good": False, "persistent.endings_us_bad": False,
+    "persistent.endings_mi": False,
+    "persistent.endings_uv_city": False,
+    "persistent.endings_uv_unknown_fucken_shit": False,
+    # Q06: только производный признак, не самостоятельный unlock.
+    "persistent.scenario_complete": False,
+}
+ENDING_STATE_KEYS = tuple(key for key in DEFAULT_SCRIPT_STATE if key.startswith("persistent.endings_"))
+SCRIPT_STATE_TYPES = {
+    key: (type(default),) if default is not None else (int, type(None))
+    for key, default in DEFAULT_SCRIPT_STATE.items()
 }
 SCRIPT_STATE = DEFAULT_SCRIPT_STATE.copy()
+
+
+def _derive_progress(state: dict) -> None:
+    state["persistent.scenario_complete"] = any(state[key] for key in ENDING_STATE_KEYS)
+
+
+def normalize_script_state(state: dict) -> dict:
+    """Проверяет состояние до его применения; bool не является int DSL."""
+    if not isinstance(state, dict):
+        raise ValueError("Script state must be a dictionary")
+    normalized = DEFAULT_SCRIPT_STATE.copy()
+    for key, value in state.items():
+        if key not in SCRIPT_STATE_TYPES:
+            raise ValueError(f"Unknown script variable: ${key}")
+        if key in ENDING_STATE_KEYS and value is None:
+            value = False
+        if type(value) not in SCRIPT_STATE_TYPES[key]:
+            expected = "/".join(t.__name__ for t in SCRIPT_STATE_TYPES[key])
+            raise ValueError(f"Invalid type for ${key}: expected {expected}, got {type(value).__name__}")
+        normalized[key] = value
+    _derive_progress(normalized)
+    return normalized
+
+
+def apply_script_assignment(line: str, state: dict) -> None:
+    """Единый строгий контракт присваиваний для runtime и обходчика."""
+    key, operation, value = parse_script_assignment(line)
+    if key not in SCRIPT_STATE_TYPES or key not in state:
+        raise ValueError(f"Unknown script variable: ${key}")
+    if key == "persistent.scenario_complete":
+        raise ValueError("$persistent.scenario_complete is derived from ending flags")
+    current = state[key]
+    if type(current) not in SCRIPT_STATE_TYPES[key]:
+        raise ValueError(f"Invalid current type for ${key}: {type(current).__name__}")
+    if operation != "=":
+        if type(current) is not int or type(value) is not int:
+            raise ValueError(f"Arithmetic assignment requires integers: {line}")
+        value = current + value if operation == "+=" else current - value
+    if type(value) not in SCRIPT_STATE_TYPES[key]:
+        raise ValueError(f"Invalid assignment type for ${key}: {type(value).__name__}")
+    state[key] = value
+    _derive_progress(state)
 
 def format_script_state(
     state: dict | None = None,
@@ -110,24 +193,24 @@ def get_persistent_state() -> dict:
 
 
 def update_persistent_state(state: dict) -> None:
-    """Применяет только известные persistent-переменные из внешнего хранилища."""
+    """Строго и монотонно объединяет прогресс, не откатывая открытия."""
     if not isinstance(state, dict):
-        return
+        raise ValueError("Persistent state must be a dictionary")
+    for key in state:
+        if not isinstance(key, str) or not key.startswith("persistent."):
+            raise ValueError(f"Invalid persistent key: {key}")
+    normalized = normalize_script_state(state)
     updated = SCRIPT_STATE.copy()
-    for key, default in DEFAULT_SCRIPT_STATE.items():
-        if not key.startswith("persistent.") or key not in state:
-            continue
-        value = state[key]
-        if isinstance(value, type(default)):
-            updated[key] = value
+    for key in state:
+        updated[key] = bool(updated[key] or normalized[key])
     set_script_state(updated)
 
 
 def set_script_state(state: dict) -> None:
     """Восстанавливает состояние, дополняя его новыми значениями по умолчанию."""
+    normalized = normalize_script_state(state)
     SCRIPT_STATE.clear()
-    SCRIPT_STATE.update(DEFAULT_SCRIPT_STATE)
-    SCRIPT_STATE.update(state)
+    SCRIPT_STATE.update(normalized)
 
 
 def ensure_day2_state() -> None:

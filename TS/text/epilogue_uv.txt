@@ -1805,7 +1805,7 @@ label epilogue_uv_city
     scene color black with esfade3
     stop music fadeout 5
     pause 5
-    if ($persistent.endings_uv_city == null)
+    if (!$persistent.endings_uv_city)
     {
         $persistent.endings_uv_city = true
         play sfx sfx_achievement
@@ -3461,7 +3461,7 @@ label epilogue_uv_ulya
     scene color black with esfade3
     stop music fadeout 5
     pause 5
-    if ($persistent.endings_uv_unknown_fucken_shit == null)
+    if (!$persistent.endings_uv_unknown_fucken_shit)
     {
         $persistent.endings_uv_unknown_fucken_shit = true
         play sfx sfx_achievement

@@ -3497,7 +3497,7 @@
     scene color black with esfade3
     stop music fadeout 5
     pause 5
-    if ($persistent.endings_mi == null)
+    if (!$persistent.endings_mi)
     {
         $persistent.endings_mi = true
         play sfx sfx_achievement

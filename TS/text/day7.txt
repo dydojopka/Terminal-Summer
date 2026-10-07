@@ -749,7 +749,7 @@ label day7_main
             window hide
             scene color black with esfade3
             pause 3
-            if ($persistent.endings_main_bad == null)
+            if (!$persistent.endings_main_bad)
             {
                 $persistent.endings_main_bad = true
                 play sfx sfx_achievement
@@ -761,7 +761,6 @@ label day7_main
                 # achievement.grant("ACH_MAIN_BAD")
             }
             # goto main_bad_ending
-            $persistent.scenario_complete = true
             load endings
         }
         "Не ходить за голосом"

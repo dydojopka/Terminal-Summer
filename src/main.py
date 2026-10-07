@@ -1670,6 +1670,13 @@ class TerminalSummer(App):
             self.sub_title = "[Load error] Invalid script variables"
             return
 
+        from script_parser import normalize_script_state
+        try:
+            restored_variables = normalize_script_state(variables["state"])
+        except ValueError as exc:
+            self.sub_title = f"[Load error] {exc}"
+            return
+
         # До изменения текущей игры полностью проверяем файл и runtime-state.
         # Иначе несовпавший hash оставлял новый parser на pc=0 и позволял
         # повторно выполнить уже начисленные поинты.
@@ -1697,6 +1704,8 @@ class TerminalSummer(App):
             return
 
         # Закрытие меню сохранений
+        from script_parser import get_persistent_state, update_persistent_state
+        previous_progress = get_persistent_state()
         self.close_save_menu()
 
         # Сброс текущего состояния
@@ -1704,7 +1713,8 @@ class TerminalSummer(App):
 
         # Восстановление состояния сценария.
         from script_parser import set_script_state
-        set_script_state(variables["state"])
+        set_script_state(restored_variables)
+        update_persistent_state(previous_progress)
         # Persistent-флаги не должны откатываться загрузкой старого слота.
         self.load_persistent_state()
         self.update_script_header()

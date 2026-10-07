@@ -284,7 +284,7 @@ label epilogue_main
     scene color black with esfade3
     stop music fadeout 5
     pause 5
-    if ($persistent.endings_main_good == null)
+    if (!$persistent.endings_main_good)
     {
         $persistent.endings_main_good = true
         play sfx sfx_achievement
@@ -297,7 +297,6 @@ label epilogue_main
     }
     # call postscriptum from _call_postscriptum
     # goto main_good_ending
-    $persistent.scenario_complete = true
     goto postscriptum
 label epilogue_un_bad
     # $ backdrop = "epilogue"
@@ -457,7 +456,7 @@ label epilogue_un_bad
     scene color black with esfade3
     stop music fadeout 5
     pause 5 
-    if ($persistent.endings_un_bad == null)
+    if (!$persistent.endings_un_bad)
     {
         $persistent.endings_un_bad = true
         play sfx sfx_achievement
@@ -470,7 +469,6 @@ label epilogue_un_bad
     }
     # call postscriptum from _call_postscriptum_1
     # goto un_bad_ending
-    $persistent.scenario_complete = true
     goto postscriptum
 label epilogue_un_good
     # $ backdrop = "epilogue"
@@ -724,7 +722,7 @@ label epilogue_un_good
     scene color black with esfade3
     stop music fadeout 5
     pause 5
-    if ($persistent.endings_un_good == null)
+    if (!$persistent.endings_un_good)
     {
         $persistent.endings_un_good = true
         play sfx sfx_achievement
@@ -737,7 +735,6 @@ label epilogue_un_good
     }
     # call postscriptum from _call_postscriptum_2
     # goto un_good_ending
-    $persistent.scenario_complete = true
     goto postscriptum
 label epilogue_us
     # if persistent.replay == "us_good":
@@ -979,7 +976,7 @@ label epilogue_us
         scene color black with esfade3
         stop music fadeout 5
         pause 5
-        if ($persistent.endings_us_bad == null)
+        if (!$persistent.endings_us_bad)
         {
             $persistent.endings_us_bad = true
             play sfx sfx_achievement
@@ -993,7 +990,6 @@ label epilogue_us
         # $ persistent.replay = ""
         # call postscriptum from _call_postscriptum_3
         # goto us_bad_ending
-        $persistent.scenario_complete = true
         goto postscriptum
     }
     else if ($us_good)
@@ -1083,7 +1079,7 @@ label epilogue_us
         scene color black with esfade3
         stop music fadeout 5
         pause 5
-        if ($persistent.endings_us_good == null)
+        if (!$persistent.endings_us_good)
         {
             $persistent.endings_us_good = true
             play sfx sfx_achievement
@@ -1097,7 +1093,6 @@ label epilogue_us
         # $ persistent.replay = ""
         # call postscriptum from _call_postscriptum_4
         # goto us_good_ending
-        $persistent.scenario_complete = true
         goto postscriptum
     }
 label epilogue_dv
@@ -1379,7 +1374,7 @@ label epilogue_dv
         scene color black with esfade3
         stop music fadeout 5
         pause 5
-        if ($persistent.endings_dv_bad == null)
+        if (!$persistent.endings_dv_bad)
         {
             $persistent.endings_dv_bad = true
             play sfx sfx_achievement
@@ -1393,7 +1388,6 @@ label epilogue_dv
         # $ persistent.replay = ""
         # call postscriptum from _call_postscriptum_5
         # goto dv_bad_ending
-        $persistent.scenario_complete = true
         goto postscriptum
     }
     else if ($dv_good)
@@ -1459,7 +1453,7 @@ label epilogue_dv
         scene color black with esfade3
         stop music fadeout 5
         pause 5
-        if ($persistent.endings_dv_good == null)
+        if (!$persistent.endings_dv_good)
         {
             $persistent.endings_dv_good = true
             play sfx sfx_achievement
@@ -1473,7 +1467,6 @@ label epilogue_dv
         # $ persistent.replay = ""
         # call postscriptum from _call_postscriptum_6
         # goto dv_good_ending
-        $persistent.scenario_complete = true
         goto postscriptum
     }
 label epilogue_sl
@@ -1668,7 +1661,7 @@ label epilogue_sl
         scene color black with esfade3
         stop music fadeout 5
         pause 5
-        if ($persistent.endings_sl_bad == null)
+        if (!$persistent.endings_sl_bad)
         {
             $persistent.endings_sl_bad = true
             play sfx sfx_achievement
@@ -1682,7 +1675,6 @@ label epilogue_sl
         # $ persistent.replay = ""
         # call postscriptum from _call_postscriptum_7
         # goto sl_bad_ending
-        $persistent.scenario_complete = true
         goto postscriptum
     }
     else if ($sl_good)
@@ -1844,7 +1836,7 @@ label epilogue_sl
         scene color black with esfade3
         stop music fadeout 5
         pause 5
-        if ($persistent.endings_sl_good == null)
+        if (!$persistent.endings_sl_good)
         {
             $persistent.endings_sl_good = true
             play sfx sfx_achievement
@@ -1858,7 +1850,6 @@ label epilogue_sl
         # $ persistent.replay = ""
         # call postscriptum from _call_postscriptum_8
         # goto sl_good_ending
-        $persistent.scenario_complete = true
         goto postscriptum
     }
 label postscriptum
