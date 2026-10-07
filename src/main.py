@@ -58,6 +58,8 @@ SETTINGS_PATH = get_settings_path()
 SAVES_PATH = get_saves_path()
 PERSISTENT_PATH = get_persistent_path()
 APP_VERSION = "0.3.0"
+# Original game/options.rpy: config.main_menu_music = "sound/music/blow_with_the_fires.ogg".
+MENU_MUSIC_KEY = "blow_with_the_fires"
 
 
 # ============ Сохранения ============
@@ -698,6 +700,7 @@ class TerminalSummer(App):
 
         self.ts_path = get_ts_path()
         self.audio = AudioManager(self.ts_path)
+        self._menu_music_active = False
 
         self._sprite_resources = None
         self._sprite_resources_loaded = False
@@ -1043,6 +1046,7 @@ class TerminalSummer(App):
         # Кнопки в MainMenu:
         elif button_id == "btn-start-game":       # Кнопка "Начать игру"
             self.cancel_script_advance()
+            self._menu_music_active = False
             self.audio.reset()
 
             # Скрытие главного меню
@@ -1173,6 +1177,7 @@ class TerminalSummer(App):
         self.load_persistent_state()
         self.load_settings()
         self.apply_settings()
+        self.start_menu_music()
         self.set_interval(0.5, self.poll_audio_errors)
         if not self.is_headless:
             errors = validate_audio_assets(self.ts_path, self.audio.catalog)
@@ -1352,6 +1357,15 @@ class TerminalSummer(App):
                 self.action_open_settings()
         else: pass # Не открывать в главном меню
 
+    def start_menu_music(self) -> None:
+        """Запускает фон меню один раз, не перезапуская его в дочерних разделах."""
+        if self._menu_music_active or hasattr(self, "script"):
+            return
+        self.audio.reset()
+        self.audio.play_menu(MENU_MUSIC_KEY)
+        self._menu_music_active = True
+
+
     def action_open_menu(self) -> None:
         """Открытие главного меню"""
         pause_menu = self.query_one("#pause-menu")
@@ -1370,6 +1384,7 @@ class TerminalSummer(App):
 
             # Показ главного меню
             main_menu.remove_class("hidden")
+            self.start_menu_music()
 
             # Фокус на кнопке "Начать игру"
             self.query_one("#btn-start-game", Button).focus()
@@ -2723,6 +2738,7 @@ class TerminalSummer(App):
 
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
+        self._menu_music_active = False
         self.audio.reset()
         self.set_game_paused(False)
         self.cancel_script_advance()
