@@ -9,6 +9,7 @@ if not hasattr(sys, "_MEIPASS"):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image, validate_gallery_assets
+from audio_catalog import validate_audio_assets
 
 # Старый архив поддерживается до публикации TS-v3.zip; URL можно сменить без сборки.
 ASSETS_URL = os.environ.get(
@@ -32,11 +33,11 @@ def _required_asset_paths() -> list[Path]:
         ts_dir / "resources.yaml",
     ]
 
-def check_assets() -> bool:
+def check_assets(*, require_audio: bool = False) -> bool:
     """Проверяет основные пути и каждое изображение из каталога галереи."""
     return all(path.exists() for path in _required_asset_paths()) and not validate_gallery_assets(
         get_project_root() / "TS", load_gallery_catalog()
-    )
+    ) and (not require_audio or not validate_audio_assets(get_project_root() / "TS"))
 
 
 def migrate_legacy_images(ts_dir: Path | None = None) -> None:
@@ -185,21 +186,38 @@ def download_assets():
     print("Все ресурсы успешно скачаны!\n")
 
 
-def ensure_assets(*, quiet: bool = False) -> None:
+def ensure_assets(*, quiet: bool = False, require_audio: bool = False) -> None:
     """Гарантирует наличие ассетов в рабочем корне"""
     restore_bundled_scripts()
     migrate_legacy_gallery()
     if check_assets():
+        if require_audio:
+            errors = validate_audio_assets(get_project_root() / "TS")
+            # Only an explicitly configured new archive may be fetched solely
+            # for audio. Never redownload the old default TS.zip in this case.
+            if errors and os.environ.get("TS_ASSETS_URL"):
+                download_assets()
+                errors = validate_audio_assets(get_project_root() / "TS")
+            if errors:
+                raise RuntimeError("Аудиоассеты неполны. Установите TS/sound из TS-v4-audio.zip; "
+                                   "старый URL сохранён до публикации нового архива.\n" + "\n".join(errors[:5]))
         if not quiet:
             print("Ассеты уже есть. Скачивание не требуется")
         return
     print("Ассеты не найдены. Запускаю загрузку...", file=sys.stderr)
     download_assets()
+    if require_audio and not check_assets(require_audio=True):
+        raise RuntimeError("Скачанный архив не содержит обязательного аудио. "
+                           "Укажите TS_ASSETS_URL нового архива или установите TS/sound вручную.")
 
 
 def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser(description="Подготовка ассетов без перезаписи существующих файлов")
+    parser.add_argument("--require-audio", action="store_true")
+    args = parser.parse_args()
     try:
-        ensure_assets()
+        ensure_assets(require_audio=args.require_audio)
     except OSError:
         print("Ошибка менеджера ассетов: не удалось прочитать или записать файл ассетов.", file=sys.stderr)
         raise SystemExit(1)
