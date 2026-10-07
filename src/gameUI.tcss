@@ -383,6 +383,34 @@ SettingsMenu {
     }
 }
 
+SettingAudio {
+    width: 100;
+    max-width: 100%;
+    height: auto;
+    padding: 1;
+    margin: 1;
+    border: round white;
+    border-title-style: b;
+}
+.audio-setting-row {
+    height: 3;
+    width: 1fr;
+}
+.audio-setting-title {
+    width: 23;
+    content-align: left middle;
+    height: 3;
+}
+.audio-setting-level {
+    width: 8;
+    content-align: center middle;
+    height: 3;
+}
+.audio-setting-row Button {
+    min-width: 8;
+    width: 8;
+}
+
 # Главное меню
 MainMenu {
     height: 100%;

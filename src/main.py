@@ -7,6 +7,8 @@ import threading
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
+from audio_manager import AUDIO_DEFAULTS, AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
+from audio_catalog import validate_audio_assets
 
 # --- ЛОГИКА ПУТЕЙ ---
 IS_FROZEN = hasattr(sys, "_MEIPASS")
@@ -482,7 +484,24 @@ class SettingsMenu(VerticalScroll):
         yield SettingQuality()
         yield SettingASCIIorANSI()
         yield SettingTextSpeed()
+        yield SettingAudio()
         yield Button("Назад ↩", id="btn-close-settings")
+
+class SettingAudio(Vertical):
+    """Независимые пользовательские уровни, не сценарные volume-команды."""
+    BORDER_TITLE = "Звук"
+    GROUPS = {"master": "Общая громкость", "music": "Музыка",
+              "environment": "Окружение", "effects": "Разовые эффекты"}
+
+    def compose(self):
+        for group, title in self.GROUPS.items():
+            with HorizontalGroup(classes="audio-setting-row"):
+                yield Label(title, classes="audio-setting-title")
+                yield Button("−10%", id=f"btn-audio-{group}-minus")
+                yield Label("", id=f"audio-{group}-level", classes="audio-setting-level")
+                yield Button("+10%", id=f"btn-audio-{group}-plus")
+        yield Button("Без звука", id="btn-audio-mute")
+
 
 class SettingHeader(Widget):
     """Виджет с настройкой Header"""
@@ -670,6 +689,7 @@ class TerminalSummer(App):
         "quality": "150",
         "style": "ANSI",
         "text_speed": "0.025",
+        **AUDIO_DEFAULTS,
     }
 
     def __init__(self):
@@ -677,6 +697,7 @@ class TerminalSummer(App):
         self.settings = self.DEFAULT_SETTINGS.copy()
 
         self.ts_path = get_ts_path()
+        self.audio = AudioManager(self.ts_path)
 
         self._sprite_resources = None
         self._sprite_resources_loaded = False
@@ -687,7 +708,6 @@ class TerminalSummer(App):
         self.current_time = "day"
         self.current_text_mode = "adv"
         self._interface_hidden = False
-        #self.audio_player = AudioPlayer()
         self._next_scene_in_progress = False
         self._text_animating = False
         self._text_animating_since = None
@@ -833,6 +853,19 @@ class TerminalSummer(App):
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Обработка событий при нажатии кнопок"""
         button_id = event.button.id
+        if button_id == "btn-audio-mute":
+            self.settings["audio_muted"] = not self.settings["audio_muted"]
+            self.apply_audio_settings()
+            self.save_settings()
+            return
+        if match := re.fullmatch(r"btn-audio-(master|music|environment|effects)-(minus|plus)", button_id or ""):
+            group, direction = match.groups()
+            key = "audio_" + group
+            self.settings[key] = max(0.0, min(1.0, round(self.settings[key] + (0.1 if direction == "plus" else -0.1), 2)))
+            self.apply_audio_settings()
+            self.save_settings()
+            return
+
 
         # Кнопки в NovelMenu:
         if   button_id == "btn-next":             # Кнопка "Продолжить"
@@ -1010,6 +1043,7 @@ class TerminalSummer(App):
         # Кнопки в MainMenu:
         elif button_id == "btn-start-game":       # Кнопка "Начать игру"
             self.cancel_script_advance()
+            self.audio.reset()
 
             # Скрытие главного меню
             self.action_open_menu()
@@ -1133,9 +1167,28 @@ class TerminalSummer(App):
 
     def on_mount(self) -> None:
         """Загрузка настроек при запуске"""
+        # Headless UI tests never open a real device. Backend tests opt in explicitly.
+        if self.is_headless and self.audio.backend_factory is PygameAudioBackend:
+            self.audio.backend_factory = NullAudioBackend
         self.load_persistent_state()
         self.load_settings()
         self.apply_settings()
+        self.set_interval(0.5, self.poll_audio_errors)
+        if not self.is_headless:
+            errors = validate_audio_assets(self.ts_path, self.audio.catalog)
+            if errors:
+                self.notify("Часть аудиофайлов отсутствует. Установите TS/sound из нового архива ассетов.",
+                            title="Звук", severity="warning", timeout=10)
+
+    def poll_audio_errors(self) -> None:
+        errors = self.audio.drain_errors()
+        if errors:
+            self.notify("\n".join(errors[:3]), title="Звук", severity="warning", timeout=10)
+
+
+    async def on_unmount(self) -> None:
+        await asyncio.to_thread(self.audio.close)
+
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
@@ -1644,6 +1697,7 @@ class TerminalSummer(App):
         from script_parser import normalize_script_state
         try:
             restored_variables = normalize_script_state(variables["state"])
+            restored_audio = self.audio.validate_snapshot(game_state.get("audio"))
         except ValueError as exc:
             self.sub_title = f"[Load error] {exc}"
             return
@@ -1701,6 +1755,7 @@ class TerminalSummer(App):
 
         # Проверенный выше parser становится активным только после сброса.
         self.script = loaded_script
+        self.audio.restore(restored_audio)
 
         # Скрытие главного меню (если загрузка из главного меню)
         if save_menu.opened_from == "menu":
@@ -1776,6 +1831,7 @@ class TerminalSummer(App):
 
         game_state = {
             "save_format": 3,
+            "audio": self.audio.snapshot(),
             "script": script_runtime,
             "variables": {
                 "state": script_parser.get_script_state(),
@@ -2550,6 +2606,7 @@ class TerminalSummer(App):
 
     def apply_settings(self):
         """Применение настроек при старте"""
+        self.apply_audio_settings()
         # Header
         if self.settings["header"]:
             self.query_one("Header").remove_class("hidden")
@@ -2589,6 +2646,14 @@ class TerminalSummer(App):
             self.query_one("#btn-speed-fast", Button).variant = "success"
         elif text_speed == "0":
             self.query_one("#btn-speed-instantly", Button).variant = "primary"
+
+    def apply_audio_settings(self) -> None:
+        self.settings.update(normalize_audio_settings(self.settings))
+        self.audio.set_settings(self.settings)
+        for group in SettingAudio.GROUPS:
+            self.query_one(f"#audio-{group}-level", Label).update(f"{round(self.settings['audio_' + group] * 100)}%")
+        self.query_one("#btn-audio-mute", Button).variant = "error" if self.settings["audio_muted"] else "default"
+
 
     def load_gallery_images(self):
         """Загружает явно выбранные изображения из общего каталога TS/images."""
@@ -2658,6 +2723,7 @@ class TerminalSummer(App):
 
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
+        self.audio.reset()
         self.set_game_paused(False)
         self.cancel_script_advance()
         # Отменённый парсер больше не считается активным: его finally-блоки

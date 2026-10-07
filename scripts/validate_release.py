@@ -329,6 +329,9 @@ def validate_script(
 ) -> list[str]:
     """Применяет существующие статические проверки к любому TXT, без обхода."""
     errors: list[str] = []
+    from audio_catalog import load_audio_catalog
+    from script_audio import parse_audio_command
+    audio_catalog = load_audio_catalog()
     project_root = ROOT_DIR if root_dir is None else root_dir
     resources_path = project_root / "TS" / "resources.yaml"
     assets_root = project_root / "TS" / "images"
@@ -364,6 +367,11 @@ def validate_script(
     show_count = 0
 
     for number, line in source_lines:
+        if line.split(maxsplit=1)[:1] in (["play"], ["stop"], ["volume"]):
+            try:
+                parse_audio_command(line, audio_catalog)
+            except ValueError as exc:
+                errors.append(f"{script_path.name}:{number}: {exc}")
         condition = None
         if line.startswith(("if ", "if(")):
             condition = line[2:].strip()

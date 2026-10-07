@@ -8,6 +8,8 @@ from textual.widget import Widget
 from textual.widgets import ListView, ListItem, Label
 from textual import _time
 from script_conditions import evaluate_script_condition
+from audio_catalog import load_audio_catalog
+from script_audio import parse_audio_command
 
 # Словарь имён
 DISPLAY_NAMES = {
@@ -437,7 +439,9 @@ class ScriptParser:
             await self._handle_show(line)
         elif line.startswith("hide"):
             await self._handle_hide(line)
-        elif line.startswith(("play", "stop", "volume", "with")):
+        elif line.startswith(("play", "stop", "volume")):
+            await self._handle_audio(line)
+        elif line.startswith("with"):
             await self._handle_play(line)
         elif line.startswith("window"):
             await self._handle_window(line)
@@ -773,10 +777,27 @@ class ScriptParser:
 
 
     async def _handle_play(self, line):
-        """Явно поддерживаемые заглушки аудио и визуальных переходов."""
+        """Заглушка визуальных переходов; аудио обрабатывается отдельно."""
         if not self.backward:
             await self.next_line()
 
+    async def _handle_audio(self, line):
+        try:
+            audio = getattr(self.app, "audio", None)
+            if audio is not None:
+                if not self.backward:
+                    audio.execute(line)
+                else:
+                    parse_audio_command(line, audio.catalog)
+            else:
+                if not hasattr(self, "_audio_catalog"):
+                    self._audio_catalog = load_audio_catalog()
+                parse_audio_command(line, self._audio_catalog)
+        except (OSError, ValueError) as exc:
+            self._report_script_error(str(exc))
+            return
+        if not self.backward:
+            await self.next_line()
 
 
     async def _handle_window(self, line):
