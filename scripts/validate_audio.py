@@ -12,11 +12,13 @@ sys.path.insert(0, str(ROOT_DIR / "src"))
 
 from audio_catalog import load_audio_catalog, resolve_audio_path, validate_audio_assets
 from script_audio import parse_audio_command
+from music_catalog import validate_music_assets
 
 
 def validate_audio(ts_dir: Path, *, decode=False) -> list[str]:
     catalog = load_audio_catalog()
     errors = validate_audio_assets(ts_dir, catalog)
+    errors.extend(validate_music_assets(ts_dir, audio_catalog=catalog))
     scripts = sorted((ts_dir / "text").glob("*.txt"))
     if not scripts:
         errors.append(f"Нет TXT-сценариев: {ts_dir / 'text'}")
@@ -66,7 +68,7 @@ def main():
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print("PASS: аудиокаталог, файлы и все TXT-аудиокоманды" + ("; декодирование pygame" if args.decode else ""))
+    print("PASS: аудиокаталог, 67 треков музыкальной комнаты, файлы и все TXT-аудиокоманды" + ("; декодирование pygame" if args.decode else ""))
     return 0
 
 
