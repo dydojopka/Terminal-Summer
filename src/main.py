@@ -258,6 +258,7 @@ SPEAKER_NAME_COLORS = {
     "sh":          "rgb(255,242,38)",
     "pi":          "rgb(230,0,0)",
     "me":          "rgb(225,221,125)",
+    "my":          "rgb(225,221,125)",
     "FIXME_voice": "rgb(192,192,192)",
     "bush":        "rgb(192,192,192)",
     "message":     "rgb(192,192,192)",

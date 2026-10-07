@@ -54,6 +54,7 @@ TextBar.uvp{border-title-color: rgb(78,255,0)}            # Странная д�
 TextBar.sh{border-title-color: rgb(255,242,38)}           # Шурик
 TextBar.pi{border-title-color: rgb(230,0,0)}              # Пионер
 TextBar.me{border-title-color: rgb(225,221,125)}          # Семён
+TextBar.my{border-title-color: rgb(225,221,125)}          # Я (эпилог Мику)
 TextBar.FIXME_voice{border-title-color: rgb(192,192,192)} # Голос
 TextBar.bush{border-title-color: rgb(192,192,192)}        # Голос
 TextBar.message{border-title-color: rgb(192,192,192)}     # Сообщение
