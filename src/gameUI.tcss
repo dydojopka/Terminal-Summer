@@ -500,6 +500,7 @@ GalleryMenu {
     content-align: center middle;
 
     GalleryMenuLeftBtns {
+        width: 22;
         height: 100%;
         
         #container-left-btns {
@@ -514,7 +515,7 @@ GalleryMenu {
     }
 
     GalleryMenuMidBtns {
-        width: 85%;
+        width: 1fr;
         height: 100%;
         border: outer #CAD06B;
         border-title-align: center;
@@ -571,6 +572,39 @@ GalleryMenu {
         margin: 1 0 0 2;
     }
 }
+
+#gallery-art-panel { height: 1fr; }
+
+MusicRoom {
+    height: 1fr;
+    width: 1fr;
+    padding: 0 1;
+    overflow-y: auto;
+}
+#music-search { height: 3; }
+#music-help {
+    height: auto;
+    max-height: 2;
+    color: $text-muted;
+}
+#music-list { height: 1fr; min-height: 1; }
+#music-empty { height: auto; }
+#music-status { height: 2; }
+#music-controls {
+    grid-size: 4 2;
+    grid-rows: 3;
+    height: 6;
+    Button { width: 1fr; min-width: 0; height: 3; }
+    Label { width: 1fr; height: 3; content-align: center middle; }
+}
+MusicRow {
+    layout: horizontal;
+    height: 1;
+    padding: 0 1;
+    .music-title { width: 1fr; text-overflow: ellipsis; text-wrap: nowrap; }
+    .music-duration { width: 6; text-align: right; }
+}
+MusicRow.music-playing { color: $success; text-style: bold; }
 
 .hidden {
     display: none;

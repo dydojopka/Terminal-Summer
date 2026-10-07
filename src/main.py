@@ -150,6 +150,7 @@ from rich.text import Text
 
 from script_parser import ScriptParser, format_script_state
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
+from music_room import MusicRoom
 from sprites_builder import (
     parse_show_like,
     load_yaml_dict as load_sprite_resources_yaml,
@@ -322,8 +323,6 @@ class MainMenuBrand(AnsiView):
                 Text("Terminal Summer", style="bold #E3B778", justify="center")
             )
     
-
-
 class MainMenuMiddleBtns(HorizontalGroup):
     """Виджет-контейнер для центарльных кнопок"""
     BORDER_TITLE="Информация"
@@ -389,10 +388,11 @@ class GalleryMenuMidBtns(Vertical):
     """Виджет-контейнер для кнопок и арт-пространства галереи в центре"""
     BORDER_TITLE=""
     def compose(self):
-        with HorizontalGroup():
+        with HorizontalGroup(id="gallery-art-panel"):
 
             with ScrollableContainer(id="bg-cg-gallery", can_focus=False, can_focus_children=False):
                 yield AnsiView("", id="ansi-content", classes="mouse-passive-art")
+            yield MusicRoom(id="music-room", classes="hidden")
             
         yield GalleryMenuBottomBtns()
         
@@ -503,7 +503,6 @@ class SettingAudio(Vertical):
                 yield Label("", id=f"audio-{group}-level", classes="audio-setting-level")
                 yield Button("+10%", id=f"btn-audio-{group}-plus")
         yield Button("Без звука", id="btn-audio-mute")
-
 
 class SettingHeader(Widget):
     """Виджет с настройкой Header"""
@@ -705,7 +704,7 @@ class TerminalSummer(App):
         self._sprite_resources = None
         self._sprite_resources_loaded = False
         self._sprite_assets_root = self.ts_path / "images"
-        self._sprite_runtime_dir = self.ts_path / "game/sprites/generated_runtime"
+        self._sprite_runtime_dir = self.ts_path / "images/sprites/generated_runtime"
         self._active_sprites = {}
         self._sprite_order_seq = 0
         self.current_time = "day"
@@ -868,7 +867,6 @@ class TerminalSummer(App):
             self.apply_audio_settings()
             self.save_settings()
             return
-
 
         # Кнопки в NovelMenu:
         if   button_id == "btn-next":             # Кнопка "Продолжить"
@@ -1085,28 +1083,11 @@ class TerminalSummer(App):
         # Кнопки в GalleryMenu:
         # LeftBtns
         elif button_id == "btn-gallery-music":    # Кнопка "Музыка"
-            # Меняем стили кнопок
-            self.query_one("#btn-gallery-music", Button).variant = "primary"
-            self.query_one("#btn-gallery-cg", Button).variant = "default"
-            self.query_one("#btn-gallery-bg", Button).variant = "default"
+            self.switch_gallery_tab("music")
         elif button_id == "btn-gallery-cg":       # Кнопка "Иллюстрации"
-            # Меняем стили кнопок
-            self.query_one("#btn-gallery-music", Button).variant = "default"
-            self.query_one("#btn-gallery-cg", Button).variant = "primary"
-            self.query_one("#btn-gallery-bg", Button).variant = "default"
-
-            self.gallery_mode = "cg"
-            self.load_gallery_images()
-            self.update_gallery_display()
+            self.switch_gallery_tab("cg")
         elif button_id == "btn-gallery-bg":       # Кнопка "Фоны"
-            # Меняем стили кнопок
-            self.query_one("#btn-gallery-music", Button).variant = "default"
-            self.query_one("#btn-gallery-cg", Button).variant = "default"
-            self.query_one("#btn-gallery-bg", Button).variant = "primary"
-
-            self.gallery_mode = "bg"
-            self.load_gallery_images()
-            self.update_gallery_display()
+            self.switch_gallery_tab("bg")
 
         # Перелистывание bg и cg
         elif button_id == "btn-back-gallery":     # Кнопка "<<<"
@@ -1190,14 +1171,14 @@ class TerminalSummer(App):
         if errors:
             self.notify("\n".join(errors[:3]), title="Звук", severity="warning", timeout=10)
 
-
     async def on_unmount(self) -> None:
         await asyncio.to_thread(self.audio.close)
-
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
         choice_bar = self.query_one("#choice-bar")
+        if event.list_view is not choice_bar.query_one(ListView):
+            return
         pending_choices = getattr(self, "pending_choices", None)
         if choice_bar.has_class("hidden") or not pending_choices:
             return
@@ -1365,6 +1346,32 @@ class TerminalSummer(App):
         self.audio.play_menu(MENU_MUSIC_KEY)
         self._menu_music_active = True
 
+    def start_music_preview(self, key, *, repeat=False):
+        self._menu_music_active = False
+        self.audio.start_preview(key, repeat=repeat)
+
+    def leave_music_preview(self):
+        if self.audio.music_status()["owner"] == "preview":
+            self.audio.stop_preview()
+            self.start_menu_music()
+
+    def switch_gallery_tab(self, mode):
+        if mode != "music":
+            self.leave_music_preview()
+        self.gallery_mode = mode
+        self.query_one("#bg-cg-gallery").set_class(mode == "music", "hidden")
+        self.query_one(GalleryMenuBottomBtns).set_class(mode == "music", "hidden")
+        room = self.query_one(MusicRoom)
+        room.set_class(mode != "music", "hidden")
+        for tab in ("music", "cg", "bg"):
+            self.query_one(f"#btn-gallery-{tab}", Button).variant = "primary" if tab == mode else "default"
+        if mode == "music":
+            self.query_one(GalleryMenuMidBtns).border_title = "Музыка"
+            room.query_one("#music-list", ListView).focus()
+            room.update_player()
+        else:
+            self.load_gallery_images()
+            self.update_gallery_display()
 
     def action_open_menu(self) -> None:
         """Открытие главного меню"""
@@ -1392,7 +1399,6 @@ class TerminalSummer(App):
             # Скрытие главного меню
             main_menu.add_class("hidden")
             self.query_one(Footer).remove_class("hidden")
-
 
     def action_open_settings(self) -> None:
         """Открытие меню настроек"""
@@ -1463,17 +1469,16 @@ class TerminalSummer(App):
             self.query_one("#btn-close-gallery", Button).focus()
 
             # Загружаем иллюстрации
-            self.gallery_mode = "cg"
             self.gallery_size = "150"
             self.gallery_index = 0
-            self.load_gallery_images()
-            self.update_gallery_display()
+            self.switch_gallery_tab("cg")
 
             # Стильи кнопок при открытии 
             self.query_one("#btn-small-gallery", Button).variant = "default"
             self.query_one("#btn-medium-gallery", Button).variant = "warning"
             self.query_one("#btn-large-gallery", Button).variant = "default"
         else:
+            self.leave_music_preview()
             # Скрываем меню галереи
             gallery_menu.add_class("hidden")
 
@@ -1708,7 +1713,6 @@ class TerminalSummer(App):
         if not isinstance(variables.get("state"), dict):
             self.sub_title = "[Load error] Invalid script variables"
             return
-
         from script_parser import normalize_script_state
         try:
             restored_variables = normalize_script_state(variables["state"])
@@ -1882,6 +1886,8 @@ class TerminalSummer(App):
     # ============ Функции - прочие ============
     async def key_space(self, event: events.Key) -> None:
         """Обработка пробела как перехода с фильтрацией ввода во время анимации."""
+        if not self.query_one("#gallery-menu").has_class("hidden"):
+            return
         now = getattr(event, "time", None) or _time.get_time()
         idle_for = now - self._space_last_event_at
         self._space_last_event_at = now
@@ -2668,7 +2674,7 @@ class TerminalSummer(App):
         for group in SettingAudio.GROUPS:
             self.query_one(f"#audio-{group}-level", Label).update(f"{round(self.settings['audio_' + group] * 100)}%")
         self.query_one("#btn-audio-mute", Button).variant = "error" if self.settings["audio_muted"] else "default"
-
+        self.query_one(MusicRoom).update_player()
 
     def load_gallery_images(self):
         """Загружает явно выбранные изображения из общего каталога TS/images."""
@@ -2740,6 +2746,7 @@ class TerminalSummer(App):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
         self._menu_music_active = False
         self.audio.reset()
+        self.query_one("#gallery-menu").add_class("hidden")
         self.set_game_paused(False)
         self.cancel_script_advance()
         # Отменённый парсер больше не считается активным: его finally-блоки
