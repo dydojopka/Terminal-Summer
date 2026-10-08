@@ -16,13 +16,18 @@ sys.path.insert(0, str(ROOT_DIR / "src"))
 from gallery_catalog import load_gallery_catalog, validate_gallery_assets
 from audio_catalog import validate_audio_assets
 from music_catalog import validate_music_assets
+from endings_catalog import ENDING_ICON_WIDTHS, load_endings_catalog, resolve_ending_ansi, validate_endings_assets
 from scripts.assets_manager import migrate_legacy_gallery
 
 
-def create_assets_archive(ts_dir: Path, output: Path, catalog: dict, *, include_audio: bool = True) -> None:
+def create_assets_archive(
+    ts_dir: Path, output: Path, catalog: dict, *, include_audio: bool = True, include_endings: bool = True,
+) -> None:
     if output.resolve().is_relative_to(ts_dir.resolve()):
         raise ValueError("Архив нужно сохранить за пределами папки TS")
     errors = validate_gallery_assets(ts_dir, catalog, verify_images=True)
+    if include_endings:
+        errors.extend(validate_endings_assets(ts_dir))
     if include_audio:
         errors.extend(validate_audio_assets(ts_dir))
         errors.extend(validate_music_assets(ts_dir))
@@ -44,6 +49,11 @@ def create_assets_archive(ts_dir: Path, output: Path, catalog: dict, *, include_
             if not path.resolve().is_relative_to(ts_dir.resolve()):
                 raise ValueError(f"Путь ассета выходит за пределы папки TS: {path}")
             files.append(path)
+    if include_endings:
+        for ending in load_endings_catalog():
+            for width in ENDING_ICON_WIDTHS:
+                for unlocked in (True, False):
+                    files.append(resolve_ending_ansi(ts_dir, ending, width, unlocked))
     if include_audio:
         for path in sorted((ts_dir / "sound").rglob("*.ogg")):
             if path.is_file():

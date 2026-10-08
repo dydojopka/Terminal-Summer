@@ -39,7 +39,9 @@ REM Проверка выпущенных сценариев и ресурсов
                       --add-data "%ROOT_DIR%\src\menu_logo.ansi;." ^
                        --add-data "%ROOT_DIR%\src\gallery_manifest.json;." ^
                         --add-data "%ROOT_DIR%\src\audio_manifest.json;." ^
-                        --add-data "%ROOT_DIR%\src\music_manifest.json;." ^
+                         --add-data "%ROOT_DIR%\src\music_manifest.json;." ^
+                         --add-data "%ROOT_DIR%\src\endings_manifest.json;." ^
+                         --add-data "%ROOT_DIR%\TS\achievements_ansi;achievements_ansi" ^
                       --add-data "%ROOT_DIR%\TS\text\prologue.txt;TS/text" ^
                       --add-data "%ROOT_DIR%\TS\text\day*.txt;TS/text" ^
                       --add-data "%ROOT_DIR%\TS\text\epilogue*.txt;TS/text" ^
