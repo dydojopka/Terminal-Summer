@@ -1870,7 +1870,7 @@ class TerminalSummer(App):
         text_bar = self.query_one("#text-bar", Widget)
         current_speaker = str(text_bar.border_title) if text_bar.border_title else ""
         current_text = text_bar.text if text_bar.text else ""
-        # speaker_id — CSS-класс персонажа (sl, un, dv и т.д.)
+        # speaker_id - CSS-класс персонажа (sl, un, dv и т.д.)
         speaker_classes = [cls for cls in text_bar.classes if cls != "text-bar"]
         speaker_id = speaker_classes[0] if speaker_classes else None
 
@@ -2305,7 +2305,7 @@ class TerminalSummer(App):
         try:
             task.result()
         except Exception:
-            # Prefetch — оптимизация; ошибка не должна останавливать сценарий.
+            # Prefetch - оптимизация; ошибка не должна останавливать сценарий.
             pass
 
     def _schedule_snapshot_prefetch(

@@ -102,7 +102,7 @@ DEFAULT_SCRIPT_STATE = {
     "us_good": False, "us_bad": False,
     "fail_good": False, "fail_bad": False,
     "epilogue_uv_chosen": 0,
-    # Q05: окончания — bool; старый null мигрирует в False.
+    # Q05: окончания - bool; старый null мигрирует в False.
     "persistent.endings_main_good": False, "persistent.endings_main_bad": False,
     "persistent.endings_sl_good": False, "persistent.endings_sl_bad": False,
     "persistent.endings_dv_good": False, "persistent.endings_dv_bad": False,
@@ -628,7 +628,7 @@ class ScriptParser:
                 break
             if line.startswith("load"):
                 break
-            # Пауза — граница видимого кадра. Команды перед ней должны быть
+            # Пауза - граница видимого кадра. Команды перед ней должны быть
             # показаны игроку, а не слиты с визуальными командами после неё.
             if line.startswith("pause"):
                 break

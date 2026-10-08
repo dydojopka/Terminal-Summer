@@ -28,7 +28,7 @@ class MusicRoom(Vertical):
 
     def compose(self):
         yield Input(placeholder="Поиск по названию", id="music-search")
-        yield Static("↑/↓ — выбор · Enter/клик — слушать · Tab — кнопки · Esc — меню",
+        yield Static("↑/↓ - выбор · Enter/клик - слушать · Tab - кнопки · Esc - меню",
                      id="music-help")
         yield ListView(id="music-list")
         yield Static("", id="music-empty", classes="hidden")
