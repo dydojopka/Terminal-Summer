@@ -151,6 +151,9 @@ from rich.text import Text
 from script_parser import ScriptParser, format_script_state
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from music_room import MusicRoom
+from ending_progress import (
+    ending_unlock_time, normalize_ending_dates, split_persistent_progress, merge_ending_dates,
+)
 from sprites_builder import (
     parse_show_like,
     load_yaml_dict as load_sprite_resources_yaml,
@@ -700,6 +703,7 @@ class TerminalSummer(App):
         self.ts_path = get_ts_path()
         self.audio = AudioManager(self.ts_path)
         self._menu_music_active = False
+        self.ending_dates = {}
 
         self._sprite_resources = None
         self._sprite_resources_loaded = False
@@ -1716,6 +1720,7 @@ class TerminalSummer(App):
         from script_parser import normalize_script_state
         try:
             restored_variables = normalize_script_state(variables["state"])
+            restored_ending_dates = normalize_ending_dates(game_state.get("ending_dates", {}), restored_variables)
             restored_audio = self.audio.validate_snapshot(game_state.get("audio"))
         except ValueError as exc:
             self.sub_title = f"[Load error] {exc}"
@@ -1757,6 +1762,10 @@ class TerminalSummer(App):
         update_persistent_state(previous_progress)
         # Persistent-флаги не должны откатываться загрузкой старого слота.
         self.load_persistent_state()
+        merged_dates = merge_ending_dates(self.ending_dates, restored_ending_dates)
+        if merged_dates != self.ending_dates:
+            self.ending_dates = merged_dates
+            self.save_persistent_state()
         self.update_script_header()
 
         # Восстановление сцены
@@ -1850,6 +1859,7 @@ class TerminalSummer(App):
 
         game_state = {
             "save_format": 3,
+            "ending_dates": self.ending_dates.copy(),
             "audio": self.audio.snapshot(),
             "script": script_runtime,
             "variables": {
@@ -2558,18 +2568,29 @@ class TerminalSummer(App):
                 state = json.load(file)
             from script_parser import update_persistent_state
 
-            update_persistent_state(state)
+            flags, dates = split_persistent_progress(state)
+            update_persistent_state(flags)
+            self.ending_dates = merge_ending_dates(self.ending_dates, dates)
             self.update_script_header()
             return True
         except (OSError, ValueError, TypeError) as exc:
             self.sub_title = f"[Persistent state error] {exc}"
             return False
 
+    def record_ending_unlock(self, flag: str) -> None:
+        """Вызывается только при сценарном переходе False → True, не при загрузке."""
+        from script_parser import ENDING_STATE_KEYS, get_persistent_state
+
+        if flag in ENDING_STATE_KEYS and get_persistent_state().get(flag) is True and flag not in self.ending_dates:
+            self.ending_dates[flag] = ending_unlock_time()
+
     def save_persistent_state(self) -> None:
         """Атомарно сохраняет persistent-флаги рядом с настройками."""
         from script_parser import get_persistent_state
 
         state = get_persistent_state()
+        if self.ending_dates:
+            state["ending_dates"] = self.ending_dates.copy()
         temporary_path = self.PERSISTENT_FILE.with_suffix(".json.tmp")
         try:
             self.PERSISTENT_FILE.parent.mkdir(parents=True, exist_ok=True)

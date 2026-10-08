@@ -1013,6 +1013,7 @@ class ScriptParser:
         # Парсим строку ($lp_sl += 1, $day2_flag = true, $persistent.flag = false)
         try:
             state_key, _, _ = parse_script_assignment(line)
+            was_unlocked = SCRIPT_STATE.get(state_key) is True
             apply_script_assignment(line, SCRIPT_STATE)
         except ValueError as exc:
             self._report_script_error(str(exc), stop_execution=False)
@@ -1022,6 +1023,10 @@ class ScriptParser:
         # Обновляем единое состояние и Header.
         self._update_script_header()
         if state_key.startswith("persistent."):
+            if state_key in ENDING_STATE_KEYS and not was_unlocked and SCRIPT_STATE[state_key] is True:
+                record_unlock = getattr(self.app, "record_ending_unlock", None)
+                if record_unlock is not None:
+                    record_unlock(state_key)
             save_persistent = getattr(self.app, "save_persistent_state", None)
             if save_persistent is not None:
                 save_persistent()
