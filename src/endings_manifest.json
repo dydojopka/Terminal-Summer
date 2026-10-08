@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "endings": [
+    {"id": "main_good", "ending": "Семён, хорошая", "title": "Титан одиночества", "flag": "persistent.endings_main_good"},
+    {"id": "main_bad", "ending": "Семён, плохая", "title": "Epic Fail", "flag": "persistent.endings_main_bad"},
+    {"id": "sl_good", "ending": "Славя, хорошая", "title": "Тёплая ламповость", "flag": "persistent.endings_sl_good"},
+    {"id": "sl_bad", "ending": "Славя, плохая", "title": "Успешный превозмогатель", "flag": "persistent.endings_sl_bad"},
+    {"id": "dv_good", "ending": "Алиса, хорошая концовка", "title": "Гуру пикапа", "flag": "persistent.endings_dv_good"},
+    {"id": "dv_bad", "ending": "Алиса, плохая", "title": "Лидер митол-группы", "flag": "persistent.endings_dv_bad"},
+    {"id": "un_good", "ending": "Лена, хорошая", "title": "Всё как у людей", "flag": "persistent.endings_un_good"},
+    {"id": "un_bad", "ending": "Лена, плохая", "title": "Вскрываемся!", "flag": "persistent.endings_un_bad"},
+    {"id": "us_good", "ending": "Ульяна, хорошая", "title": "Гроза педобиров", "flag": "persistent.endings_us_good"},
+    {"id": "us_bad", "ending": "Ульяна, плохая", "title": "ICQ выше среднего", "flag": "persistent.endings_us_bad"},
+    {"id": "mi", "ending": "Мику", "title": "What is this I don't even", "flag": "persistent.endings_mi"},
+    {"id": "uv_unknown_fucken_shit", "ending": "Юля", "title": "Собственная кошкодевочка", "flag": "persistent.endings_uv_unknown_fucken_shit"},
+    {"id": "uv_city", "ending": "Все вместе", "title": "Harem Master 80 lvl", "flag": "persistent.endings_uv_city"}
+  ]
+}
