@@ -606,6 +606,51 @@ MusicRow {
 }
 MusicRow.music-playing { color: $success; text-style: bold; }
 
+EndingsMenu {
+    width: 100%;
+    height: 100%;
+    border: round white;
+    border-title-align: center;
+    border-title-style: bold;
+    background: $surface;
+    padding: 0 1;
+}
+#endings-toolbar { height: 4; }
+#btn-close-endings { width: 12; min-width: 9; }
+#endings-progress {
+    width: 1fr;
+    height: 3;
+    content-align: right middle;
+}
+#endings-help { height: auto; max-height: 2; color: $text-muted; }
+#endings-error { height: auto; }
+#endings-list { height: 1fr; min-height: 1; background: transparent; }
+EndingRow {
+    layout: horizontal;
+    align: left middle;
+    height: auto;
+    min-height: 10;
+    width: 1fr;
+    padding: 1;
+    .ending-icon { width: 24; height: 12; margin-right: 2; }
+    .ending-details { width: 1fr; height: auto; align: left middle; }
+    .ending-route { width: 23; height: auto; margin-right: 2; color: $text-muted; }
+    .ending-caption { width: 1fr; height: auto; }
+    .ending-title { width: 1fr; height: auto; color: $text-muted; }
+    .ending-status { width: 1fr; height: auto; margin-top: 1; color: $text-muted; }
+    .ending-date { width: 1fr; height: auto; margin-top: 1; color: $text-muted; }
+}
+EndingRow.ending-unlocked {
+    .ending-route { color: $text; text-style: bold; }
+    .ending-title { color: $text; text-style: bold; }
+    .ending-status { color: $text; }
+}
+EndingRow.ending-compact {
+    .ending-icon { margin-right: 1; }
+    .ending-details { layout: vertical; }
+    .ending-route { width: 1fr; margin-right: 0; margin-bottom: 1; }
+}
+
 .hidden {
     display: none;
 }

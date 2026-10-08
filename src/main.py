@@ -151,6 +151,7 @@ from rich.text import Text
 from script_parser import ScriptParser, format_script_state
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from music_room import MusicRoom
+from endings_menu import EndingsMenu, EndingsList
 from ending_progress import (
     ending_unlock_time, normalize_ending_dates, split_persistent_progress, merge_ending_dates,
 )
@@ -337,7 +338,7 @@ class MainMenuMiddleBtns(HorizontalGroup):
 class MainMenuBottomBtns(HorizontalGroup):
     """Виджет-контейнер для нижних кнопок"""
     def compose(self):
-        yield Button("Достижения (скоро) 🏅", id="btn-achievements", disabled=True)
+        yield Button("Достижения 🏅", id="btn-achievements")
         yield Button("Настройки 🪛", id="btn-settings-menu")
         yield Button("Выход 🚪", id="btn-exit-menu")
 
@@ -808,6 +809,7 @@ class TerminalSummer(App):
         yield PauseMenu(   id="pause-menu",    classes="hidden")
         yield SettingsMenu(id="settings-menu", classes="hidden")
         yield GalleryMenu( id="gallery-menu",  classes="hidden")
+        yield EndingsMenu( id="endings-menu",  classes="hidden")
         yield SaveMenu(    id="save-menu",     classes="hidden")
         yield ScriptLoadingOverlay(id="script-loading", classes="hidden")
 
@@ -1077,6 +1079,8 @@ class TerminalSummer(App):
             self.open_save_menu("menu")
         elif button_id == "btn-gallery":          # Кнопка "Галерея"
             self.action_open_gallery()
+        elif button_id in {"btn-achievements", "btn-close-endings"}:
+            self.action_open_endings()
         elif button_id == "btn-settings-menu":    # Кнопка "Настройки"
             self.query_one("#settings-menu").remove_class("open-from-pause")
             self.query_one("#settings-menu").add_class("open-from-menu") # Класс-флаг что настройки открыты из MainMenu
@@ -1215,6 +1219,8 @@ class TerminalSummer(App):
 
     def action_log(self) -> None:
         """Открытие меню истории"""
+        if not self.query_one("#endings-menu").has_class("hidden"):
+            return
         log_menu = self.query_one("#log-menu")
         novel_menu = self.query_one("#novel-menu")
         novel_window = self.query_one("#novel-window")
@@ -1252,6 +1258,7 @@ class TerminalSummer(App):
             self.query_one("#settings-menu"),
             self.query_one("#save-menu"),
             self.query_one("#gallery-menu"),
+            self.query_one("#endings-menu"),
         )
         if (
             not main_menu.has_class("hidden")
@@ -1298,6 +1305,10 @@ class TerminalSummer(App):
         # меню было открыто: в главное меню или в окно новеллы.
         if not save_menu.has_class("hidden"):
             self.close_save_menu()
+            return
+
+        if not self.query_one("#endings-menu").has_class("hidden"):
+            self.action_open_endings()
             return
 
         # Галерея всегда открывается из главного меню.
@@ -1490,6 +1501,23 @@ class TerminalSummer(App):
             self.action_open_menu()
             #main_menu.remove_class("hidden")
 
+
+    def action_open_endings(self) -> None:
+        """Самостоятельное меню только из главного экрана, без изменения аудио."""
+        menu = self.query_one(EndingsMenu)
+        main_menu = self.query_one("#main-menu")
+        if menu.has_class("hidden"):
+            if main_menu.has_class("hidden"):
+                return
+            main_menu.add_class("hidden")
+            self.query_one(Footer).add_class("hidden")
+            menu.remove_class("hidden")
+            menu.refresh_progress()
+            menu.query_one(EndingsList).focus()
+        else:
+            menu.add_class("hidden")
+            main_menu.remove_class("hidden")
+            self.query_one("#btn-achievements", Button).focus()
 
     # ============ Сохранения ============
     def is_savable_game_state(self) -> bool:
@@ -1896,7 +1924,8 @@ class TerminalSummer(App):
     # ============ Функции - прочие ============
     async def key_space(self, event: events.Key) -> None:
         """Обработка пробела как перехода с фильтрацией ввода во время анимации."""
-        if not self.query_one("#gallery-menu").has_class("hidden"):
+        if (not self.query_one("#gallery-menu").has_class("hidden")
+                or not self.query_one("#endings-menu").has_class("hidden")):
             return
         now = getattr(event, "time", None) or _time.get_time()
         idle_for = now - self._space_last_event_at
@@ -2768,6 +2797,7 @@ class TerminalSummer(App):
         self._menu_music_active = False
         self.audio.reset()
         self.query_one("#gallery-menu").add_class("hidden")
+        self.query_one("#endings-menu").add_class("hidden")
         self.set_game_paused(False)
         self.cancel_script_advance()
         # Отменённый парсер больше не считается активным: его finally-блоки
