@@ -31,6 +31,7 @@ fi
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/assets_manager.py" --require-audio
 
 # Проверка выпущенных сценариев и ресурсов до дорогостоящей сборки
+"${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_endings.py"
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_release.py" --day 2 --day 3
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_gallery.py"
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_audio.py" --decode

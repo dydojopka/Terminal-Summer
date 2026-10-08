@@ -29,6 +29,7 @@ REM Подготовка ассетов в корне проекта
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\assets_manager.py" --require-audio || exit /b 1
 
 REM Проверка выпущенных сценариев и ресурсов до дорогостоящей сборки
+"%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_endings.py" || exit /b 1
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_release.py" --day 2 --day 3 || exit /b 1
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_gallery.py" || exit /b 1
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_audio.py" --decode || exit /b 1
