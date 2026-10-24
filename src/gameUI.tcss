@@ -115,6 +115,13 @@ NovelMenu {
         align: right bottom;
     }
 
+    #skip-status {
+        width: 100%;
+        height: auto;
+        text-align: center;
+        color: $text-muted;
+    }
+
     # Кнопки "Назад" и "Вперёд" 
     #btn-log {
         dock: none;

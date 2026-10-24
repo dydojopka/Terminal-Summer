@@ -600,6 +600,7 @@ class NovelMenu(Static):
             yield Button("История", id="btn-log")
         yield TextBar(id="text-bar")
         with Vertical(id="novel-next-control", classes="novel-control"):
+            yield Label("", id="skip-status")
             yield Button("Продолжить", id="btn-next")
 
 class TextBar(Widget):
@@ -625,8 +626,14 @@ class TextBar(Widget):
             self.text = ""
             self.refresh()
 
-        for char in new_text:
+        for index, char in enumerate(new_text):
             await self.app.wait_until_game_resumed()
+            if self.app.skipping:
+                self.text += new_text[index:]
+                self.refresh()
+                # Быстрые части <w> тоже должны отдавать управление вводу.
+                await asyncio.sleep(0)
+                break
             self.text += char
             self.refresh()
             await asyncio.sleep(speed)
@@ -734,6 +741,12 @@ class TerminalSummer(App):
         self._space_last_event_at = 0.0
         self._space_idle_gap = 0.12
         self._space_require_idle = False
+        self.skipping = False
+        self._skip_last_event_at = 0.0
+        self._skip_input_after = _time.get_time()
+        self._skip_next_advance_at = 0.0
+        self._skip_timer = None
+        self._skip_controls_state = None
         self._script_advance_task: asyncio.Task | None = None
         self._script_delay_event: asyncio.Event | None = None
         self._script_delay_kind: str | None = None
@@ -786,6 +799,12 @@ class TerminalSummer(App):
             show=True,
             key_display = "SPACE",
             id="bind-next"),
+        Binding(
+            "s,ы,S,Ы",
+            "toggle_skipping",
+            "Пропуск",
+            key_display="S",
+            id="bind-skip"),
         Binding(
             "h, р",
             "log",
@@ -1164,6 +1183,10 @@ class TerminalSummer(App):
         self.apply_settings()
         self.start_menu_music()
         self.set_interval(0.5, self.poll_audio_errors)
+        self._skip_timer = self.set_interval(0.05, self._skip_tick)
+        self.app_suspend_signal.subscribe(
+            self, lambda _: self.stop_skipping(), immediate=True
+        )
         if not self.is_headless:
             errors = validate_audio_assets(self.ts_path, self.audio.catalog)
             if errors:
@@ -1176,7 +1199,13 @@ class TerminalSummer(App):
             self.notify("\n".join(errors[:3]), title="Звук", severity="warning", timeout=10)
 
     async def on_unmount(self) -> None:
+        self.cancel_script_advance()
+        if self._skip_timer is not None:
+            self._skip_timer.stop()
         await asyncio.to_thread(self.audio.close)
+
+    def on_app_blur(self) -> None:
+        self.stop_skipping()
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
@@ -1193,6 +1222,7 @@ class TerminalSummer(App):
         if choice is None:
             return
 
+        self.stop_skipping()
         self.script.select_choice(choice)
 
         # Очищаем pending_choices до продолжения сценария.
@@ -1215,6 +1245,7 @@ class TerminalSummer(App):
 
     def action_log(self) -> None:
         """Открытие меню истории"""
+        self.stop_skipping()
         if not self.query_one("#endings-menu").has_class("hidden"):
             return
         log_menu = self.query_one("#log-menu")
@@ -1243,6 +1274,7 @@ class TerminalSummer(App):
 
     def action_toggle_interface(self) -> None:
         """Показывает или скрывает интерфейс новеллы, оставляя сцену видимой."""
+        self.stop_skipping()
         if not hasattr(self, "script"):
             return
 
@@ -1281,6 +1313,7 @@ class TerminalSummer(App):
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
+        self.stop_skipping()
         # Preload временно скрывает игровой интерфейс и затем самостоятельно
         # восстанавливает его. Не позволяем Escape открыть PauseMenu под
         # полноэкранным оверлеем и получить два конкурирующих состояния UI.
@@ -1386,6 +1419,7 @@ class TerminalSummer(App):
 
     def action_open_menu(self) -> None:
         """Открытие главного меню"""
+        self.stop_skipping()
         pause_menu = self.query_one("#pause-menu")
         settings_menu = self.query_one("#settings-menu")
         main_menu = self.query_one("#main-menu")
@@ -1413,6 +1447,7 @@ class TerminalSummer(App):
 
     def action_open_settings(self) -> None:
         """Открытие меню настроек"""
+        self.stop_skipping()
         settings_menu = self.query_one("#settings-menu")
         pause_menu = self.query_one("#pause-menu")
         main_menu = self.query_one("#main-menu")
@@ -1465,6 +1500,7 @@ class TerminalSummer(App):
 
     def action_open_gallery(self) -> None:
         """Открытие меню галереи"""
+        self.stop_skipping()
         main_menu = self.query_one("#main-menu")
         gallery_menu = self.query_one("#gallery-menu")
 
@@ -1500,6 +1536,7 @@ class TerminalSummer(App):
 
     def action_open_endings(self) -> None:
         """Самостоятельное меню только из главного экрана, без изменения аудио."""
+        self.stop_skipping()
         menu = self.query_one(EndingsMenu)
         main_menu = self.query_one("#main-menu")
         if menu.has_class("hidden"):
@@ -1538,6 +1575,7 @@ class TerminalSummer(App):
 
     def open_save_menu(self, opened_from: str) -> None:
         """Открытие меню сохранений"""
+        self.stop_skipping()
         save_menu = self.query_one("#save-menu")
         pause_menu = self.query_one("#pause-menu")
         main_menu = self.query_one("#main-menu")
@@ -1583,6 +1621,7 @@ class TerminalSummer(App):
 
     def close_save_menu(self) -> None:
         """Закрытие меню сохранений"""
+        self.stop_skipping()
         save_menu = self.query_one("#save-menu")
         save_menu.add_class("hidden")
 
@@ -1918,6 +1957,112 @@ class TerminalSummer(App):
         self.update_save_menu_display()
 
     # ============ Функции - прочие ============
+    def on_key(self, event: events.Key) -> None:
+        # Обычное всплытие: Input сначала получает буквы сам. Binding нужен
+        # Footer, но не должен второй раз исполнить уже обработанное событие.
+        if event.key not in {"s", "ы", "S", "Ы"}:
+            return
+        event.stop()
+        event.prevent_default()
+        now = event.time
+        idle_for = now - self._skip_last_event_at
+        self._skip_last_event_at = max(now, self._skip_last_event_at)
+        if now <= self._skip_input_after or idle_for < 0.12:
+            return
+        self.toggle_skipping()
+
+    def _is_script_loading(self) -> bool:
+        return (
+            self._script_preload_task is not None
+            and not self._script_preload_task.done()
+        ) or not self.query_one("#script-loading").has_class("hidden")
+
+    def is_gameplay_context(self, *, allow_preload: bool = False) -> bool:
+        """Игровой контекст, независимо от печати/занятости parser-task."""
+        if (
+            not self.is_running
+            or not self.screen_stack
+            or not isinstance(getattr(self, "script", None), ScriptParser)
+            or not self.app_focus
+            or self.screen.id != "_default"
+            or self._game_paused
+            or self._interface_hidden
+            or getattr(self, "pending_choices", None) is not None
+        ):
+            return False
+        if any(not self.query_one(selector).has_class("hidden") for selector in (
+            "#main-menu", "#pause-menu", "#log-menu", "#settings-menu",
+            "#save-menu", "#gallery-menu", "#endings-menu", "#choice-bar",
+        )):
+            return False
+        if self._is_script_loading():
+            return allow_preload
+        # NVL скрывает novel-window, а window hide задаёт invisible, не hidden.
+        return not self.query_one("#novel-menu").has_class("hidden")
+
+    def can_start_skipping(self) -> bool:
+        return self.is_gameplay_context() and not (
+            self.script.failed or self.script.finished or self.script.has_diagnostic
+        )
+
+    def set_skipping(self, enabled: bool) -> None:
+        if not enabled:
+            self.stop_skipping()
+        elif not self.skipping and self.can_start_skipping():
+            self.skipping = True
+            self._skip_next_advance_at = _time.get_time() + 0.1
+            self._sync_skip_controls()
+
+    def toggle_skipping(self) -> None:
+        self.set_skipping(not self.skipping)
+
+    def action_toggle_skipping(self) -> None:
+        self.toggle_skipping()
+
+    def stop_skipping(self) -> None:
+        """Не отменяет исполняемый DSL; отсекает ввод из старого контекста."""
+        self.skipping = False
+        self._skip_input_after = _time.get_time()
+        self._sync_skip_controls()
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == "toggle_skipping":
+            return self.skipping or self.can_start_skipping()
+        return super().check_action(action, parameters)
+
+    def _sync_skip_controls(self) -> None:
+        if not self.is_running or not self.screen_stack:
+            return
+        available = self.skipping or self.can_start_skipping()
+        state = (self.skipping, available)
+        if state == self._skip_controls_state:
+            return
+        self._skip_controls_state = state
+        status = self.query_one("#skip-status", Label)
+        status.update(
+            "Пропуск — S: выключить" if self.skipping else "S: включить пропуск"
+        )
+        status.set_class(not available, "hidden")
+        self.refresh_bindings()
+
+    def _skip_tick(self) -> None:
+        self._sync_skip_controls()
+        if not self.skipping:
+            return
+        if not self.is_gameplay_context(allow_preload=True) or (
+            self.script.failed or self.script.finished or self.script.has_diagnostic
+        ):
+            self.stop_skipping()
+            return
+        if self._is_script_loading():
+            return
+        if self.skip_script_delay(automatic=True):
+            return
+        if self._input_blocked or self._text_animating:
+            return
+        if _time.get_time() >= self._skip_next_advance_at:
+            self._start_script_advance()
+
     async def key_space(self, event: events.Key) -> None:
         """Обработка пробела как перехода с фильтрацией ввода во время анимации."""
         if (not self.query_one("#gallery-menu").has_class("hidden")
@@ -2452,6 +2597,10 @@ class TerminalSummer(App):
             raise
         finally:
             if generation == self._preload_generation:
+                if not self.skipping:
+                    # Запоздавшая S, введённая под оверлеем, не запускает skip
+                    # после прогрева. Активному режиму оставляем возможность stop.
+                    self._skip_input_after = _time.get_time()
                 overlay.add_class("hidden")
                 if self._loading_restore_novel:
                     novel_menu.remove_class("hidden")
@@ -2921,6 +3070,8 @@ class TerminalSummer(App):
             return False
 
         self._next_scene_in_progress = True
+        # Любой успешный запрос, включая ручной, отодвигает следующий skip-шаг.
+        self._skip_next_advance_at = _time.get_time() + 0.1
         task = asyncio.create_task(self.script.next_line())
         self._script_advance_task = task
         task.add_done_callback(self._on_script_advance_done)
@@ -2928,7 +3079,8 @@ class TerminalSummer(App):
 
     def _on_script_advance_done(self, task: asyncio.Task) -> None:
         """Освобождает переход после завершения только актуальной задачи."""
-        if self._script_advance_task is task:
+        is_current = self._script_advance_task is task
+        if is_current:
             self._script_advance_task = None
             self._next_scene_in_progress = False
 
@@ -2939,11 +3091,14 @@ class TerminalSummer(App):
             task.result()
         except Exception as exc:
             # Исключение уже извлечено из Task и не останется незамеченным.
-            self.sub_title = f"[Script error] {exc}"
+            if is_current:
+                self.script._report_script_error(str(exc))
 
     def set_game_paused(self, paused: bool) -> None:
         """Меняет состояние паузы и будит ожидающие сценарные задачи."""
         paused = bool(paused)
+        if paused:
+            self.stop_skipping()
         if self._game_paused == paused:
             return
         self._game_paused = paused
@@ -2960,7 +3115,7 @@ class TerminalSummer(App):
     async def wait_script_delay(
         self, seconds: float, kind: str, *, skippable: bool = True
     ) -> bool:
-        """Ждёт сценарную задержку или её пропуск действием «Далее»."""
+        """Ждёт задержку; skippable ограничивает только ручное «Далее»."""
         if seconds <= 0:
             return False
 
@@ -2976,6 +3131,12 @@ class TerminalSummer(App):
 
         remaining = seconds
         try:
+            await self.wait_until_game_resumed()
+            if self.skipping and not self._is_script_loading():
+                await asyncio.sleep(0)
+                await self.wait_until_game_resumed()
+                if self.skipping:
+                    return True
             while remaining > 0:
                 await self.wait_until_game_resumed()
                 started_at = _time.get_time()
@@ -3015,13 +3176,13 @@ class TerminalSummer(App):
                 self._input_blocked = False
                 self._input_blocked_until = _time.get_time()
 
-    def skip_script_delay(self) -> bool:
-        """Завершает только активную сценарную задержку."""
+    def skip_script_delay(self, *, automatic: bool = False) -> bool:
+        """Завершает задержку; активный автопропуск разрешает и hard pause."""
         delay_event = self._script_delay_event
         if (
             self._game_paused
             or delay_event is None
-            or not self._script_delay_skippable
+            or (not self._script_delay_skippable and not (automatic and self.skipping))
             or delay_event.is_set()
         ):
             return False
@@ -3043,6 +3204,7 @@ class TerminalSummer(App):
 
     def cancel_script_advance(self) -> None:
         """Отменяет старое выполнение сценария и его активную задержку."""
+        self.stop_skipping()
         task = self._script_advance_task
         self._script_advance_task = None
         self._next_scene_in_progress = False
