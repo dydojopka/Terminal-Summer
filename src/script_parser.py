@@ -317,6 +317,8 @@ class ScriptParser:
         self.index = 0
         self.frames.clear()
         self.failed = False
+        self.finished = False
+        self.has_diagnostic = False
         self._build_resource_manifest()
 
     def _build_resource_manifest(self) -> None:
@@ -369,6 +371,8 @@ class ScriptParser:
             frames.append(ExecutionFrame(end=end, return_pc=return_pc))
         self.index = pc
         self.frames = frames
+        self.finished = False
+        self.has_diagnostic = False
         return True
 
     def _index_labels(self) -> None:
@@ -390,6 +394,9 @@ class ScriptParser:
         if self._advancing:
             self._continue_requested = True
             return
+        # После нефатальной ошибки только новый явный next_line снимает
+        # диагностику: автоматический планировщик до этого заблокирован.
+        self.has_diagnostic = False
         self._advancing = True
         steps = 0
         try:
@@ -401,6 +408,8 @@ class ScriptParser:
                 while self.frames and self.index >= self.frames[-1].end:
                     self.index = self.frames.pop().return_pc
                 if self.index >= len(self.lines):
+                    self.finished = True
+                    self._stop_skipping()
                     return
                 self.backward = False
                 line = self.lines[self.index]
@@ -480,13 +489,13 @@ class ScriptParser:
         """Переходит на строку с именованной меткой."""
         match = re.fullmatch(r"goto\s+([a-zA-Z0-9_]+)", line)
         if not match:
-            self.app.sub_title = f"[Script error] Invalid goto: {line}"
+            self._report_script_error(f"Invalid goto: {line}", stop_execution=False)
             return
 
         label = match.group(1)
         target_index = self.labels.get(label)
         if target_index is None:
-            self.app.sub_title = f"[Script error] Label not found: {label}"
+            self._report_script_error(f"Label not found: {label}", stop_execution=False)
             return
 
         self.index = target_index
@@ -536,11 +545,18 @@ class ScriptParser:
             expression, SCRIPT_STATE if state is None else state, SCRIPT_STATE_TYPES
         )
 
+    def _stop_skipping(self) -> None:
+        stop = getattr(self.app, "stop_skipping", None)
+        if stop is not None:
+            stop()
+
     def _report_script_error(
         self, detail: str, *, pc: int | None = None, stop_execution: bool = True
     ) -> None:
         if stop_execution:
             self.failed = True
+        self.has_diagnostic = True
+        self._stop_skipping()
         position = max(0, self.index - 1) if pc is None else pc
         number = self.source_line_numbers[position] if position < len(self.source_line_numbers) else "EOF"
         labels = [(index, name) for name, index in self.labels.items() if index <= position]
@@ -810,6 +826,10 @@ class ScriptParser:
 
     async def _handle_choice(self, line):
         """Обработка строки menu и логика выбора"""
+        # Логическая граница устанавливается до первого await и включает
+        # пустое меню: CSS ещё может не успеть показать ChoiceBar.
+        self.app.pending_choices = {}
+        self._stop_skipping()
 
         options = {}
         cursor = self.index  # строка после "menu"
@@ -1002,9 +1022,12 @@ class ScriptParser:
                 # Показать кнопку обратно
                 btn.remove_class("invisible")
 
-                # Фокусируем кнопку только если меню выбора НЕ открыто
-                choice_bar = self.app.query_one("#choice-bar")
-                if choice_bar.has_class("hidden"):
+                # Не возвращаем фокус из истории/паузы или уже закрытой игры.
+                gameplay_context = getattr(self.app, "is_gameplay_context", None)
+                if (
+                    gameplay_context() if gameplay_context is not None
+                    else self.app.query_one("#choice-bar").has_class("hidden")
+                ):
                     btn.focus()
 
 
@@ -1055,7 +1078,7 @@ class ScriptParser:
 
         target_path = target_path.resolve()
         if not target_path.exists():
-            self.app.sub_title = f"[Load error] File not found: {target_path}"
+            self._report_script_error(f"File not found: {target_path}", stop_execution=False)
             return
 
         self.load_script(target_path)
