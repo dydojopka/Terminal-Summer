@@ -134,6 +134,7 @@ import asyncio
 import json
 from PIL import Image
 from pil2ansi import convert_img, Palettes
+from art_renderer import ART_STYLES, render_art
 
 from textual import events, errors, _time
 from textual.app import App, ComposeResult
@@ -551,17 +552,25 @@ class DescriptionSettingQuality(Widget):
 class SettingASCIIorANSI(Widget):
     """Виджет с настройкой стиля артов"""
     BORDER_TITLE = "Стиль артов"
+    STYLE_BUTTONS = {
+        "btn-ANSI": "ANSI",
+        "btn-ASCII": "ASCII",
+        "btn-COLOR-ASCII": "COLOR_ASCII",
+    }
+
     def compose(self):
-        with HorizontalGroup():
+        with Vertical():
             yield Button("ANSI", variant="default", id="btn-ANSI")
-            yield Button("ASCII", variant="default", id="btn-ASCII")
+            yield Button("ЧБ ASCII", variant="default", id="btn-ASCII")
+            yield Button("Цветной ASCII", variant="default", id="btn-COLOR-ASCII")
             yield DescriptionSettingASCIIorANSI()
 
 class DescriptionSettingASCIIorANSI(Widget):
     """Описание настройки 'Стиль артов'"""
     def render(self):
-        return """ANSI  - изображение будет цветным
-ASCII - изображение будет состоять из символов .,:+*? и других"""
+        return """ANSI — цветные блоки
+ЧБ ASCII — одноцветные символы .,:+*?%@
+Цветной ASCII — те же символы в цветах изображения"""
 
 class SettingTextSpeed(Widget):
     """Виджет с настройкой скорости текста"""
@@ -971,23 +980,10 @@ class TerminalSummer(App):
             self.save_settings()
             await self.update_current_scene_art()
 
-        # ASCIIorANSI
-        elif button_id == "btn-ANSI":             # Кнопка "ANSI"
-            # Меняем стили кнопок
-            self.query_one("#btn-ANSI", Button).variant = "primary"
-            self.query_one("#btn-ASCII", Button).variant = "default"
-
-            # Сохранение в файл настроек и обновляем текущую сцену
-            self.settings["style"] = "ANSI"
-            self.save_settings()
-            await self.update_current_scene_art()
-        elif button_id == "btn-ASCII":            # Кнопка "ASCII"
-            # Меняем стили кнопок
-            self.query_one("#btn-ANSI", Button).variant = "default"
-            self.query_one("#btn-ASCII", Button).variant = "primary"
-
-            # Сохранение в файл настроек и обновляем текущую сцену
-            self.settings["style"] = "ASCII"
+        # Стиль артов
+        elif button_id in SettingASCIIorANSI.STYLE_BUTTONS:
+            self.settings["style"] = SettingASCIIorANSI.STYLE_BUTTONS[button_id]
+            self.sync_art_style_buttons()
             self.save_settings()
             await self.update_current_scene_art()
 
@@ -2147,7 +2143,7 @@ class TerminalSummer(App):
         if not snapshot.name or not snapshot.category:
             return Text("")
 
-        palette = Palettes.color if snapshot.style == "ANSI" else Palettes.ascii
+        composed = None
         try:
             if snapshot.category == "color":
                 colors = {
@@ -2211,16 +2207,17 @@ class TerminalSummer(App):
                 composed.alpha_composite(sprite_img, dest=(x, y))
                 sprite_img.close()
 
-            ansi_art = convert_img(
+            art = render_art(
                 composed,
                 width=snapshot.width,
+                style=snapshot.style,
                 alpha=not snapshot.sprites,
-                palette=palette,
             )
-            composed.close()
-            art = Text.from_ansi(ansi_art)
         except Exception as exc:
             art = Text.from_markup(f"[Ошибка сборки сцены со спрайтами: {exc}]")
+        finally:
+            if composed is not None:
+                composed.close()
 
         if snapshot.cache_epoch == self._cache_epoch:
             self._remember_render(snapshot.key, art)
@@ -2661,7 +2658,11 @@ class TerminalSummer(App):
                     **self.DEFAULT_SETTINGS,
                     **loaded_settings,
                 }
-                if any(
+                style = self.settings["style"]
+                invalid_style = not isinstance(style, str) or style not in ART_STYLES
+                if invalid_style:
+                    self.settings["style"] = self.DEFAULT_SETTINGS["style"]
+                if invalid_style or any(
                     key not in loaded_settings for key in self.DEFAULT_SETTINGS
                 ):
                     self.save_settings()
@@ -2674,6 +2675,13 @@ class TerminalSummer(App):
         self.CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         with self.CONFIG_FILE.open("w", encoding="utf-8") as f:
             json.dump(self.settings, f, indent=4)
+
+    def sync_art_style_buttons(self) -> None:
+        """Ровно одна кнопка соответствует выбранному стилю кадра."""
+        for button_id, style in SettingASCIIorANSI.STYLE_BUTTONS.items():
+            self.query_one(f"#{button_id}", Button).variant = (
+                "primary" if self.settings["style"] == style else "default"
+            )
 
     def apply_settings(self):
         """Применение настроек при старте"""
@@ -2699,12 +2707,7 @@ class TerminalSummer(App):
         elif quality == "200":
             self.query_one("#btn-large", Button).variant = "success"
 
-        # ASCIIorANSI
-        style = self.settings["style"]
-        if style == "ANSI":
-            self.query_one("#btn-ANSI", Button).variant = "primary"
-        elif style == "ASCII":
-            self.query_one("#btn-ASCII", Button).variant = "primary"
+        self.sync_art_style_buttons()
 
         # TextSpeed
         text_speed = self.settings["text_speed"]
@@ -2775,7 +2778,7 @@ class TerminalSummer(App):
         self.query_one(GalleryMenuMidBtns).border_title = image.id
 
     async def update_current_scene_art(self):
-        """Перерисовывает текущий арт при смене качества."""
+        """Перерисовывает текущий арт при смене размера или стиля."""
         if not hasattr(self, "current_scene") or not self.current_scene:
             return
         if not hasattr(self, "current_scene_category") or not self.current_scene_category:
