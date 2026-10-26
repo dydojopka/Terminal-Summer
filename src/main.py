@@ -14,6 +14,7 @@ from audio_catalog import finite_number, validate_audio_assets
 from file_io import atomic_output, write_json_atomic
 from save_data import validate_save_view, plain_save_text
 from single_instance import single_instance, AlreadyRunningError
+from terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
 # --- ЛОГИКА ПУТЕЙ ---
 IS_FROZEN = hasattr(sys, "_MEIPASS")
@@ -450,7 +451,7 @@ class GalleryMenuBottomBtns(HorizontalGroup):
         yield Button("->", id="btn-next-gallery")
 
 
-class SaveMenuLeftBtns(Vertical):
+class SaveMenuLeftBtns(VerticalScroll):
     """Виджет-контейнер для кнопок сохранений слева (Назад + номера страниц)"""
     def compose(self):
         yield Button("Назад ↩", id="btn-close-save-menu")
@@ -463,7 +464,8 @@ class SaveMenuMidBtns(Vertical):
     """Виджет-контейнер для слотов и кнопок действий в центре"""
     BORDER_TITLE = "Сохранения"
     def compose(self):
-        yield SaveMenuSlots(id="save-menu-slots")
+        with VerticalScroll(id="save-slots-scroll"):
+            yield SaveMenuSlots(id="save-menu-slots")
         yield SaveMenuActionBtns(id="save-action-btns")
 
 
@@ -852,6 +854,8 @@ class TerminalSummer(App):
         self._script_delay_skippable = False
         self._script_delay_generation = 0
         self._game_paused = False
+        self._terminal_too_small = False
+        self._terminal_size_focus = None
         self._game_pause_changed_event = asyncio.Event()
         self.scene_dirty = False
         self._scene_generation = 0
@@ -940,6 +944,7 @@ class TerminalSummer(App):
         yield EndingsMenu( id="endings-menu",  classes="hidden")
         yield SaveMenu(    id="save-menu",     classes="hidden")
         yield ScriptLoadingOverlay(id="script-loading", classes="hidden")
+        yield TerminalSizeWarning()
 
     def set_text_mode(self, mode: str) -> None:
         """Сохраняет режим текста и обновляет его отображение."""
@@ -988,6 +993,9 @@ class TerminalSummer(App):
     # ============ Функции - on_ ============
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Обработка событий при нажатии кнопок"""
+        if self._terminal_too_small:
+            event.stop()
+            return
         button_id = event.button.id
         if button_id == "btn-audio-mute":
             self.settings["audio_muted"] = not self.settings["audio_muted"]
@@ -1296,11 +1304,76 @@ class TerminalSummer(App):
         self.app_suspend_signal.subscribe(
             self, lambda _: self.stop_skipping(), immediate=True
         )
+        self.screen_change_signal.subscribe(self, lambda _: self.sync_terminal_size())
+        self.sync_terminal_size()
         if not self.is_headless:
             errors = validate_audio_assets(self.ts_path, self.audio.catalog)
             if errors:
                 self.notify("Часть аудиофайлов отсутствует. Установите TS/sound из нового архива ассетов.",
                             title="Звук", severity="warning", timeout=10)
+
+    def on_resize(self, event: events.Resize) -> None:
+        self.sync_terminal_size(event.size)
+
+    def sync_terminal_size(self, size=None) -> None:
+        """Скрывает все экраны, не меняя состояния меню, фокуса и обычной паузы."""
+        size = self.size if size is None else size
+        too_small = (size.width < MINIMUM_TERMINAL_SIZE.width
+                     or size.height < MINIMUM_TERMINAL_SIZE.height)
+        # Отладочный Header уступает место маленькому арту, а не увеличивает
+        # минимальный размер окна на семь дополнительных строк.
+        for header in self.query(ScriptStateHeader):
+            header.styles.max_height = min(8, max(1, size.height - MINIMUM_TERMINAL_SIZE.height + 1))
+        changed = too_small != self._terminal_too_small
+        if changed:
+            if too_small and self.focused is not None:
+                self._terminal_size_focus = self.focused
+            self._terminal_too_small = too_small
+            self.stop_skipping()
+            self._space_require_idle = True
+            self._space_last_event_at = _time.get_time()
+            self._signal_game_pause_changed()
+        for screen in self.screen_stack:
+            screen.set_class(too_small, "terminal-too-small")
+            # 27 + 27 — боковые панели; 50 + 2 — текст с рамкой.
+            screen.set_class(size.width < 106, "compact-terminal")
+            warnings = screen.query(TerminalSizeWarning)
+            if not warnings:
+                # В том числе встроенные экраны Textual, например Ctrl+P.
+                screen.call_after_refresh(self._ensure_terminal_size_warning, screen)
+            for warning in warnings:
+                warning.update_size(size)
+        if changed:
+            self.refresh_bindings()
+            if not too_small:
+                self.call_after_refresh(self._restore_terminal_size_focus)
+
+    def _ensure_terminal_size_warning(self, screen: Screen) -> None:
+        if screen.is_mounted and screen in self.screen_stack and not screen.query(TerminalSizeWarning):
+            screen.mount(TerminalSizeWarning())
+
+    def _restore_terminal_size_focus(self) -> None:
+        if self._terminal_too_small:
+            return
+        focused = self._terminal_size_focus
+        self._terminal_size_focus = None
+        focus_chain = self.screen.focus_chain
+        if focused in focus_chain:
+            focused.focus(scroll_visible=False)
+        elif self.focused not in focus_chain:
+            self.set_focus(None)
+            self.screen.focus_next()
+
+    async def on_event(self, event: events.Event) -> None:
+        # Перехват до фокуса и priority-bindings модальных экранов: невидимые
+        # кнопки/выборы не получают ввод. Resize и события фокуса проходят.
+        if self._terminal_too_small and isinstance(event, (events.InputEvent, events.Paste)):
+            if isinstance(event, events.Key) and event.key == "ctrl+q":
+                self.exit()
+            event.stop()
+            event.prevent_default()
+            return
+        await super().on_event(event)
 
     def poll_audio_errors(self) -> None:
         errors = self.audio.drain_errors()
@@ -1318,6 +1391,9 @@ class TerminalSummer(App):
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
+        if self._terminal_too_small:
+            event.stop()
+            return
         choice_bar = self.query_one("#choice-bar")
         if event.list_view is not choice_bar.query_one(ListView):
             return
@@ -1656,7 +1732,7 @@ class TerminalSummer(App):
         Запрещает сохранение во время анимации текста, блокировки ввода,
         показа меню выбора или отсутствия запущенного сценария.
         """
-        if self._credits is not None:
+        if self._terminal_too_small or self._credits is not None:
             return False
         if self._text_animating:
             return False
@@ -1667,6 +1743,8 @@ class TerminalSummer(App):
         if self._next_scene_in_progress:
             return False
         if not hasattr(self, "script") or not self.script or self.script.finished:
+            return False
+        if self.script.failed or self.script.has_diagnostic:
             return False
         if not self.query_one("#choice-bar").has_class("hidden"):
             return False
@@ -1743,8 +1821,6 @@ class TerminalSummer(App):
         page = save_menu.current_page
         all_saves = save_menu.all_saves
 
-        if self.script.failed or self.script.has_diagnostic:
-            return False
         for slot_index in range(12):
             save_id = f"{page}/{slot_index}"
             btn_id = f"save-slot-{slot_index}"
@@ -2153,6 +2229,7 @@ class TerminalSummer(App):
             or not self.app_focus
             or self.screen.id != "_default"
             or self._game_paused
+            or self._terminal_too_small
             or self._interface_hidden
             or getattr(self, "pending_choices", None) is not None
         ):
@@ -2193,6 +2270,8 @@ class TerminalSummer(App):
         self._refresh_skip_binding()
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if self._terminal_too_small and action != "quit":
+            return False
         if action == "toggle_skipping":
             return self.skipping or self.can_start_skipping()
         return super().check_action(action, parameters)
@@ -2943,6 +3022,13 @@ class TerminalSummer(App):
     def load_settings(self):
         """Дополняет старый config; ошибочный файл заменяет полными defaults."""
         self._settings_read_error = False
+
+        def reject_constant(value):
+            raise ValueError(f"Недопустимое число в настройках: {value}")
+
+        def parse_float(value):
+            return finite_number(float(value), minimum=-float("inf"))
+
         try:
             if not self.CONFIG_FILE.exists():
                 self.settings = self.DEFAULT_SETTINGS.copy()
@@ -3033,13 +3119,6 @@ class TerminalSummer(App):
 
         self.sync_art_style_buttons()
         self.sync_scene_filter_buttons()
-
-        def reject_constant(value):
-            raise ValueError(f"Недопустимое число в настройках: {value}")
-
-        def parse_float(value):
-            return finite_number(float(value), minimum=-float("inf"))
-
 
         # TextSpeed
         text_speed = self.settings["text_speed"]
@@ -3282,7 +3361,7 @@ class TerminalSummer(App):
 
     def can_advance_scene(self) -> bool:
         """Можно ли переходить к следующей строке по пользовательскому вводу."""
-        if self._next_scene_in_progress:
+        if self._terminal_too_small or self._next_scene_in_progress:
             return False
         if self._text_animating:
             return False
@@ -3375,13 +3454,16 @@ class TerminalSummer(App):
         if self._game_paused == paused:
             return
         self._game_paused = paused
+        self._signal_game_pause_changed()
+
+    def _signal_game_pause_changed(self) -> None:
         previous_event = self._game_pause_changed_event
         self._game_pause_changed_event = asyncio.Event()
         previous_event.set()
 
     async def wait_until_game_resumed(self) -> None:
         """Не даёт сценарию и анимации текста идти под меню паузы."""
-        while self._game_paused:
+        while self._game_paused or self._terminal_too_small:
             pause_changed = self._game_pause_changed_event
             await pause_changed.wait()
 
@@ -3454,6 +3536,7 @@ class TerminalSummer(App):
         delay_event = self._script_delay_event
         if (
             self._game_paused
+            or self._terminal_too_small
             or delay_event is None
             or (not self._script_delay_skippable and not (automatic and self.skipping))
             or delay_event.is_set()

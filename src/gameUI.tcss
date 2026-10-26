@@ -42,6 +42,25 @@ Screen {
     layers: base loading;
 }
 
+TerminalSizeWarning { display: none; }
+.terminal-too-small {
+    layers: base loading terminal-size;
+    * { visibility: hidden; }
+    TerminalSizeWarning {
+        display: block;
+        visibility: visible;
+        layer: terminal-size;
+        position: absolute;
+        offset: 0 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        background: $background;
+        content-align: left top;
+    }
+}
+
 #script-loading {
     layer: loading;
     position: absolute;
@@ -81,7 +100,10 @@ NovelWindow {
         align-vertical: middle;
         width: 100%;
         height: auto;
-        margin: 2 2;
+        max-height: 100%;
+        margin: 0 2;
+
+        ListView { max-height: 100%; }
 
         # Элементы в окне выбора
         Label {
@@ -148,6 +170,13 @@ NovelMenu {
         overflow-y: auto;
         .dialogue-content { width: 1fr; height: auto; }
     }
+}
+
+# В узком окне убираем декоративные поля вокруг сюжетных кнопок.
+.compact-terminal NovelMenu {
+    .novel-control { width: 17; }
+    #btn-log { margin-left: 0; }
+    #btn-next { margin-right: 0; }
 }
 
 # Титры занимают только нижнюю панель, оставляя место финальному арту.
@@ -217,6 +246,7 @@ SaveMenu {
     border-title-style: b;
 
     SaveMenuLeftBtns {
+        width: 14;
         height: 100%;
 
         #btn-close-save-menu {
@@ -239,7 +269,7 @@ SaveMenu {
     }
 
     SaveMenuMidBtns {
-        width: 94%;
+        width: 1fr;
         height: 100%;
         border: outer #CAD06B;
         border-title-align: center;
@@ -247,15 +277,23 @@ SaveMenu {
         border-right: none;
         border-top: none;
 
+        #save-slots-scroll {
+            height: 1fr;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
         SaveMenuSlots {
             height: auto;
 
             HorizontalGroup {
+                width: 1fr;
                 height: auto;
             }
 
             .save-slot {
-                width: 23%;
+                width: 1fr;
+                min-width: 0;
                 height: 8;
                 margin: 1;
                 text-align: center;
@@ -282,9 +320,11 @@ SaveMenu {
             padding: 1 0;
 
             .save-action-btn {
-                width: 20;
+                width: 1fr;
+                min-width: 0;
+                max-width: 20;
                 height: 3;
-                margin: 0 2;
+                margin: 0 1;
             }
         }
     }
