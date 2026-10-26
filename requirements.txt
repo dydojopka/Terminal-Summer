@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Runtime и его транзитивные зависимости. Инструменты: requirements-dev.txt.
 certifi==2026.2.25
 charset-normalizer==3.4.7

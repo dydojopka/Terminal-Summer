@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 -r requirements.txt
 
 # Textual CLI / dev console / browser preview (не нужны для игры).
