@@ -537,9 +537,10 @@ GalleryMenu {
             scrollbar-size: 1 1;
             scrollbar-color: #888 #333;
         }
-        #ascii-content {
-            display: block;
-            min-width: 250%;
+        #ansi-content {
+            width: auto;
+            height: auto;
+            text-wrap: nowrap;
         }
 
         #btn-back-gallery {

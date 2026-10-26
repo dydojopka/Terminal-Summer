@@ -2960,10 +2960,8 @@ class TerminalSummer(App):
         try:
             image_path = resolve_gallery_image(self.ts_path / "images", image)
             with Image.open(image_path) as img:
-                ansi_art = convert_img(
-                    img, width=int(self.gallery_size), alpha=True, palette=Palettes.color
-                )
-            static.update(Text.from_ansi(ansi_art))
+                art = render_art(img, width=int(self.gallery_size), alpha=True, style="ANSI")
+            static.update(art)
         except FileNotFoundError:
             static.update(Text(f"[Ошибка изображения {image.id}: файл не найден]"))
         except PermissionError:
