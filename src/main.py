@@ -10,7 +10,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from audio_manager import AUDIO_DEFAULTS, AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
-from audio_catalog import validate_audio_assets
+from audio_catalog import finite_number, validate_audio_assets
 from file_io import atomic_output, write_json_atomic
 from save_data import validate_save_view, plain_save_text
 from single_instance import single_instance, AlreadyRunningError
@@ -2940,7 +2940,7 @@ class TerminalSummer(App):
         )
 
     def load_settings(self):
-        """Загрузка настроек"""
+        """Дополняет старый config; ошибочный файл заменяет полными defaults."""
         self._settings_read_error = False
         try:
             if not self.CONFIG_FILE.exists():
@@ -2948,31 +2948,41 @@ class TerminalSummer(App):
                 self.save_settings()
                 return
             with self.CONFIG_FILE.open("r", encoding="utf-8") as source:
-                loaded = json.load(source)
+                loaded = json.load(source, parse_constant=reject_constant, parse_float=parse_float)
             if not isinstance(loaded, dict):
                 raise ValueError("Настройки должны быть JSON-объектом")
             self.settings = {**self.DEFAULT_SETTINGS, **loaded}
-            normalized_bool = False
             for key in ("header", "header_lp_points", "header_flags", "scene_filters_enabled"):
                 if type(self.settings[key]) is not bool:
-                    self.settings[key] = self.DEFAULT_SETTINGS[key]
-                    normalized_bool = True
+                    raise ValueError(f"Некорректная настройка: {key}")
             for key, choices in (("quality", ("50", "150", "200")),
                                  ("text_speed", ("0", "0.01", "0.025", "0.04"))):
                 raw = self.settings[key]
-                value = format(raw, "g") if type(raw) in (int, float) else raw
-                self.settings[key] = value if isinstance(value, str) and value in choices else self.DEFAULT_SETTINGS[key]
+                if type(raw) in (int, float):
+                    value = next((choice for choice in choices if raw == float(choice)), None)
+                else:
+                    value = raw
+                if not isinstance(value, str) or value not in choices:
+                    raise ValueError(f"Некорректная настройка: {key}")
+                self.settings[key] = value
             style = self.settings["style"]
             if not isinstance(style, str) or style not in ART_STYLES:
-                self.settings["style"] = self.DEFAULT_SETTINGS["style"]
-            self.settings.update(normalize_audio_settings(self.settings))
-            if normalized_bool or self.settings != loaded:
+                raise ValueError("Некорректная настройка: style")
+            for key in AUDIO_DEFAULTS:
+                if key == "audio_muted":
+                    if type(self.settings[key]) is not bool:
+                        raise ValueError(f"Некорректная настройка: {key}")
+                else:
+                    self.settings[key] = finite_number(self.settings[key], maximum=1)
+            if self.settings != loaded:
                 self.save_settings()
         except (OSError, ValueError, UnicodeError) as exc:
             self.settings = self.DEFAULT_SETTINGS.copy()
             self._settings_read_error = True
-            self.notify(f"Используются настройки по умолчанию. Исходный файл сохранён. {exc}",
-                        title="Не удалось прочитать настройки", severity="warning", timeout=10)
+            self.save_settings()
+            detail = ("Используются настройки по умолчанию; файл не удалось перезаписать."
+                      if self._settings_read_error else "Файл настроек сброшен к значениям по умолчанию.")
+            self.notify(f"{detail} {exc}", title="Ошибка настроек", severity="warning", timeout=10)
     
     def save_settings(self):
         """Сохранение настроек"""
@@ -3022,6 +3032,13 @@ class TerminalSummer(App):
 
         self.sync_art_style_buttons()
         self.sync_scene_filter_buttons()
+
+        def reject_constant(value):
+            raise ValueError(f"Недопустимое число в настройках: {value}")
+
+        def parse_float(value):
+            return finite_number(float(value), minimum=-float("inf"))
+
 
         # TextSpeed
         text_speed = self.settings["text_speed"]
