@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import re
 import sys
 from dataclasses import dataclass
@@ -11,6 +12,8 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
@@ -25,6 +28,8 @@ from script_parser import (
 )
 from sprites_builder import load_yaml_dict, parse_show_like, resolve_sprite
 from script_conditions import evaluate_script_condition, parse_script_condition
+from script_resources import RELEASE_SCRIPTS, find_scene_path, visual_asset_problems
+from script_structure import read_block_range, structure_errors
 
 
 LABEL_RE = re.compile(r"label\s+([a-zA-Z0-9_]+):?$")
@@ -73,19 +78,7 @@ def _route_document(path: Path, cache: dict[Path, RouteDocument]) -> RouteDocume
 
 
 def _block_range(lines: tuple[str, ...], start: int) -> tuple[int, int]:
-    if start >= len(lines) or lines[start] != "{":
-        raise ValueError("ожидалась открывающая скобка блока")
-    depth = 1
-    cursor = start + 1
-    while cursor < len(lines):
-        if lines[cursor] == "{":
-            depth += 1
-        elif lines[cursor] == "}":
-            depth -= 1
-            if depth == 0:
-                return start + 1, cursor
-        cursor += 1
-    raise ValueError("незакрытый блок")
+    return read_block_range(lines, start)
 
 
 def _evaluate_route_condition(expression: str, variables: dict) -> bool:
@@ -304,8 +297,8 @@ def explore_routes(
 
 
 def _scene_exists(category: str, name: str, assets_root: Path | None = None) -> bool:
-    base = (assets_root or ROOT_DIR / "TS" / "images") / category / name
-    return any(base.with_suffix(f".{extension}").exists() for extension in ("jpg", "jpeg", "png", "webp"))
+    path = find_scene_path(assets_root or ROOT_DIR / "TS/images", category, name)
+    return path is not None and path.is_file()
 
 
 def _load_target(script_path: Path, line: str) -> Path | None:
@@ -361,6 +354,9 @@ def validate_script(
         source_lines = [(number, line) for number, line in source_lines if number <= cutoff]
     resources = load_yaml_dict(resources_path)
 
+    for pc, detail in structure_errors(lines):
+        errors.append(f"{script_path.name}:{source_lines[pc][0]}: {detail}")
+
     labels: dict[str, int] = {}
     gotos: list[tuple[str, int]] = []
     scene_count = 0
@@ -385,9 +381,10 @@ def validate_script(
             except ValueError as exc:
                 errors.append(f"{script_path.name}:{number}: {exc}; выражение: {condition}")
         if not (
-            line in {"{", "}", "else", "clear"}
+            line in {"{", "}", "else", "clear", "rollcredits"}
             or line.startswith("$")
-            or '"' in line
+            or re.fullmatch(r'(?:[a-zA-Z0-9_-]+\s+)?".*"', line)
+            or re.fullmatch(r'".+?"\s+if\s+.+', line)
             or line.startswith(SUPPORTED_PREFIXES)
         ):
             errors.append(
@@ -434,6 +431,16 @@ def validate_script(
                 errors.append(f"{script_path.name}:{number}: некорректная команда {command}: {line}")
 
         goto_match = GOTO_RE.fullmatch(line)
+        if line.startswith("menu") and line not in ("menu", "menu:"):
+            errors.append(f"{script_path.name}:{number}: некорректная команда menu: {line}")
+        if line.startswith("with") and not re.fullmatch(r"with\s+\w+(?:\s+\d+(?:\.\d+)?)?(?:\s+skip)?", line):
+            errors.append(f"{script_path.name}:{number}: некорректная команда with: {line}")
+        if line.startswith("goto") and goto_match is None:
+            errors.append(f"{script_path.name}:{number}: некорректная команда goto: {line}")
+        if line.startswith("label") and label_match is None:
+            errors.append(f"{script_path.name}:{number}: некорректная метка: {line}")
+        if line.startswith("hide") and not re.fullmatch(r"hide\s+[a-zA-Z0-9_]+(?:\s+with\s+\w+(?:\s+\d+(?:\.\d+)?)?(?:\s+skip)?)?", line):
+            errors.append(f"{script_path.name}:{number}: некорректная команда hide: {line}")
         if goto_match:
             gotos.append((goto_match.group(1), number))
 
