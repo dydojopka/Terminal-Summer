@@ -1484,7 +1484,6 @@ class TerminalSummer(App):
         """Запускает фон меню один раз, не перезапуская его в дочерних разделах."""
         if self._menu_music_active or hasattr(self, "script"):
             return
-        self.audio.reset()
         self.audio.play_menu(MENU_MUSIC_KEY)
         self._menu_music_active = True
 
