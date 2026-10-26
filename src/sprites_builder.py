@@ -183,10 +183,6 @@ def _build_tokens_from_shortname(
         resolved = str(shortnames[expression_text]).split()
         return resolved, expression_text
 
-    if len(expression_tokens) == 1 and expression_tokens[0] in shortnames:
-        resolved = str(shortnames[expression_tokens[0]]).split()
-        return resolved, expression_tokens[0]
-
     return list(expression_tokens), expression_text or "default"
 
 

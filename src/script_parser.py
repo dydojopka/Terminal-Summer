@@ -62,7 +62,8 @@ DEFAULT_SCRIPT_STATE = {
     "day2_map_dinning_hall": False, "day2_map_aidpost": False,
     "day2_map_library": False, "day2_cards_with_sl": 0,
     "day2_dv_bet": 0, "day2_un": 0, "day2_card_result": None,
-    "d2_gave_keys": False, "d2_cardgame_block_rollback": False,
+    "d2_gave_keys": False,
+    "d2_cardgame_block_rollback": False,  # Legacy save: мини-игра заменена меню.
     "persistent.CardsDemo": False, "persistent.CardsWon1": False,
     "persistent.CardsWon2": False, "persistent.CardsWon3": False,
     "persistent.CardsFail": False,
@@ -216,13 +217,6 @@ def set_script_state(state: dict) -> None:
     normalized = normalize_script_state(state)
     SCRIPT_STATE.clear()
     SCRIPT_STATE.update(normalized)
-
-
-def ensure_day2_state() -> None:
-    """Добавляет флаги второго дня при входе в его первую метку."""
-    for key in DEFAULT_SCRIPT_STATE:
-        if key.startswith("day2_") or key.startswith("d2_"):
-            SCRIPT_STATE.setdefault(key, DEFAULT_SCRIPT_STATE[key])
 
 
 def reset_globals(*, preserve_persistent: bool = True):
@@ -527,9 +521,6 @@ class ScriptParser:
 
     async def _handle_label(self, line):
         """Пропускает метку: она нужна только для переходов."""
-        match = re.fullmatch(r"label\s+([a-zA-Z0-9_]+):?", line)
-        if match and match.group(1) == "day2_main1":
-            ensure_day2_state()
         await self.next_line()
 
     async def _handle_goto(self, line):
