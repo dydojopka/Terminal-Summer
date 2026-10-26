@@ -143,18 +143,15 @@ def get_all_saves() -> dict[str, dict]:
                 saves[f"{page_num - 1}/{slot_num - 1}"] = {"error": "Повреждённое сохранение"}
     return saves
 
-import asyncio
 import json
 from PIL import Image
-from pil2ansi import convert_img, Palettes
 from art_renderer import ART_STYLES, render_art
 
 from textual import events, errors, _time
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
-from textual.reactive import reactive
 from textual.screen import Screen, ModalScreen
-from textual.widgets import Button, Label, Footer, Header, Static, ListView, ListItem, Log, LoadingIndicator
+from textual.widgets import Button, Label, Footer, Header, Static, ListView, Log, LoadingIndicator
 from textual.widget import Widget
 from textual.binding import Binding
 
@@ -969,7 +966,6 @@ class TerminalSummer(App):
         # Кнопки в NovelMenu:
         if   button_id == "btn-next":             # Кнопка "Продолжить"
             await self._advance_from_button()
-        # TODO: Добавить закрытие через escape
         elif button_id == "btn-log":              # Кнопка "История"
             self.action_log()
 
@@ -2676,15 +2672,7 @@ class TerminalSummer(App):
         if self._get_cached_render(snapshot.key) is None:
             self._render_scene_snapshot(snapshot)
 
-    def generate_scene_ansi(self, category: str, scene_name: str):
-        """Конвертирует только сцену (без спрайтов) в ANSI/ASCII."""
-        return self._render_scene_snapshot(
-            self._make_scene_snapshot(category, scene_name, {})
-        )
 
-    def generate_scene_with_sprites_ansi(self):
-        """Собирает сцену + активные спрайты и конвертирует в ANSI/ASCII."""
-        return self._render_scene_snapshot(self._capture_scene_snapshot())
 
     def show_sprite_from_script_line(self, show_line: str):
         """Собирает PNG спрайта из show-строки и обновляет активный набор спрайтов."""
