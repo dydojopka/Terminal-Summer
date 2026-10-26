@@ -13,6 +13,7 @@ from audio_manager import AUDIO_DEFAULTS, AudioManager, NullAudioBackend, Pygame
 from audio_catalog import validate_audio_assets
 from file_io import atomic_output, write_json_atomic
 from save_data import validate_save_view, plain_save_text
+from single_instance import single_instance, AlreadyRunningError
 
 # --- ЛОГИКА ПУТЕЙ ---
 IS_FROZEN = hasattr(sys, "_MEIPASS")
@@ -236,10 +237,15 @@ def main():
     if not IS_FROZEN:
         sys.path.insert(0, str(PROJECT_ROOT))
     try:
-        from scripts.assets_manager import ensure_assets
-        ensure_assets(quiet=True)
+        with single_instance(PERSISTENT_PATH.parent):
+            from scripts.assets_manager import ensure_assets
+            ensure_assets(quiet=True, require_endings=True)
+            TerminalSummer().run()
+    except AlreadyRunningError as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(1)
     except Exception as exc:
-        print(f"Ошибка загрузки ассетов: {exc}", file=sys.stderr)
+        print(f"Ошибка запуска: {exc}", file=sys.stderr)
         raise SystemExit(1)
 
 
@@ -3481,5 +3487,3 @@ class TerminalSummer(App):
 
 if __name__ == "__main__":
     main()
-    app = TerminalSummer()
-    app.run()
