@@ -36,13 +36,9 @@ from scripts.validate_release import (
     _load_target,
     parse_script_assignment,
     validate_script,
+    RELEASE_SCRIPTS,
 )
 
-RELEASE_SCRIPTS = (
-    "prologue.txt",
-    *(f"day{day}.txt" for day in range(1, 8)),
-    "epilogue.txt", "epilogue_mi.txt", "epilogue_uv.txt", "endings.txt",
-)
 OPTION_RE = re.compile(r'"(.+?)"(?:\s+if\s+(.+))?')
 DIALOGUE_RE = re.compile(r'(?:([a-zA-Z0-9_-]+)\s+)?".*"')
 LP_RE = re.compile(r'\$\s*(lp_\w+)\s*([+\-]?=)\s*(.+)')
@@ -215,7 +211,7 @@ def inventory_script(path: Path) -> dict:
                 diagnostic(f"неизвестный говорящий: {speaker}")
         elif line not in ("{", "}", "else", "clear") and kind not in (
             "pause", "scene", "show", "hide", "play", "stop", "window",
-            "time", "mode", "with", "volume",
+            "time", "mode", "with", "volume", "rollcredits",
         ):
             diagnostic(f"команда без явного runtime-контракта: {line}")
         commands[kind] += 1
@@ -238,7 +234,7 @@ def inventory_script(path: Path) -> dict:
 
 
 def build_audit(root: Path = ROOT_DIR) -> dict:
-    # Полный состав пока является предложением плана, не решением Q01.
+    # Явный согласованный состав; сам аудит не является доказательством маршрутов.
     scripts = []
     missing = []
     for filename in RELEASE_SCRIPTS:
@@ -309,7 +305,7 @@ def build_audit(root: Path = ROOT_DIR) -> dict:
     unknown = sorted(key for key, record in schema.items() if not record["registered"])
     diagnostics = sum(len(script["diagnostics"]) for script in scripts)
     return {
-        "format_version": 1, "scope_status": "PROPOSED_NEEDS_DECISION",
+        "format_version": 1, "scope_status": "APPROVED_RELEASE_SCRIPTS",
         "revision": revision.stdout.strip() if revision.returncode == 0 else None,
         "environment": {"python": sys.version, "executable": sys.executable, "platform": platform.platform(), "packages": packages},
         "scripts": scripts, "missing_scripts": missing, "state_schema_inventory": schema,

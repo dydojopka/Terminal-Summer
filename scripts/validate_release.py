@@ -736,11 +736,12 @@ def validate_day3_routes() -> list[str]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    scope = parser.add_mutually_exclusive_group(required=True)
+    scope.add_argument("--all", dest="all_scripts", action="store_true", help="Весь релиз и 13 свидетелей концовок")
+    scope.add_argument(
         "--day",
         type=int,
         action="append",
-        required=True,
         help="Номер проверяемого дня; параметр можно повторять",
     )
     return parser.parse_args()
@@ -750,10 +751,19 @@ def main() -> int:
     args = parse_args()
     try:
         errors = []
-        for day in args.day:
-            errors.extend(validate_day(day))
-        if 3 in args.day:
+        if args.all_scripts:
+            for filename in RELEASE_SCRIPTS:
+                errors.extend(validate_script(ROOT_DIR / "TS/text" / filename))
+            missing, invalid = visual_asset_problems(ROOT_DIR / "TS", verify_images=True)
+            errors.extend(missing + invalid)
+        else:
+            for day in args.day:
+                errors.extend(validate_day(day))
+        if not errors and (args.all_scripts or 3 in (args.day or [])):
             errors.extend(validate_day3_routes())
+        if not errors and args.all_scripts:
+            from scripts.release_routes import validate_release_routes
+            errors.extend(asyncio.run(validate_release_routes(ROOT_DIR / "TS")))
     except Exception as exc:
         print(f"Ошибка валидатора: {exc}", file=sys.stderr)
         return 1

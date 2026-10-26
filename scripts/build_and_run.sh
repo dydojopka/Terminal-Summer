@@ -12,7 +12,7 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 # Проверка зависимостей окружения
 if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
     echo "Ошибка: не найден Python (${PYTHON_BIN})."
-    echo "Создате/активируйте виртуальное окружение и установите зависимости"
+    echo "Создайте/активируйте виртуальное окружение и установите зависимости"
     exit 1
 fi
 
@@ -28,11 +28,11 @@ if ! "${PYTHON_BIN}" -m PyInstaller --version >/dev/null 2>&1; then
 fi
 
 # Подготовка ассетов в корне проекта
-"${PYTHON_BIN}" "${ROOT_DIR}/scripts/assets_manager.py" --require-audio
+"${PYTHON_BIN}" "${ROOT_DIR}/scripts/assets_manager.py" --require-audio --require-endings
 
 # Проверка выпущенных сценариев и ресурсов до дорогостоящей сборки
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_endings.py"
-"${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_release.py" --day 2 --day 3
+"${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_release.py" --all
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_gallery.py"
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_audio.py" --decode
 
