@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from audio_manager import AUDIO_DEFAULTS, AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
 from audio_catalog import validate_audio_assets
+from file_io import atomic_output, write_json_atomic
+from save_data import validate_save_view, plain_save_text
 
 # --- ЛОГИКА ПУТЕЙ ---
 IS_FROZEN = hasattr(sys, "_MEIPASS")
@@ -79,8 +81,7 @@ def save_game_state(page: int, slot: int, game_state: dict, timestamp: str = "")
         "timestamp": timestamp,
         "game_state": game_state,
     }
-    with save_file.open("w", encoding="utf-8") as f:
-        json.dump(save_data, f, indent=2, ensure_ascii=False)
+    write_json_atomic(save_file, save_data)
 
 
 def load_game_state(page: int, slot: int) -> dict | None:
@@ -90,6 +91,10 @@ def load_game_state(page: int, slot: int) -> dict | None:
         return None
     with save_file.open("r", encoding="utf-8") as f:
         save_data = json.load(f)
+    if not isinstance(save_data, dict):
+        raise ValueError("Invalid save file")
+    if not isinstance(save_data.get("game_state"), dict):
+        raise ValueError("Invalid game state")
     return save_data.get("game_state")
 
 
@@ -123,11 +128,19 @@ def get_all_saves() -> dict[str, dict]:
             try:
                 with save_file.open("r", encoding="utf-8") as f:
                     data = json.load(f)
+                if not isinstance(data, dict):
+                    raise ValueError("Invalid save file")
+                if not isinstance(data.get("game_state"), dict):
+                    raise ValueError("Invalid game state")
                 slot_num = int(save_file.stem)
                 save_id = f"{page_num - 1}/{slot_num - 1}"
                 saves[save_id] = data
-            except Exception:
-                continue
+            except (OSError, ValueError, UnicodeError):
+                try:
+                    slot_num = int(save_file.stem)
+                except ValueError:
+                    continue
+                saves[f"{page_num - 1}/{slot_num - 1}"] = {"error": "Повреждённое сохранение"}
     return saves
 
 import asyncio
@@ -140,7 +153,7 @@ from textual import events, errors, _time
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
 from textual.reactive import reactive
-from textual.screen import Screen
+from textual.screen import Screen, ModalScreen
 from textual.widgets import Button, Label, Footer, Header, Static, ListView, ListItem, Log, LoadingIndicator
 from textual.widget import Widget
 from textual.binding import Binding
@@ -161,8 +174,49 @@ from sprites_builder import (
     load_yaml_dict as load_sprite_resources_yaml,
     resolve_sprite,
     compose_layers,
+    normalize_sprite_position, SPRITE_POSITIONS, SPRITE_SIZES,
 )
 
+
+
+def _backup_invalid_json(path: Path) -> None:
+    if path.exists():
+        backup = path.with_name(f"{path.name}.invalid-{time.time_ns()}.bak")
+        with path.open("rb") as source, atomic_output(backup, overwrite=False) as target:
+            import shutil
+            shutil.copyfileobj(source, target)
+
+
+def _file_signature(path: Path) -> tuple:
+    stat = path.stat()
+    return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
+
+
+class OutdatedSaveDialog(ModalScreen):
+    BINDINGS = [("escape", "keep", "Оставить")]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.keep_button = Button("Оставить", id="outdated-save-keep", variant="primary")
+
+    def compose(self):
+        with Vertical(id="outdated-save-panel"):
+            yield Label("Сохранение устарело", id="outdated-save-title")
+            yield Static("Оно несовместимо с текущей версией сценария.\nУдалить выбранное сохранение?")
+            with HorizontalGroup():
+                yield self.keep_button
+                yield Button("Удалить", id="outdated-save-delete", variant="error")
+
+    def on_mount(self):
+        if self.keep_button.is_mounted:
+            self.keep_button.focus()
+
+    def action_keep(self):
+        self.dismiss(False)
+
+    def on_button_pressed(self, event: Button.Pressed):
+        event.stop()
+        self.dismiss(event.button.id == "outdated-save-delete")
 
 @dataclass(frozen=True)
 class RenderSprite:
@@ -716,6 +770,8 @@ class TerminalSummer(App):
     def __init__(self):
         super().__init__()
         self.settings = self.DEFAULT_SETTINGS.copy()
+        self._settings_read_error = False
+        self._persistent_read_error = False
 
         self.ts_path = get_ts_path()
         self.audio = AudioManager(self.ts_path)
@@ -723,7 +779,7 @@ class TerminalSummer(App):
         self.ending_dates = {}
 
         self._sprite_resources = None
-        self._sprite_resources_loaded = False
+        self._sprite_resources_signature = None
         self._sprite_assets_root = self.ts_path / "images"
         self._sprite_runtime_dir = self.ts_path / "images/sprites/generated_runtime"
         self._active_sprites = {}
@@ -759,7 +815,8 @@ class TerminalSummer(App):
         self._cache_epoch = 0
         self._cache_lock = threading.RLock()
         self._scene_render_cache: OrderedDict[tuple, Text] = OrderedDict()
-        self._sprite_build_cache: OrderedDict[str, str] = OrderedDict()
+        self._asset_fingerprints: OrderedDict[str, tuple] = OrderedDict()
+        self._generated_validation: OrderedDict[str, tuple] = OrderedDict()
         self._decoded_image_cache: OrderedDict[str, tuple[Image.Image, int]] = OrderedDict()
         self._decoded_image_cache_bytes = 0
         self._decoded_image_cache_limit = 128 * 1024 * 1024
@@ -1743,13 +1800,20 @@ class TerminalSummer(App):
         slot_index = int(save_menu.selected_slot.split("-")[-1])
         page = save_menu.current_page
 
-        delete_save(page, slot_index)
+        try:
+            delete_save(page, slot_index)
+        except OSError as exc:
+            self._show_load_error(str(exc))
+            return
         save_menu.all_saves = get_all_saves()
         save_menu.selected_slot = None
         self.update_save_menu_display()
 
     def load_selected_save(self) -> None:
         """Загрузка выбранного сохранения"""
+        # Повторное нажатие, уже стоящее в очереди, не обрабатывается под модальным окном.
+        if isinstance(self.screen, OutdatedSaveDialog):
+            return
         save_menu = self.query_one("#save-menu")
         if not save_menu.selected_slot:
             return
@@ -1757,14 +1821,21 @@ class TerminalSummer(App):
         slot_index = int(save_menu.selected_slot.split("-")[-1])
         page = save_menu.current_page
 
-        game_state = load_game_state(page, slot_index)
+        try:
+            game_state = load_game_state(page, slot_index)
+        except (OSError, ValueError, UnicodeError) as exc:
+            self._show_load_error(str(exc))
+            return
         if game_state is None:
             return
         if not isinstance(game_state, dict):
-            self.sub_title = "[Load error] Invalid game state"
+            self._show_load_error("Invalid game state")
             return
-        if game_state.get("save_format") != 3:
-            self.sub_title = "[Load error] Unsupported save format; expected 3"
+        version = game_state.get("save_format")
+        if type(version) is not int or version != 3:
+            self._show_load_error("Unsupported save format; expected 3")
+            if version is None or (type(version) is int and version < 3):
+                self._offer_outdated_save(page, slot_index)
             return
 
         variables = game_state.get("variables", {})
@@ -1775,18 +1846,19 @@ class TerminalSummer(App):
             isinstance(section, dict)
             for section in (variables, scene, sprites_data, dialogue)
         ):
-            self.sub_title = "[Load error] Invalid save section"
+            self._show_load_error("Invalid save section")
             return
         if not isinstance(variables.get("state"), dict):
-            self.sub_title = "[Load error] Invalid script variables"
+            self._show_load_error("Invalid script variables")
             return
         from script_parser import normalize_script_state
         try:
             restored_variables = normalize_script_state(variables["state"])
             restored_ending_dates = normalize_ending_dates(game_state.get("ending_dates", {}), restored_variables)
             restored_audio = self.audio.validate_snapshot(game_state.get("audio"))
-        except ValueError as exc:
-            self.sub_title = f"[Load error] {exc}"
+            scene, sprites_data, dialogue = validate_save_view(game_state)
+        except (TypeError, ValueError) as exc:
+            self._show_load_error(str(exc))
             return
 
         # До изменения текущей игры полностью проверяем файл и runtime-state.
@@ -1794,21 +1866,29 @@ class TerminalSummer(App):
         # повторно выполнить уже начисленные поинты.
         script_runtime = game_state.get("script", {})
         if not isinstance(script_runtime, dict):
-            self.sub_title = "[Load error] Invalid script runtime"
+            self._show_load_error("Invalid script runtime")
             return
         script_filename = script_runtime.get("filename", "")
-        if not script_filename:
-            self.sub_title = "[Load error] Save has no script filename"
+        if not isinstance(script_filename, str) or not script_filename:
+            self._show_load_error("Save has no script filename")
             return
-        if not Path(script_filename).is_absolute():
-            script_filename = str(self.ts_path / script_filename)
 
         try:
+            if not Path(script_filename).is_absolute():
+                script_filename = str(self.ts_path / script_filename)
             loaded_script = ScriptParser(script_filename, self)
             if not loaded_script.restore_runtime_state(script_runtime):
+                self._show_load_error(loaded_script.runtime_error)
+                if loaded_script.runtime_outdated:
+                    self._offer_outdated_save(page, slot_index)
                 return
-        except (OSError, TypeError, ValueError) as exc:
-            self.sub_title = f"[Load error] {exc}"
+            for sprite in sprites_data["active_sprites"].values():
+                built = self._build_sprite_png(sprite["show_line"])
+                if built is None:
+                    raise ValueError(f"Не удалось восстановить спрайт: {sprite['character']}")
+                sprite["image_path"] = str(built[1])
+        except (OSError, TypeError, ValueError, UnicodeError) as exc:
+            self._show_load_error(str(exc))
             return
 
         # Закрытие меню сохранений
@@ -1826,9 +1906,9 @@ class TerminalSummer(App):
         # Persistent-флаги не должны откатываться загрузкой старого слота.
         self.load_persistent_state()
         merged_dates = merge_ending_dates(self.ending_dates, restored_ending_dates)
-        if merged_dates != self.ending_dates:
-            self.ending_dates = merged_dates
-            self.save_persistent_state()
+        self.ending_dates = merged_dates
+        # Новые флаги могут прийти из старого save без дат.
+        self.save_persistent_state()
         self.update_script_header()
 
         # Восстановление сцены
@@ -1839,10 +1919,8 @@ class TerminalSummer(App):
         self.set_text_mode(scene.get("current_text_mode", "adv"))
 
         # Восстановление спрайтов
-        self.restore_active_sprites(
-            sprites_data.get("active_sprites", {}),
-            sprites_data.get("sprite_order_seq", 0),
-        )
+        self._active_sprites = sprites_data["active_sprites"]
+        self._sprite_order_seq = sprites_data["sprite_order_seq"]
 
         # Проверенный выше parser становится активным только после сброса.
         self.script = loaded_script
@@ -1950,7 +2028,11 @@ class TerminalSummer(App):
 
         from datetime import datetime
         timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
-        save_game_state(page, slot_index, game_state, timestamp)
+        try:
+            save_game_state(page, slot_index, game_state, timestamp)
+        except (OSError, ValueError, TypeError) as exc:
+            self.notify(str(exc), title="Не удалось сохранить игру", severity="error")
+            return
 
         # Обновление отображения
         save_menu.all_saves = get_all_saves()
@@ -2099,10 +2181,6 @@ class TerminalSummer(App):
 
     def _load_sprite_resources(self):
         """Ленивая загрузка resources.yaml для сборщика спрайтов."""
-        if self._sprite_resources_loaded:
-            return self._sprite_resources
-
-        self._sprite_resources_loaded = True
         resource_candidates = (
             (self.ts_path / "resources.yaml", self.ts_path / "images"),
             (Path("resources.yaml"), self.ts_path / "images"),
@@ -2112,8 +2190,12 @@ class TerminalSummer(App):
                 continue
 
             try:
+                signature = (str(candidate.resolve()), _file_signature(candidate))
+                if signature == self._sprite_resources_signature:
+                    return self._sprite_resources
                 self._sprite_resources = load_sprite_resources_yaml(candidate)
                 self._sprite_assets_root = assets_root
+                self._sprite_resources_signature = signature
             except Exception as e:
                 self._sprite_resources = None
                 self.sub_title = f"Sprite resources error: {e}"
@@ -2126,29 +2208,12 @@ class TerminalSummer(App):
     @staticmethod
     def _sprite_position_factor(position: str | None) -> float:
         """Позиция спрайта по горизонтали."""
-        mapping = {
-            "fleft": 0.18,
-            "left": 0.30,
-            "cleft": 0.40,
-            "center": 0.50,
-            "cright": 0.60,
-            "right": 0.70,
-            "fright": 0.82,
-        }
-        key = (position or "center").strip().lower()
-        return mapping.get(key, 0.50)
+        return SPRITE_POSITIONS[normalize_sprite_position(position or "center")]
 
     @staticmethod
     def _sprite_size_scale(size_name: str | None) -> float:
         """Доп. масштаб из show size <...>."""
-        mapping = {
-            "normal": 1.0,
-            "small": 0.86,
-            "large": 1.12,
-            "big": 1.12,
-        }
-        key = (size_name or "normal").strip().lower()
-        return mapping.get(key, 1.0)
+        return SPRITE_SIZES[size_name or "normal"]
 
     def _sorted_active_sprites(self, active_sprites: dict | None = None) -> list[dict]:
         """Возвращает активные спрайты в порядке от заднего к переднему."""
@@ -2524,7 +2589,8 @@ class TerminalSummer(App):
         self._prefetch_tasks.clear()
         with self._cache_lock:
             self._scene_render_cache.clear()
-            self._sprite_build_cache.clear()
+            self._asset_fingerprints.clear()
+            self._generated_validation.clear()
             for image, _ in self._decoded_image_cache.values():
                 image.close()
             self._decoded_image_cache.clear()
@@ -2654,75 +2720,41 @@ class TerminalSummer(App):
 
     def _build_sprite_png(self, show_line: str, generation: int | None = None):
         """Собирает или получает из кэша PNG, не изменяя состояние сцены."""
+        if generation is not None and generation != self._preload_generation:
+            return None
         resources = self._load_sprite_resources()
         if not resources:
             return None
 
         try:
             request = parse_show_like(show_line)
-            cached_path = self._sprite_build_cache.get(show_line)
-            if cached_path and os.path.exists(cached_path):
-                out_path = Path(cached_path)
-            else:
-                digest = hashlib.sha256(
-                    f"sprite-v2\0{show_line}".encode("utf-8")
-                ).hexdigest()[:16]
-                runtime_dir = self._sprite_runtime_dir
+            resolved = resolve_sprite(resources, request, self._sprite_assets_root)
+            root = self._sprite_assets_root.resolve()
+            if any(not pick.absolute_path.resolve().is_relative_to(root) for pick in resolved.picks):
+                raise ValueError("Слой спрайта выходит за пределы TS/images")
+            layers = [(pick.layer_name, pick.part_name, str(pick.absolute_path.resolve()),
+                       self._asset_fingerprint(pick.absolute_path)) for pick in resolved.picks]
+            digest = hashlib.sha256(repr(("sprite-v3", show_line, layers)).encode("utf-8")).hexdigest()
+            runtime_dir = self._sprite_runtime_dir
+            try:
+                runtime_dir.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                temporary_root = Path("/tmp/opencode") if Path("/tmp/opencode").is_dir() else Path(tempfile.gettempdir())
+                runtime_dir = temporary_root / "terminal-summer-sprites/generated_runtime"
+                runtime_dir.mkdir(parents=True, exist_ok=True)
+            out_path = runtime_dir / f"{request.character}_{digest}.png"
+            if not self._valid_generated_sprite(out_path):
+                sprite_img = compose_layers(resolved.picks, request.extras.get("spritecolor"))
                 try:
-                    runtime_dir.mkdir(parents=True, exist_ok=True)
-                except Exception:
-                    runtime_dir = Path("/tmp/terminal-summer-sprites/generated_runtime")
-                    runtime_dir.mkdir(parents=True, exist_ok=True)
-                out_path = runtime_dir / f"{request.character}_{digest}.png"
-                if not out_path.exists():
-                    resolved = resolve_sprite(resources, request, self._sprite_assets_root)
-                    sprite_img = compose_layers(
-                        resolved.picks, request.extras.get("spritecolor")
-                    )
-                    try:
-                        sprite_img.save(out_path, format="PNG")
-                    finally:
-                        sprite_img.close()
-                if generation is None or generation == self._preload_generation:
-                    self._sprite_build_cache[show_line] = str(out_path)
-                    self._sprite_build_cache.move_to_end(show_line)
-                    while len(self._sprite_build_cache) > self._sprite_cache_limit:
-                        self._sprite_build_cache.popitem(last=False)
+                    with atomic_output(out_path) as target:
+                        sprite_img.save(target, format="PNG")
+                finally:
+                    sprite_img.close()
         except Exception as e:
             self.sub_title = f"Sprite build error: {e}"
             return None
         return request, out_path
 
-    def restore_active_sprites(
-        self,
-        saved_sprites: dict,
-        saved_order_seq: int,
-    ) -> None:
-        """Собирает спрайты из show-команд, не используя устаревший PNG-кэш."""
-        self.clear_active_sprites()
-        if not isinstance(saved_sprites, dict):
-            return
-
-        sprites = sorted(
-            (sprite for sprite in saved_sprites.values() if isinstance(sprite, dict)),
-            key=lambda sprite: sprite.get("order", 0),
-        )
-        for saved_sprite in sprites:
-            show_line = saved_sprite.get("show_line")
-            character = saved_sprite.get("character")
-            if isinstance(show_line, str) and show_line.startswith("show "):
-                self.show_sprite_from_script_line(show_line)
-                restored_sprite = self._active_sprites.get(character)
-                if restored_sprite is not None:
-                    for key in ("at", "size", "behind", "order"):
-                        if key in saved_sprite:
-                            restored_sprite[key] = saved_sprite[key]
-                continue
-
-        self._sprite_order_seq = max(
-            saved_order_seq if isinstance(saved_order_seq, int) else 0,
-            max((sprite.get("order", 0) for sprite in self._active_sprites.values()), default=0),
-        )
 
     def hide_sprite_by_id(self, character_id: str):
         """Удаляет персонажа со сцены."""
@@ -2737,6 +2769,7 @@ class TerminalSummer(App):
     def load_persistent_state(self) -> bool:
         """Загружает общие для всех прохождений сценарные флаги."""
         if not self.PERSISTENT_FILE.exists():
+            self._persistent_read_error = False
             return False
         try:
             with self.PERSISTENT_FILE.open("r", encoding="utf-8") as file:
@@ -2746,9 +2779,11 @@ class TerminalSummer(App):
             flags, dates = split_persistent_progress(state)
             update_persistent_state(flags)
             self.ending_dates = merge_ending_dates(self.ending_dates, dates)
+            self._persistent_read_error = False
             self.update_script_header()
             return True
         except (OSError, ValueError, TypeError) as exc:
+            self._persistent_read_error = True
             self.sub_title = f"[Persistent state error] {exc}"
             return False
 
@@ -2766,18 +2801,14 @@ class TerminalSummer(App):
         state = get_persistent_state()
         if self.ending_dates:
             state["ending_dates"] = self.ending_dates.copy()
-        temporary_path = self.PERSISTENT_FILE.with_suffix(".json.tmp")
         try:
-            self.PERSISTENT_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with temporary_path.open("w", encoding="utf-8") as file:
-                json.dump(state, file, indent=2, ensure_ascii=False)
-            temporary_path.replace(self.PERSISTENT_FILE)
+            if self._persistent_read_error:
+                _backup_invalid_json(self.PERSISTENT_FILE)
+            write_json_atomic(self.PERSISTENT_FILE, state)
+            self._persistent_read_error = False
         except OSError as exc:
             self.sub_title = f"[Persistent state error] {exc}"
-            try:
-                temporary_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+            self.notify(str(exc), title="Не удалось сохранить прогресс", severity="error")
 
     def update_script_header(self) -> None:
         """Обновляет Header согласно выбранным группам сценарных переменных."""
@@ -2799,31 +2830,48 @@ class TerminalSummer(App):
 
     def load_settings(self):
         """Загрузка настроек"""
-        if self.CONFIG_FILE.exists():
-            with self.CONFIG_FILE.open("r", encoding="utf-8") as f:
-                loaded_settings = json.load(f)
-            if isinstance(loaded_settings, dict):
-                self.settings = {
-                    **self.DEFAULT_SETTINGS,
-                    **loaded_settings,
-                }
-                style = self.settings["style"]
-                invalid_style = not isinstance(style, str) or style not in ART_STYLES
-                if invalid_style:
-                    self.settings["style"] = self.DEFAULT_SETTINGS["style"]
-                if invalid_style or any(
-                    key not in loaded_settings for key in self.DEFAULT_SETTINGS
-                ):
-                    self.save_settings()
-        else:
+        self._settings_read_error = False
+        try:
+            if not self.CONFIG_FILE.exists():
+                self.settings = self.DEFAULT_SETTINGS.copy()
+                self.save_settings()
+                return
+            with self.CONFIG_FILE.open("r", encoding="utf-8") as source:
+                loaded = json.load(source)
+            if not isinstance(loaded, dict):
+                raise ValueError("Настройки должны быть JSON-объектом")
+            self.settings = {**self.DEFAULT_SETTINGS, **loaded}
+            normalized_bool = False
+            for key in ("header", "header_lp_points", "header_flags"):
+                if type(self.settings[key]) is not bool:
+                    self.settings[key] = self.DEFAULT_SETTINGS[key]
+                    normalized_bool = True
+            for key, choices in (("quality", ("50", "150", "200")),
+                                 ("text_speed", ("0", "0.01", "0.025", "0.04"))):
+                raw = self.settings[key]
+                value = format(raw, "g") if type(raw) in (int, float) else raw
+                self.settings[key] = value if isinstance(value, str) and value in choices else self.DEFAULT_SETTINGS[key]
+            style = self.settings["style"]
+            if not isinstance(style, str) or style not in ART_STYLES:
+                self.settings["style"] = self.DEFAULT_SETTINGS["style"]
+            self.settings.update(normalize_audio_settings(self.settings))
+            if normalized_bool or self.settings != loaded:
+                self.save_settings()
+        except (OSError, ValueError, UnicodeError) as exc:
             self.settings = self.DEFAULT_SETTINGS.copy()
-            self.save_settings()
+            self._settings_read_error = True
+            self.notify(f"Используются настройки по умолчанию. Исходный файл сохранён. {exc}",
+                        title="Не удалось прочитать настройки", severity="warning", timeout=10)
     
     def save_settings(self):
         """Сохранение настроек"""
-        self.CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with self.CONFIG_FILE.open("w", encoding="utf-8") as f:
-            json.dump(self.settings, f, indent=4)
+        try:
+            if self._settings_read_error:
+                _backup_invalid_json(self.CONFIG_FILE)
+            write_json_atomic(self.CONFIG_FILE, self.settings)
+            self._settings_read_error = False
+        except (OSError, ValueError, TypeError) as exc:
+            self.notify(str(exc), title="Не удалось сохранить настройки", severity="error")
 
     def sync_art_style_buttons(self) -> None:
         """Ровно одна кнопка соответствует выбранному стилю кадра."""
@@ -3228,6 +3276,76 @@ class TerminalSummer(App):
 
     def clear_log(self) -> None:
         self.query_one("#log-menu", LogMenu).clear()
+
+    def _show_load_error(self, detail: str) -> None:
+        self.sub_title = f"[Load error] {detail}"
+        self.notify(detail, title="Ошибка загрузки", severity="error", timeout=8)
+
+    def _offer_outdated_save(self, page: int, slot: int) -> None:
+        if isinstance(self.screen, OutdatedSaveDialog):
+            return
+        path = _save_path(page, slot)
+        try:
+            signature = hashlib.sha256(path.read_bytes()).digest()
+        except OSError:
+            signature = None
+
+        def confirmed(remove: bool) -> None:
+            if not remove:
+                return
+            try:
+                if signature is None or hashlib.sha256(path.read_bytes()).digest() != signature:
+                    raise ValueError("Слот изменился; сохранение не удалено")
+                delete_save(page, slot)
+            except (OSError, ValueError) as exc:
+                self._show_load_error(str(exc))
+                return
+            menu = self.query_one("#save-menu")
+            menu.all_saves = get_all_saves()
+            if menu.current_page == page and menu.selected_slot == f"save-slot-{slot}":
+                menu.selected_slot = None
+            self.update_save_menu_display()
+
+        self.push_screen(OutdatedSaveDialog(id="outdated-save"), confirmed)
+
+    def _asset_fingerprint(self, path: Path) -> str:
+        name = str(path.resolve())
+        signature = _file_signature(path)
+        with self._cache_lock:
+            cached = self._asset_fingerprints.get(name)
+            if cached is not None and cached[0] == signature:
+                self._asset_fingerprints.move_to_end(name)
+                return cached[1]
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if signature != _file_signature(path):
+            raise ValueError(f"Ассет изменился во время чтения: {path}")
+        with self._cache_lock:
+            self._asset_fingerprints[name] = (signature, digest)
+            self._asset_fingerprints.move_to_end(name)
+            while len(self._asset_fingerprints) > 2048:
+                self._asset_fingerprints.popitem(last=False)
+        return digest
+
+    def _valid_generated_sprite(self, path: Path) -> bool:
+        try:
+            signature = _file_signature(path)
+            with self._cache_lock:
+                if self._generated_validation.get(str(path)) == signature:
+                    return True
+            with Image.open(path) as image:
+                image.verify()
+            with self._cache_lock:
+                self._generated_validation[str(path)] = signature
+                self._generated_validation.move_to_end(str(path))
+                while len(self._generated_validation) > self._sprite_cache_limit:
+                    self._generated_validation.popitem(last=False)
+            return True
+        except (OSError, ValueError):
+            return False
+
+
+
+
 
 
 if __name__ == "__main__":
