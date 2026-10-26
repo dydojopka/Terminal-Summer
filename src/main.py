@@ -4,6 +4,8 @@ import sys
 import asyncio
 import hashlib
 import threading
+import time
+import tempfile
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -143,6 +145,19 @@ def get_all_saves() -> dict[str, dict]:
                 saves[f"{page_num - 1}/{slot_num - 1}"] = {"error": "Повреждённое сохранение"}
     return saves
 
+
+def _backup_invalid_json(path: Path) -> None:
+    if path.exists():
+        backup = path.with_name(f"{path.name}.invalid-{time.time_ns()}.bak")
+        with path.open("rb") as source, atomic_output(backup, overwrite=False) as target:
+            import shutil
+            shutil.copyfileobj(source, target)
+
+
+def _file_signature(path: Path) -> tuple:
+    stat = path.stat()
+    return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
+
 import json
 from PIL import Image
 from art_renderer import ART_STYLES, render_art
@@ -175,45 +190,9 @@ from sprites_builder import (
 )
 
 
+# Только сценарные фильтры; полноэкранные записки и opening-слои ими не являются.
+SCENE_FILTER_IDS = frozenset({"prologue_filter"})
 
-def _backup_invalid_json(path: Path) -> None:
-    if path.exists():
-        backup = path.with_name(f"{path.name}.invalid-{time.time_ns()}.bak")
-        with path.open("rb") as source, atomic_output(backup, overwrite=False) as target:
-            import shutil
-            shutil.copyfileobj(source, target)
-
-
-def _file_signature(path: Path) -> tuple:
-    stat = path.stat()
-    return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
-
-
-class OutdatedSaveDialog(ModalScreen):
-    BINDINGS = [("escape", "keep", "Оставить")]
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.keep_button = Button("Оставить", id="outdated-save-keep", variant="primary")
-
-    def compose(self):
-        with Vertical(id="outdated-save-panel"):
-            yield Label("Сохранение устарело", id="outdated-save-title")
-            yield Static("Оно несовместимо с текущей версией сценария.\nУдалить выбранное сохранение?")
-            with HorizontalGroup():
-                yield self.keep_button
-                yield Button("Удалить", id="outdated-save-delete", variant="error")
-
-    def on_mount(self):
-        if self.keep_button.is_mounted:
-            self.keep_button.focus()
-
-    def action_keep(self):
-        self.dismiss(False)
-
-    def on_button_pressed(self, event: Button.Pressed):
-        event.stop()
-        self.dismiss(event.button.id == "outdated-save-delete")
 
 @dataclass(frozen=True)
 class RenderSprite:
@@ -241,6 +220,7 @@ class SceneRenderSnapshot:
             (
                 sprite.character,
                 sprite.show_line,
+                sprite.image_path,
                 sprite.at,
                 sprite.size,
                 sprite.behind,
@@ -248,7 +228,7 @@ class SceneRenderSnapshot:
             )
             for sprite in self.sprites
         )
-        return self.category, self.name, sprite_key, str(self.width), self.style, 2
+        return self.category, self.name, sprite_key, str(self.width), self.style, self.cache_epoch, 3
 
 def main():
     if not IS_FROZEN:
@@ -517,6 +497,33 @@ class SaveMenu(HorizontalGroup):
         yield SaveMenuMidBtns()
 
 
+class OutdatedSaveDialog(ModalScreen):
+    BINDINGS = [("escape", "keep", "Оставить")]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.keep_button = Button("Оставить", id="outdated-save-keep", variant="primary")
+
+    def compose(self):
+        with Vertical(id="outdated-save-panel"):
+            yield Label("Сохранение устарело", id="outdated-save-title")
+            yield Static("Оно несовместимо с текущей версией сценария.\nУдалить выбранное сохранение?")
+            with HorizontalGroup():
+                yield self.keep_button
+                yield Button("Удалить", id="outdated-save-delete", variant="error")
+
+    def on_mount(self):
+        if self.keep_button.is_mounted:
+            self.keep_button.focus()
+
+    def action_keep(self):
+        self.dismiss(False)
+
+    def on_button_pressed(self, event: Button.Pressed):
+        event.stop()
+        self.dismiss(event.button.id == "outdated-save-delete")
+
+
 class PauseMenu(Static):
     """Виджет меню паузы"""
     def compose(self):
@@ -538,10 +545,11 @@ class SettingsMenu(VerticalScroll):
     BORDER_TITLE = "Настройки"
 
     def compose(self):
-        yield SettingHeader()
-        yield SettingQuality()
-        yield SettingASCIIorANSI()
-        yield SettingTextSpeed()
+        yield SettingHeader(classes="setting-with-description")
+        yield SettingQuality(classes="setting-with-description")
+        yield SettingASCIIorANSI(classes="setting-with-description")
+        yield SettingSceneFilters(classes="setting-with-description")
+        yield SettingTextSpeed(classes="setting-with-description")
         yield SettingAudio()
         yield Button("Назад ↩", id="btn-close-settings")
 
@@ -560,11 +568,11 @@ class SettingAudio(Vertical):
                 yield Button("+10%", id=f"btn-audio-{group}-plus")
         yield Button("Без звука", id="btn-audio-mute")
 
-class SettingHeader(Widget):
+class SettingHeader(HorizontalGroup):
     """Виджет с настройкой Header"""
     BORDER_TITLE = "Верхняя панель(Header)"
     def compose(self):
-        with Vertical(id="header-controls"):
+        with Vertical(id="header-controls", classes="setting-controls setting-controls-wide"):
             with HorizontalGroup(classes="header-setting-row"):
                 yield Button("Включить", variant="default", id="btn-header-on")
                 yield Button("Выключить", variant="error", id="btn-header-off")
@@ -572,7 +580,7 @@ class SettingHeader(Widget):
             with HorizontalGroup(classes="header-setting-row"):
                 yield Button("LP-поинты", id="btn-header-lp-points")
                 yield Button("Флаги", id="btn-header-flags")
-        yield DescriptionSettingHeader()
+        yield DescriptionSettingHeader(classes="setting-description")
 
 class DescriptionSettingHeader(Widget):
     """Описание настройки 'Верхняя панель(Header)'"""
@@ -582,15 +590,15 @@ class DescriptionSettingHeader(Widget):
 LP-поинты и флаги можно включать независимо.
 (может слегка уменьшить обзор)"""
 
-class SettingQuality(Widget):
+class SettingQuality(HorizontalGroup):
     """Виджет с настройкой размера ASCII-артов"""
     BORDER_TITLE = "Размер ANSI/ASCII артов"
     def compose(self):
-        with Vertical():
+        with Vertical(classes="setting-controls"):
             yield Button("маленький\n(50)", variant="default", id="btn-small")
             yield Button("Средний\n(150)", variant="default", id="btn-medium")
             yield Button("ОГРОМНЫЙ\n(200)", variant="default", id="btn-large")
-            yield DescriptionSettingQuality()
+        yield DescriptionSettingQuality(classes="setting-description")
 
 class DescriptionSettingQuality(Widget):
     """Описание настройки 'Размер ANSI/ASCII артов'"""
@@ -600,7 +608,7 @@ class DescriptionSettingQuality(Widget):
 Можно так же попробовать уменьшить размер шрифта самой консоли 
 (Обычно это Ctrl+"+" и Ctrl+"-")"""
 
-class SettingASCIIorANSI(Widget):
+class SettingASCIIorANSI(HorizontalGroup):
     """Виджет с настройкой стиля артов"""
     BORDER_TITLE = "Стиль артов"
     STYLE_BUTTONS = {
@@ -610,11 +618,11 @@ class SettingASCIIorANSI(Widget):
     }
 
     def compose(self):
-        with Vertical():
+        with Vertical(classes="setting-controls"):
             yield Button("ANSI", variant="default", id="btn-ANSI")
             yield Button("ЧБ ASCII", variant="default", id="btn-ASCII")
             yield Button("Цветной ASCII", variant="default", id="btn-COLOR-ASCII")
-            yield DescriptionSettingASCIIorANSI()
+        yield DescriptionSettingASCIIorANSI(classes="setting-description")
 
 class DescriptionSettingASCIIorANSI(Widget):
     """Описание настройки 'Стиль артов'"""
@@ -623,16 +631,35 @@ class DescriptionSettingASCIIorANSI(Widget):
 ЧБ ASCII — одноцветные символы .,:+*?%@
 Цветной ASCII — те же символы в цветах изображения"""
 
-class SettingTextSpeed(Widget):
+class SettingSceneFilters(HorizontalGroup):
+    """Пользовательская видимость фильтров, независимо от стиля артов."""
+    BORDER_TITLE = "Фильтры изображения"
+    BUTTON_VALUES = {
+        "btn-scene-filters-on": True,
+        "btn-scene-filters-off": False,
+    }
+
+    def compose(self):
+        with HorizontalGroup(id="scene-filter-controls", classes="setting-controls setting-controls-wide"):
+            yield Button("Включить", id="btn-scene-filters-on")
+            yield Button("Выключить", id="btn-scene-filters-off")
+        yield Static(
+            "В ASCII фильтры можно отключить для лучшей различимости изображения. "
+            "Персонажи и их тонировка сохраняются.",
+            classes="setting-description scene-filter-description",
+        )
+
+
+class SettingTextSpeed(HorizontalGroup):
     """Виджет с настройкой скорости текста"""
     BORDER_TITLE = "Скорость текста"
     def compose(self):
-        with Vertical():
+        with Vertical(classes="setting-controls"):
             yield Button("Медленно", variant="default", id="btn-speed-slow")
             yield Button("Средне", variant="default", id="btn-speed-medium")
             yield Button("Быстро", variant="default", id="btn-speed-fast")
             yield Button("Моментально", variant="default", id="btn-speed-instantly")
-            yield DescriptionSettingTextSpeed()
+        yield DescriptionSettingTextSpeed(classes="setting-description")
 
 class DescriptionSettingTextSpeed(Widget):
     """Описание настройки 'Скорость текста'"""
@@ -651,7 +678,6 @@ class NovelMenu(Static):
             yield Button("История", id="btn-log")
         yield TextBar(id="text-bar")
         with Vertical(id="novel-next-control", classes="novel-control"):
-            yield Label("", id="skip-status")
             yield Button("Продолжить", id="btn-next")
 
 class TextBar(VerticalScroll):
@@ -767,6 +793,7 @@ class TerminalSummer(App):
         "header_flags": True,
         "quality": "150",
         "style": "ANSI",
+        "scene_filters_enabled": True,
         "text_speed": "0.025",
         **AUDIO_DEFAULTS,
     }
@@ -806,7 +833,7 @@ class TerminalSummer(App):
         self._skip_input_after = _time.get_time()
         self._skip_next_advance_at = 0.0
         self._skip_timer = None
-        self._skip_controls_state = None
+        self._skip_binding_available = None
         self._script_advance_task: asyncio.Task | None = None
         self._script_delay_event: asyncio.Event | None = None
         self._script_delay_kind: str | None = None
@@ -1065,6 +1092,14 @@ class TerminalSummer(App):
             self.sync_art_style_buttons()
             self.save_settings()
             await self.update_current_scene_art()
+
+        elif button_id in SettingSceneFilters.BUTTON_VALUES:
+            enabled = SettingSceneFilters.BUTTON_VALUES[button_id]
+            if self.settings["scene_filters_enabled"] != enabled:
+                self.settings["scene_filters_enabled"] = enabled
+                self.sync_scene_filter_buttons()
+                self.save_settings()
+                await self.update_current_scene_art()
 
         # TextSpeed
         elif button_id == "btn-speed-slow":       # Кнопка "Медленно"
@@ -1614,7 +1649,7 @@ class TerminalSummer(App):
             return False
         if self._next_scene_in_progress:
             return False
-        if not hasattr(self, "script") or not self.script:
+        if not hasattr(self, "script") or not self.script or self.script.finished:
             return False
         if not self.query_one("#choice-bar").has_class("hidden"):
             return False
@@ -1702,13 +1737,23 @@ class TerminalSummer(App):
 
             save_data = all_saves.get(save_id)
             if save_data:
+                save_data = save_data if isinstance(save_data, dict) else {"error": "Повреждённое сохранение"}
                 game_state = save_data.get("game_state", {})
+                game_state = game_state if isinstance(game_state, dict) else {}
                 dialogue = game_state.get("dialogue", {})
+                dialogue = dialogue if isinstance(dialogue, dict) else {}
                 speaker = dialogue.get("speaker", "")
+                speaker = speaker if isinstance(speaker, str) else ""
                 text = dialogue.get("text", "")
+                text = text if isinstance(text, str) else "Повреждённое сохранение"
+                error = save_data.get("error")
+                if error is not None:
+                    text = error if isinstance(error, str) else "Повреждённое сохранение"
+                speaker, text = plain_save_text(speaker), plain_save_text(text)
                 timestamp = save_data.get("timestamp", "")
+                timestamp = timestamp if isinstance(timestamp, str) else ""
 
-                # Обрезаем текст до 5 слов
+                # Превью не исполняет разметку из внешнего JSON.
                 words = text.split()
                 if len(words) > 6:
                     short_text = " ".join(words[:6]) + "..."
@@ -1723,7 +1768,7 @@ class TerminalSummer(App):
                 else:
                     label = "Пусто"
 
-                btn.label = f"{label}\n{timestamp}"
+                btn.label = Text(f"{label}\n{timestamp}")
                 btn.remove_class("save-slot-empty")
                 btn.add_class("save-slot-filled")
             else:
@@ -1798,6 +1843,37 @@ class TerminalSummer(App):
         save_menu.all_saves = get_all_saves()
         save_menu.selected_slot = None
         self.update_save_menu_display()
+
+    def _show_load_error(self, detail: str) -> None:
+        self.sub_title = f"[Load error] {detail}"
+        self.notify(detail, title="Ошибка загрузки", severity="error", timeout=8)
+
+    def _offer_outdated_save(self, page: int, slot: int) -> None:
+        if isinstance(self.screen, OutdatedSaveDialog):
+            return
+        path = _save_path(page, slot)
+        try:
+            signature = hashlib.sha256(path.read_bytes()).digest()
+        except OSError:
+            signature = None
+
+        def confirmed(remove: bool) -> None:
+            if not remove:
+                return
+            try:
+                if signature is None or hashlib.sha256(path.read_bytes()).digest() != signature:
+                    raise ValueError("Слот изменился; сохранение не удалено")
+                delete_save(page, slot)
+            except (OSError, ValueError) as exc:
+                self._show_load_error(str(exc))
+                return
+            menu = self.query_one("#save-menu")
+            menu.all_saves = get_all_saves()
+            if menu.current_page == page and menu.selected_slot == f"save-slot-{slot}":
+                menu.selected_slot = None
+            self.update_save_menu_display()
+
+        self.push_screen(OutdatedSaveDialog(id="outdated-save"), confirmed)
 
     def load_selected_save(self) -> None:
         """Загрузка выбранного сохранения"""
@@ -2083,7 +2159,7 @@ class TerminalSummer(App):
         elif not self.skipping and self.can_start_skipping():
             self.skipping = True
             self._skip_next_advance_at = _time.get_time() + 0.1
-            self._sync_skip_controls()
+            self._refresh_skip_binding()
 
     def toggle_skipping(self) -> None:
         self.set_skipping(not self.skipping)
@@ -2095,30 +2171,24 @@ class TerminalSummer(App):
         """Не отменяет исполняемый DSL; отсекает ввод из старого контекста."""
         self.skipping = False
         self._skip_input_after = _time.get_time()
-        self._sync_skip_controls()
+        self._refresh_skip_binding()
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         if action == "toggle_skipping":
             return self.skipping or self.can_start_skipping()
         return super().check_action(action, parameters)
 
-    def _sync_skip_controls(self) -> None:
+    def _refresh_skip_binding(self) -> None:
         if not self.is_running or not self.screen_stack:
             return
         available = self.skipping or self.can_start_skipping()
-        state = (self.skipping, available)
-        if state == self._skip_controls_state:
+        if available == self._skip_binding_available:
             return
-        self._skip_controls_state = state
-        status = self.query_one("#skip-status", Label)
-        status.update(
-            "Пропуск — S: выключить" if self.skipping else "S: включить пропуск"
-        )
-        status.set_class(not available, "hidden")
+        self._skip_binding_available = available
         self.refresh_bindings()
 
     def _skip_tick(self) -> None:
-        self._sync_skip_controls()
+        self._refresh_skip_binding()
         if not self.skipping:
             return
         if not self.is_gameplay_context(allow_preload=True) or (
@@ -2262,6 +2332,8 @@ class TerminalSummer(App):
                 order=int(sprite.get("order", 0)),
             )
             for sprite in self._sorted_active_sprites(active_sprites)
+            if self.settings.get("scene_filters_enabled", True)
+            or sprite.get("character") not in SCENE_FILTER_IDS
         )
         return SceneRenderSnapshot(
             category=category,
@@ -2672,8 +2744,6 @@ class TerminalSummer(App):
         if self._get_cached_render(snapshot.key) is None:
             self._render_scene_snapshot(snapshot)
 
-
-
     def show_sprite_from_script_line(self, show_line: str):
         """Собирает PNG спрайта из show-строки и обновляет активный набор спрайтов."""
         built = self._build_sprite_png(show_line)
@@ -2699,6 +2769,41 @@ class TerminalSummer(App):
         }
 
         return None
+
+    def _asset_fingerprint(self, path: Path) -> str:
+        name = str(path.resolve())
+        signature = _file_signature(path)
+        with self._cache_lock:
+            cached = self._asset_fingerprints.get(name)
+            if cached is not None and cached[0] == signature:
+                self._asset_fingerprints.move_to_end(name)
+                return cached[1]
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if signature != _file_signature(path):
+            raise ValueError(f"Ассет изменился во время чтения: {path}")
+        with self._cache_lock:
+            self._asset_fingerprints[name] = (signature, digest)
+            self._asset_fingerprints.move_to_end(name)
+            while len(self._asset_fingerprints) > 2048:
+                self._asset_fingerprints.popitem(last=False)
+        return digest
+
+    def _valid_generated_sprite(self, path: Path) -> bool:
+        try:
+            signature = _file_signature(path)
+            with self._cache_lock:
+                if self._generated_validation.get(str(path)) == signature:
+                    return True
+            with Image.open(path) as image:
+                image.verify()
+            with self._cache_lock:
+                self._generated_validation[str(path)] = signature
+                self._generated_validation.move_to_end(str(path))
+                while len(self._generated_validation) > self._sprite_cache_limit:
+                    self._generated_validation.popitem(last=False)
+            return True
+        except (OSError, ValueError):
+            return False
 
     def _build_sprite_png(self, show_line: str, generation: int | None = None):
         """Собирает или получает из кэша PNG, не изменяя состояние сцены."""
@@ -2736,7 +2841,6 @@ class TerminalSummer(App):
             self.sub_title = f"Sprite build error: {e}"
             return None
         return request, out_path
-
 
     def hide_sprite_by_id(self, character_id: str):
         """Удаляет персонажа со сцены."""
@@ -2824,7 +2928,7 @@ class TerminalSummer(App):
                 raise ValueError("Настройки должны быть JSON-объектом")
             self.settings = {**self.DEFAULT_SETTINGS, **loaded}
             normalized_bool = False
-            for key in ("header", "header_lp_points", "header_flags"):
+            for key in ("header", "header_lp_points", "header_flags", "scene_filters_enabled"):
                 if type(self.settings[key]) is not bool:
                     self.settings[key] = self.DEFAULT_SETTINGS[key]
                     normalized_bool = True
@@ -2862,6 +2966,11 @@ class TerminalSummer(App):
                 "primary" if self.settings["style"] == style else "default"
             )
 
+    def sync_scene_filter_buttons(self) -> None:
+        enabled = self.settings["scene_filters_enabled"]
+        self.query_one("#btn-scene-filters-on", Button).variant = "success" if enabled else "default"
+        self.query_one("#btn-scene-filters-off", Button).variant = "default" if enabled else "error"
+
     def apply_settings(self):
         """Применение настроек при старте"""
         self.apply_audio_settings()
@@ -2887,6 +2996,7 @@ class TerminalSummer(App):
             self.query_one("#btn-large", Button).variant = "success"
 
         self.sync_art_style_buttons()
+        self.sync_scene_filter_buttons()
 
         # TextSpeed
         text_speed = self.settings["text_speed"]
@@ -2971,6 +3081,13 @@ class TerminalSummer(App):
                 self.start_script_preload(self.script)
             else:
                 self._preload_after_settings = True
+
+
+
+
+
+
+
 
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
@@ -3256,76 +3373,6 @@ class TerminalSummer(App):
 
     def clear_log(self) -> None:
         self.query_one("#log-menu", LogMenu).clear()
-
-    def _show_load_error(self, detail: str) -> None:
-        self.sub_title = f"[Load error] {detail}"
-        self.notify(detail, title="Ошибка загрузки", severity="error", timeout=8)
-
-    def _offer_outdated_save(self, page: int, slot: int) -> None:
-        if isinstance(self.screen, OutdatedSaveDialog):
-            return
-        path = _save_path(page, slot)
-        try:
-            signature = hashlib.sha256(path.read_bytes()).digest()
-        except OSError:
-            signature = None
-
-        def confirmed(remove: bool) -> None:
-            if not remove:
-                return
-            try:
-                if signature is None or hashlib.sha256(path.read_bytes()).digest() != signature:
-                    raise ValueError("Слот изменился; сохранение не удалено")
-                delete_save(page, slot)
-            except (OSError, ValueError) as exc:
-                self._show_load_error(str(exc))
-                return
-            menu = self.query_one("#save-menu")
-            menu.all_saves = get_all_saves()
-            if menu.current_page == page and menu.selected_slot == f"save-slot-{slot}":
-                menu.selected_slot = None
-            self.update_save_menu_display()
-
-        self.push_screen(OutdatedSaveDialog(id="outdated-save"), confirmed)
-
-    def _asset_fingerprint(self, path: Path) -> str:
-        name = str(path.resolve())
-        signature = _file_signature(path)
-        with self._cache_lock:
-            cached = self._asset_fingerprints.get(name)
-            if cached is not None and cached[0] == signature:
-                self._asset_fingerprints.move_to_end(name)
-                return cached[1]
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if signature != _file_signature(path):
-            raise ValueError(f"Ассет изменился во время чтения: {path}")
-        with self._cache_lock:
-            self._asset_fingerprints[name] = (signature, digest)
-            self._asset_fingerprints.move_to_end(name)
-            while len(self._asset_fingerprints) > 2048:
-                self._asset_fingerprints.popitem(last=False)
-        return digest
-
-    def _valid_generated_sprite(self, path: Path) -> bool:
-        try:
-            signature = _file_signature(path)
-            with self._cache_lock:
-                if self._generated_validation.get(str(path)) == signature:
-                    return True
-            with Image.open(path) as image:
-                image.verify()
-            with self._cache_lock:
-                self._generated_validation[str(path)] = signature
-                self._generated_validation.move_to_end(str(path))
-                while len(self._generated_validation) > self._sprite_cache_limit:
-                    self._generated_validation.popitem(last=False)
-            return True
-        except (OSError, ValueError):
-            return False
-
-
-
-
 
 
 if __name__ == "__main__":
