@@ -1173,6 +1173,7 @@ label day4_house_of_mt
     scene bg int_library_day with dissolve
     play ambience ambience_library_day fadein 3
     play music take_me_beautifully fadein 3
+    window show
     "Первым пунктом нашего маршрута была библиотека."
     "Славя подошла к Жене, сидевшей за столом, и о чём-то с ней заговорила."
     "Я же просто стоял в дверях и ждал – лишний раз общаться с местной библиотекаршей у меня не было никакого желания."
@@ -2683,12 +2684,22 @@ label labyrinth
         goto day4_uv
     }
     $mine_route = 1
+    goto mine_start
+label mine_start
+    $point = 1
+    $previous_point = 1
+    $halt_visited = false
+    $coalface_visited = false
+    $back_to_start = false
+    $first_turn = true
     goto mine_crossroad
 label mine_crossroad
     scene bg int_mine_crossroad with esfade
     if ($first_turn == false)
     {
+        window show
         "Похоже, ещё одна развилка."
+        window hide
     }
 label mine_eval
     menu
@@ -2711,7 +2722,7 @@ label mine_eval
     # halt - 14, coalface - 15, exit - 16
     #
     label pizda_blyat
-    if (($back_to_start == false) && ($point == 1))
+    if ($point == 1)
     {
         $previous_point = 1
         if ($direction == 0)
@@ -2773,7 +2784,7 @@ label mine_eval
             if ($direction == 0)
             {
                 $point = 14
-                goto pizda_blyat
+                goto mine_dispatch
             }
             else if ($direction == 1)
             {
@@ -2790,7 +2801,7 @@ label mine_eval
             else if ($direction == 1)
             {
                 $point = 14
-                goto pizda_blyat
+                goto mine_dispatch
             }
         }
         else if ($previous_point == 14)
@@ -3055,7 +3066,7 @@ label mine_eval
             if ($direction == 0)
             {
                 $point = 14
-                goto pizda_blyat
+                goto mine_dispatch
             }
             else if ($direction == 1)
             {
@@ -3072,7 +3083,7 @@ label mine_eval
             else if ($direction == 1)
             {
                 $point = 14
-                goto pizda_blyat
+                goto mine_dispatch
             }
         }
         else if ($previous_point == 14)
@@ -3097,7 +3108,7 @@ label mine_eval
             if ($direction == 0)
             {
                 $point = 16
-                goto pizda_blyat
+                goto mine_dispatch
             }
             else if ($direction == 1)
             {
@@ -3114,7 +3125,7 @@ label mine_eval
             else if ($direction == 1)
             {
                 $point = 16
-                goto pizda_blyat
+                goto mine_dispatch
             }
         }
     }
@@ -3171,7 +3182,7 @@ label mine_eval
             else if ($direction == 1)
             {
                 $point = 15
-                goto pizda_blyat
+                goto mine_dispatch
             }
         }
         else if ($previous_point == 12)
@@ -3180,11 +3191,11 @@ label mine_eval
             if ($direction == 0)
             {
                 $point = 15
-                goto pizda_blyat
+                goto mine_dispatch
             }
             else if ($direction == 1)
             {
-                $point = 12
+                $point = 2
             }     
         }
         else if ($previous_point == 15)
@@ -3200,7 +3211,8 @@ label mine_eval
             }
         }
     }
-    else if ($point == 16)
+label mine_dispatch
+    if ($point == 16)
     {
         #renpy.jump(mine_route+"_mine_exit")
         if ($mine_route == 1)
@@ -3304,7 +3316,6 @@ label fail_mine_return_to_start
     th "Значит, где-то не там повернул."
     th "Надо искать дальше."
     window hide
-    $back_to_start = false
     goto mine_eval
 label girls_mine_return_to_start
     #$ persistent.sprite_time = "night"
@@ -3314,7 +3325,6 @@ label girls_mine_return_to_start
     th "Значит, где-то не там повернули."
     th "Надо искать дальше."
     window hide
-    $back_to_start = false
     goto mine_eval
 label fail_mine_coalface
     #$ persistent.sprite_time = "night"
@@ -4065,7 +4075,7 @@ label day4_sl
     "…"
     window hide
     $mine_route = 2
-    goto mine_crossroad
+    goto mine_start
 label sl_mine_coalface
     #$ persistent.sprite_time = "night"
     scene bg int_mine_coalface with esfade
@@ -4144,6 +4154,7 @@ label sl_mine_exit
     show sl sad_pioneer size normal spritecolor night at cleft
     show sh scared_pioneer size normal spritecolor night at cright
     with dissolve
+    window show
     sl "Всё в порядке, это я, Славя."
     sh "Правда?"
     show sh cry_pioneer size normal spritecolor night at cright with dspr
@@ -4736,7 +4747,7 @@ label day4_dv
     me "Так, вот теперь можно идти…"
     window hide
     $mine_route = 3
-    goto mine_crossroad
+    goto mine_start
 label dv_mine_coalface
     #$ persistent.sprite_time = "night"
     scene bg int_mine_coalface with esfade
@@ -5622,7 +5633,7 @@ label day4_us
     th "Не уверен, но выбирать, куда идти, всё равно придётся мне – такое я не могу доверить маленькой девочке."
     window hide
     $mine_route = 4
-    goto mine_crossroad
+    goto mine_start
 label us_mine_coalface
     #$ persistent.sprite_time = "night"
     scene bg int_mine_coalface with esfade
@@ -6444,7 +6455,7 @@ label day4_un
     me "Теперь хотя бы будем знать, откуда начинали."
     window hide
     $mine_route = 5
-    goto mine_crossroad
+    goto mine_start
 label un_mine_coalface
     #$ persistent.sprite_time = "night"
     scene bg int_mine_coalface with esfade

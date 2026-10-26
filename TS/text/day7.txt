@@ -850,6 +850,7 @@ label day7_main
     "..."
     window hide
     with esfade2
+    window show
     if ($day3_got_fail == 1)
     {
         "Я внезапно вспомнил про тот клочок бумаги и несколько слов, написанных на нём."
@@ -1843,6 +1844,7 @@ label day7_us
         "Это всё она!"
         {
             $lp_us -= 2
+            window show
             "Я показал пальцем в сторону Ульяны."
             show us angry_pioneer size normal spritecolor sunset at center with dspr
             "Та же в свою очередь грозно посмотрела на меня."
