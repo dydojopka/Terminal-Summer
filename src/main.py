@@ -63,7 +63,7 @@ MENU_LOGO_PATH = get_resource_path("menu_logo.ansi")
 SETTINGS_PATH = get_settings_path()
 SAVES_PATH = get_saves_path()
 PERSISTENT_PATH = get_persistent_path()
-APP_VERSION = "0.3.0"
+APP_VERSION = "1.0.0"
 # Original game/options.rpy: config.main_menu_music = "sound/music/blow_with_the_fires.ogg".
 MENU_MUSIC_KEY = "blow_with_the_fires"
 
