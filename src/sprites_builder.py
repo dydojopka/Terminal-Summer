@@ -43,6 +43,20 @@ SPRITE_COLOR_FACTORS = {
     "night": (0.63, 0.78, 0.82),
 }
 
+SPRITE_POSITIONS = {
+    "fleft": 0.18, "left": 0.30, "cleft": 0.40, "center": 0.50,
+    "cright": 0.60, "right": 0.70, "fright": 0.82,
+}
+SPRITE_SIZES = {"normal": 1.0, "small": 0.86, "large": 1.12, "big": 1.12}
+
+
+def normalize_sprite_position(position: str) -> str:
+    # Именованные Ren'Py transforms адаптированы к статичным позициям терминала.
+    position = {"us_d1": "left", "uv_pos": "center"}.get(position, position)
+    if position not in SPRITE_POSITIONS:
+        raise ValueError(f"Unknown sprite position: {position}")
+    return position
+
 
 @dataclass
 class ShowRequest:
@@ -119,6 +133,8 @@ def parse_show_like(line: str) -> ShowRequest:
         raise ValueError(f"Invalid command: {line}")
 
     character = tokens[0]
+    if not re.fullmatch(r"[a-zA-Z0-9_]+", character):
+        raise ValueError(f"Invalid sprite character: {character}")
     rest = tokens[1:]
 
     i = 0
@@ -131,18 +147,27 @@ def parse_show_like(line: str) -> ShowRequest:
 
     while i < len(rest):
         key = rest[i]
-        if i + 1 < len(rest):
-            value = rest[i + 1]
-        else:
-            value = ""
+        if key == "with":
+            transition = " ".join(rest[i + 1:])
+            if not re.fullmatch(r"\w+(?:\s+\d+(?:\.\d+)?)?(?:\s+(?:skip|await))?", transition):
+                raise ValueError(f"Invalid sprite transition: {line}")
+            req.transition = rest[i + 1]
+            break
+        if key not in {"size", "at", "behind", "spritecolor"} or i + 1 >= len(rest):
+            raise ValueError(f"Invalid sprite modifier: {line}")
+        value = rest[i + 1]
 
         if key == "size":
+            if value not in SPRITE_SIZES:
+                raise ValueError(f"Unknown sprite size: {value}")
             req.size = value
         elif key == "at":
-            req.at = value
-        elif key == "with":
-            req.transition = value
+            req.at = normalize_sprite_position(value)
         else:
+            if key == "behind" and not re.fullmatch(r"[a-zA-Z0-9_]+", value):
+                raise ValueError(f"Invalid behind character: {value}")
+            if key == "spritecolor" and value not in SPRITE_COLOR_FACTORS:
+                raise ValueError(f"Unknown sprite color: {value}")
             req.extras[key] = value
         i += 2
 
