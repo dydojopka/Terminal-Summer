@@ -18,6 +18,7 @@ from audio_catalog import validate_audio_assets
 from music_catalog import validate_music_assets
 from endings_catalog import ENDING_ICON_WIDTHS, load_endings_catalog, resolve_ending_ansi, validate_endings_assets
 from scripts.assets_manager import migrate_legacy_gallery
+from script_resources import visual_asset_problems
 
 
 def create_assets_archive(
@@ -26,6 +27,8 @@ def create_assets_archive(
     if output.resolve().is_relative_to(ts_dir.resolve()):
         raise ValueError("Архив нужно сохранить за пределами папки TS")
     errors = validate_gallery_assets(ts_dir, catalog, verify_images=True)
+    missing_visuals, invalid_visuals = visual_asset_problems(ts_dir, verify_images=True)
+    errors.extend(missing_visuals + invalid_visuals)
     if include_endings:
         errors.extend(validate_endings_assets(ts_dir))
     if include_audio:
