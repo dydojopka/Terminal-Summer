@@ -1744,6 +1744,8 @@ class TerminalSummer(App):
         page = save_menu.current_page
         all_saves = save_menu.all_saves
 
+        if self.script.failed or self.script.has_diagnostic:
+            return False
         for slot_index in range(12):
             save_id = f"{page}/{slot_index}"
             btn_id = f"save-slot-{slot_index}"
