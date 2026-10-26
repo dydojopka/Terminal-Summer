@@ -319,6 +319,8 @@ class ScriptParser:
         self.failed = False
         self.finished = False
         self.has_diagnostic = False
+        self.rolling_credits = False
+        self.credits_skipped = False
         self._build_resource_manifest()
 
     def _build_resource_manifest(self) -> None:
@@ -453,6 +455,8 @@ class ScriptParser:
                 if self.index >= len(self.lines):
                     self.finished = True
                     self._stop_skipping()
+                    if self.rolling_credits:
+                        self.app.finish_game(self)
                     return
                 line = self.lines[self.index]
                 self.index += 1
@@ -484,6 +488,8 @@ class ScriptParser:
             await self._handle_if(line)
         elif line.startswith("pause"):
             await self._handle_pause(line)
+        elif line == "rollcredits":
+            await self._handle_rollcredits()
         elif line.startswith("scene"):
             await self._handle_scene(line)
         elif line.startswith("show"):
@@ -739,7 +745,30 @@ class ScriptParser:
            
 
 
+    async def _handle_rollcredits(self):
+        try:
+            start, end = self._read_block_range(self.index)
+            duration = sum(
+                float(match.group(1))
+                for command in self.lines[start:end]
+                if (match := re.fullmatch(r"pause\s+(?:hard\s+)?(\d+(?:\.\d+)?)", command))
+            )
+            self.app.start_credits(self, duration)
+        except (OSError, ValueError) as exc:
+            self._report_script_error(str(exc))
+            return
+        self.rolling_credits = True
+        # В конце блока титров игра завершается, а не проваливается в другой рут.
+        self._enter_range(start, end, len(self.lines))
+        await self.next_line()
 
+    def skip_credits(self) -> bool:
+        if not self.rolling_credits or self.finished or self.failed:
+            return False
+        self.credits_skipped = True
+        self.index = len(self.lines)
+        self.frames.clear()
+        return True
 
     async def _handle_pause(self, line):
         """Обработка строки pause"""
@@ -751,11 +780,14 @@ class ScriptParser:
             await self.app.flush_scene_render()
             self.app.prefetch_next_scene(self)
             self.app._space_require_idle = True
-            await self.app.wait_script_delay(
-                seconds,
-                "hard_pause" if is_hard_pause else "pause",
-                skippable=not is_hard_pause,
-            )
+            if self.rolling_credits:
+                await self.app.wait_credit_pause(self, seconds, skippable=not is_hard_pause)
+            else:
+                await self.app.wait_script_delay(
+                    seconds,
+                    "hard_pause" if is_hard_pause else "pause",
+                    skippable=not is_hard_pause,
+                )
             await self.next_line()
 
 

@@ -752,11 +752,6 @@ label day7_main
             if (!$persistent.endings_main_bad)
             {
                 $persistent.endings_main_bad = true
-                play sfx sfx_achievement
-                show ach main_bad at achievement_trans with dissolve
-                pause 3.5
-                hide ach with dissolve
-                pause 1
                 # show_achievement("main_bad")
                 # achievement.grant("ACH_MAIN_BAD")
             }

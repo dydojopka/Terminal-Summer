@@ -3500,11 +3500,6 @@
     if (!$persistent.endings_mi)
     {
         $persistent.endings_mi = true
-        play sfx sfx_achievement
-        show ach mi at achievement_trans with dissolve
-        pause 3.5
-        hide ach with dissolve
-        pause 1
         # $ show_achievement("mi")
         # $ achievement.grant("ACH_MI")
     }

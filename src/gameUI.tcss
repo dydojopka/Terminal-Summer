@@ -150,6 +150,27 @@ NovelMenu {
     }
 }
 
+# Титры занимают только нижнюю панель, оставляя место финальному арту.
+Screen.rolling-credits {
+    Header { display: none; }
+    Footer { display: none; }
+}
+NovelMenu.credits-mode {
+    layout: vertical;
+    height: 6;
+    max-height: 50%;
+    margin-bottom: 0;
+    .novel-control { display: none; }
+    TextBar {
+        width: 100%;
+        height: 1fr;
+        min-height: 3;
+        text-align: center;
+        overflow-y: auto;
+        .dialogue-content { text-align: center; }
+    }
+}
+
 # Режим NVL: высокая нижняя панель с обычными элементами управления.
 NovelMenu.nvl-mode {
     layout: horizontal;
@@ -570,7 +591,43 @@ MusicRow {
 }
 MusicRow.music-playing { color: $success; text-style: bold; }
 
-
+EndingResult {
+    align: center middle;
+    background: $background 50%;
+    #ending-result-panel {
+        width: 72;
+        max-width: 95%;
+        height: 90%;
+        max-height: 34;
+        border: round white;
+        background: $surface;
+        padding: 0 1;
+        align: center middle;
+    }
+    #ending-result-heading {
+        width: 100%;
+        height: 2;
+        content-align: center middle;
+        text-style: bold;
+    }
+    #ending-result-content {
+        width: 100%;
+        height: 1fr;
+        min-height: 1;
+        align: center top;
+    }
+    #ending-result-icon { width: 100%; content-align: center middle; }
+    Label { width: 100%; height: auto; text-align: center; }
+    #ending-result-title { text-style: bold; }
+    #ending-result-date { color: $text-muted; }
+    #ending-result-actions {
+        dock: bottom;
+        width: 100%;
+        height: 4;
+        align: center bottom;
+    }
+    #btn-ending-menu { width: 24; max-width: 100%; min-width: 0; height: 3; padding: 0 1; }
+}
 
 EndingsMenu {
     width: 100%;

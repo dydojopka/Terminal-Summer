@@ -177,7 +177,9 @@ from rich.text import Text
 from script_parser import ScriptParser, format_script_state
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from music_room import MusicRoom
-from endings_menu import EndingsMenu, EndingsList
+from endings_menu import EndingsMenu, EndingsList, EndingResult
+from endings_catalog import current_ending
+from credits import CREDIT_PAGES, CreditsTimeline
 from ending_progress import (
     ending_unlock_time, normalize_ending_dates, split_persistent_progress, merge_ending_dates,
 )
@@ -808,6 +810,10 @@ class TerminalSummer(App):
         self.audio = AudioManager(self.ts_path)
         self._menu_music_active = False
         self.ending_dates = {}
+        self._new_ending_flags: set[str] = set()
+        self._credits: CreditsTimeline | None = None
+        self._credits_script: ScriptParser | None = None
+        self._credit_ending = None
 
         self._sprite_resources = None
         self._sprite_resources_signature = None
@@ -1160,6 +1166,8 @@ class TerminalSummer(App):
         # Кнопки в MainMenu:
         elif button_id == "btn-start-game":       # Кнопка "Начать игру"
             self.cancel_script_advance()
+            self.stop_credits()
+            self._new_ending_flags.clear()
             self._menu_music_active = False
             self.audio.reset()
 
@@ -1340,6 +1348,8 @@ class TerminalSummer(App):
 
     def action_log(self) -> None:
         """Открытие меню истории"""
+        if self._credits is not None:
+            return
         self.stop_skipping()
         if not self.query_one("#endings-menu").has_class("hidden"):
             return
@@ -1641,6 +1651,8 @@ class TerminalSummer(App):
         Запрещает сохранение во время анимации текста, блокировки ввода,
         показа меню выбора или отсутствия запущенного сценария.
         """
+        if self._credits is not None:
+            return False
         if self._text_animating:
             return False
         if self._input_blocked:
@@ -2149,7 +2161,7 @@ class TerminalSummer(App):
         return not self.query_one("#novel-menu").has_class("hidden")
 
     def can_start_skipping(self) -> bool:
-        return self.is_gameplay_context() and not (
+        return self._credits is None and self.is_gameplay_context() and not (
             self.script.failed or self.script.finished or self.script.has_diagnostic
         )
 
@@ -2191,7 +2203,7 @@ class TerminalSummer(App):
         self._refresh_skip_binding()
         if not self.skipping:
             return
-        if not self.is_gameplay_context(allow_preload=True) or (
+        if self._credits is not None or not self.is_gameplay_context(allow_preload=True) or (
             self.script.failed or self.script.finished or self.script.has_diagnostic
         ):
             self.stop_skipping()
@@ -2209,6 +2221,11 @@ class TerminalSummer(App):
         """Обработка пробела как перехода с фильтрацией ввода во время анимации."""
         if (not self.query_one("#gallery-menu").has_class("hidden")
                 or not self.query_one("#endings-menu").has_class("hidden")):
+            return
+        if self._credits is not None:
+            self.action_skip_credits()
+            event.stop()
+            event.prevent_default()
             return
         now = getattr(event, "time", None) or _time.get_time()
         idle_for = now - self._space_last_event_at
@@ -2877,8 +2894,10 @@ class TerminalSummer(App):
         """Вызывается только при сценарном переходе False → True, не при загрузке."""
         from script_parser import ENDING_STATE_KEYS, get_persistent_state
 
-        if flag in ENDING_STATE_KEYS and get_persistent_state().get(flag) is True and flag not in self.ending_dates:
-            self.ending_dates[flag] = ending_unlock_time()
+        if flag in ENDING_STATE_KEYS and get_persistent_state().get(flag) is True:
+            self._new_ending_flags.add(flag)
+            if flag not in self.ending_dates:
+                self.ending_dates[flag] = ending_unlock_time()
 
     def save_persistent_state(self) -> None:
         """Атомарно сохраняет persistent-флаги рядом с настройками."""
@@ -3082,15 +3101,98 @@ class TerminalSummer(App):
             else:
                 self._preload_after_settings = True
 
+    def start_credits(self, script: ScriptParser, duration: float) -> None:
+        from script_parser import get_script_state
 
+        ending = current_ending(get_script_state())
+        timeline = CreditsTimeline(duration)
+        self._credit_ending = ending
+        self._credits_script = script
+        self._credits = timeline
+        self.stop_skipping()
+        self._interface_hidden = False
+        self.set_text_mode("adv")
+        menu = self.query_one("#novel-menu")
+        menu.remove_class("hidden", "invisible")
+        menu.add_class("credits-mode")
+        menu.screen.add_class("rolling-credits")
+        self.show_credit_page()
+        # Скрытые сюжетные кнопки больше не должны удерживать фокус.
+        self.set_focus(None)
 
+    def show_credit_page(self) -> None:
+        if self._credits is None:
+            return
+        bar = self.query_one("#text-bar", TextBar)
+        bar.remove_class(*list(bar.classes))
+        bar.border_title = ""
+        bar.text = CREDIT_PAGES[self._credits.page]
+        bar.scroll_home(animate=False)
+        bar.refresh()
 
+    async def wait_credit_pause(
+        self, script: ScriptParser, seconds: float, *, skippable: bool = True
+    ) -> None:
+        timeline = self._credits
+        remaining = seconds
+        while (remaining > 1e-6 and timeline is not None
+               and self._credits_script is script and not script.credits_skipped):
+            page = timeline.page
+            delay = timeline.next_delay(remaining)
+            await self.wait_script_delay(
+                delay, "pause" if skippable else "hard_pause", skippable=skippable
+            )
+            if (self._credits is not timeline or self._credits_script is not script
+                    or script.credits_skipped):
+                return
+            timeline.advance(delay)
+            remaining -= delay
+            if timeline.page != page:
+                self.show_credit_page()
 
+    def action_skip_credits(self) -> None:
+        if self._credits_script is None or not self.is_gameplay_context():
+            return
+        script = self._credits_script
+        if script.skip_credits():
+            self.stop_skipping()
+            self.cancel_script_delay()
+            if not self._next_scene_in_progress:
+                self._start_script_advance()
 
+    def stop_credits(self) -> None:
+        self._credits = None
+        self._credits_script = None
+        self._credit_ending = None
+        menu = self.query_one("#novel-menu")
+        menu.remove_class("credits-mode")
+        menu.screen.remove_class("rolling-credits")
 
+    def finish_game(self, script: ScriptParser) -> None:
+        if self._credits_script is not script:
+            return
+        ending = self._credit_ending
+        newly_unlocked = ending.flag in self._new_ending_flags
+        self._new_ending_flags.discard(ending.flag)
+        self.stop_skipping()
+        self.stop_credits()
+        self.query_one("#novel-menu").add_class("hidden")
+        self.query_one(Footer).add_class("hidden")
+        self._menu_music_active = False
+        self.audio.reset()
+        self.push_screen(
+            EndingResult(ending, newly_unlocked=newly_unlocked, date=self.ending_dates.get(ending.flag)),
+            self.return_from_ending,
+        )
+
+    def return_from_ending(self, result=None) -> None:
+        self.reset_game_view()
+        self.action_open_menu()
 
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
+        self.stop_credits()
+        self._new_ending_flags.clear()
         self._menu_music_active = False
         self.audio.reset()
         self.query_one("#gallery-menu").add_class("hidden")
@@ -3201,6 +3303,8 @@ class TerminalSummer(App):
 
     async def _advance_script_line(self) -> None:
         """Запрашивает выполнение следующей строки без блокировки очереди UI."""
+        if self._credits is not None:
+            return
         if self.skip_script_delay():
             return
         self._start_script_advance()

@@ -5,7 +5,8 @@ from pathlib import Path
 
 from rich.text import Text
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import ModalScreen
 from textual.widgets import Button, Label, ListItem, ListView, Static
 
 from endings_catalog import load_endings_catalog, runtime_ending_ansi
@@ -129,3 +130,76 @@ class EndingsMenu(Vertical):
 
     def on_list_view_highlighted(self, event: ListView.Highlighted):
         event.stop()
+
+
+class EndingResult(ModalScreen):
+    """Результат прохождения; готовый ANSI, без зависимости от старых ach/*.png."""
+
+    BINDINGS = [
+        Binding("escape", "return_to_menu", show=False, priority=True),
+        # Удержанный во время титров пробел не должен закрыть результат.
+        Binding("space", "ignore", show=False, priority=True),
+    ]
+
+    def __init__(self, ending, *, newly_unlocked: bool, date: str | None):
+        super().__init__(id="ending-result")
+        self.ending = ending
+        self.newly_unlocked = newly_unlocked
+        self.date = date
+        self.icon_error = None
+        self._sound_played = False
+        self._ending_icon = Static("", id="ending-result-icon")
+        self._menu_button = Button("В главное меню", id="btn-ending-menu")
+
+    def compose(self):
+        with Vertical(id="ending-result-panel"):
+            yield Label("Игра окончена", id="ending-result-heading")
+            with VerticalScroll(id="ending-result-content"):
+                yield self._ending_icon
+                yield Label(Text(self.ending.ending), id="ending-result-route")
+                yield Label(Text(self.ending.title), id="ending-result-title")
+                yield Label("Впервые открыта" if self.newly_unlocked else "Уже открыта",
+                            id="ending-result-status")
+                yield Label(format_ending_date(self.date), id="ending-result-date")
+            with Horizontal(id="ending-result-actions"):
+                yield self._menu_button
+
+    def on_mount(self):
+        if not self._menu_button.is_mounted:
+            return
+        self.update_icon()
+        self._menu_button.focus()
+        self.call_after_refresh(self.play_completion_sound)
+
+    def on_resize(self):
+        self.update_icon()
+
+    def update_icon(self):
+        if not self._ending_icon.is_mounted:
+            return
+        width = 16 if self.size.width < 60 or self.size.height < 28 else 24
+        icon = self._ending_icon
+        icon.styles.height = width // 2
+        try:
+            path = runtime_ending_ansi(self.app.ts_path, self.ending, width, True)
+            icon.update(load_ending_icon(str(path), path.stat().st_mtime_ns, width).copy())
+            self.icon_error = None
+        except (OSError, ValueError) as exc:
+            self.icon_error = str(exc)
+            icon.update(Text("Нет иконки", style="dim"))
+
+    def play_completion_sound(self):
+        if self.is_mounted and self.app.screen is self and not self._sound_played:
+            self._sound_played = True
+            self.app.audio.execute("play sfx sfx_achievement")
+
+    def action_ignore(self):
+        pass
+
+    def action_return_to_menu(self):
+        self.dismiss()
+
+    def on_button_pressed(self, event: Button.Pressed):
+        if event.button.id == "btn-ending-menu":
+            event.stop()
+            self.action_return_to_menu()

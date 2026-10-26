@@ -1808,11 +1808,6 @@ label epilogue_uv_city
     if (!$persistent.endings_uv_city)
     {
         $persistent.endings_uv_city = true
-        play sfx sfx_achievement
-        show ach uv_city at achievement_trans with dissolve
-        pause 3.5
-        hide ach with dissolve
-        pause 1
         # $ show_achievement("uv_city")
         # $ achievement.grant("ACH_HAREM")
     }
@@ -3464,11 +3459,6 @@ label epilogue_uv_ulya
     if (!$persistent.endings_uv_unknown_fucken_shit)
     {
         $persistent.endings_uv_unknown_fucken_shit = true
-        play sfx sfx_achievement
-        show ach uv_good at achievement_trans with dissolve
-        pause 3.5
-        hide ach with dissolve
-        pause 1
         # $ show_achievement("uv_unknown_fucken_shit")
         # $ achievement.grant("ACH_UV")
     }

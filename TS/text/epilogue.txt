@@ -287,11 +287,6 @@ label epilogue_main
     if (!$persistent.endings_main_good)
     {
         $persistent.endings_main_good = true
-        play sfx sfx_achievement
-        show ach main_good at achievement_trans with dissolve
-        pause 3.5
-        hide ach with dissolve
-        pause 1
         # $ show_achievement("main_good")
         # $ achievement.grant("ACH_MAIN_GOOD")
     }
@@ -459,11 +454,6 @@ label epilogue_un_bad
     if (!$persistent.endings_un_bad)
     {
         $persistent.endings_un_bad = true
-        play sfx sfx_achievement
-        show ach un_bad at achievement_trans with dissolve
-        pause 3.5
-        hide ach with dissolve
-        pause 1
         # $ show_achievement("un_bad")
         # $ achievement.grant("ACH_UN_BAD")
     }
@@ -725,11 +715,6 @@ label epilogue_un_good
     if (!$persistent.endings_un_good)
     {
         $persistent.endings_un_good = true
-        play sfx sfx_achievement
-        show ach un_good at achievement_trans with dissolve
-        pause 3.5
-        hide ach with dissolve
-        pause 1
         # $ show_achievement("un_good")
         # $ achievement.grant("ACH_UN_GOOD")
     }
@@ -979,11 +964,6 @@ label epilogue_us
         if (!$persistent.endings_us_bad)
         {
             $persistent.endings_us_bad = true
-            play sfx sfx_achievement
-            show ach us_bad at achievement_trans with dissolve
-            pause 3.5
-            hide ach with dissolve
-            pause 1
                 # $ show_achievement("us_bad")
                 # $ achievement.grant("ACH_US_BAD")
         }
@@ -1082,11 +1062,6 @@ label epilogue_us
         if (!$persistent.endings_us_good)
         {
             $persistent.endings_us_good = true
-            play sfx sfx_achievement
-            show ach us_good at achievement_trans with dissolve
-            pause 3.5
-            hide ach with dissolve
-            pause 1
             # $ show_achievement("us_good")
             # $ achievement.grant("ACH_US_GOOD")
         }
@@ -1377,11 +1352,6 @@ label epilogue_dv
         if (!$persistent.endings_dv_bad)
         {
             $persistent.endings_dv_bad = true
-            play sfx sfx_achievement
-            show ach dv_bad at achievement_trans with dissolve
-            pause 3.5
-            hide ach with dissolve
-            pause 1
             # $ show_achievement("dv_bad")
             # $ achievement.grant("ACH_DV_BAD")
         }
@@ -1456,11 +1426,6 @@ label epilogue_dv
         if (!$persistent.endings_dv_good)
         {
             $persistent.endings_dv_good = true
-            play sfx sfx_achievement
-            show ach dv_good at achievement_trans with dissolve
-            pause 3.5
-            hide ach with dissolve
-            pause 1
             # $ show_achievement("dv_good")
             # $ achievement.grant("ACH_DV_GOOD")
         }
@@ -1664,11 +1629,6 @@ label epilogue_sl
         if (!$persistent.endings_sl_bad)
         {
             $persistent.endings_sl_bad = true
-            play sfx sfx_achievement
-            show ach sl_bad at achievement_trans with dissolve
-            pause 3.5
-            hide ach with dissolve
-            pause 1
             # $ show_achievement("sl_bad")
             # $ achievement.grant("ACH_SL_BAD")
         }
@@ -1839,11 +1799,6 @@ label epilogue_sl
         if (!$persistent.endings_sl_good)
         {
             $persistent.endings_sl_good = true
-            play sfx sfx_achievement
-            show ach sl_good at achievement_trans with dissolve
-            pause 3.5
-            hide ach with dissolve
-            pause 1
             # $ show_achievement("sl_good")
             # $ achievement.grant("ACH_SL_GOOD")
         }

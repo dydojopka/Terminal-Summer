@@ -72,6 +72,22 @@ def load_endings_catalog(path: Path | None = None) -> tuple[Ending, ...]:
     return tuple(entries)
 
 
+def current_ending(state: dict) -> Ending:
+    """Текущий маршрут, не последнее persistent-открытие; порядок endings_checker."""
+    routes = (
+        ("fail_good", "main_good"), ("fail_bad", "main_bad"), ("mi_root", "mi"),
+        ("un_good", "un_good"), ("un_bad", "un_bad"),
+        ("dv_good", "dv_good"), ("dv_bad", "dv_bad"),
+        ("sl_good", "sl_good"), ("sl_bad", "sl_bad"),
+        ("us_good", "us_good"), ("us_bad", "us_bad"),
+        ("harem_root", "uv_city"), ("uv_root", "uv_unknown_fucken_shit"),
+    )
+    for flag, ending_id in routes:
+        if state.get(flag):
+            return next(ending for ending in load_endings_catalog() if ending.id == ending_id)
+    raise ValueError("Не определена пройденная концовка")
+
+
 def resolve_ending_ansi(ts_dir: Path, ending: Ending, width: int, unlocked: bool) -> Path:
     root = ts_dir.resolve()
     path = (root / ending.ansi_path(width, unlocked)).resolve()
