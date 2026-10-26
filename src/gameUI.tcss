@@ -151,6 +151,9 @@ NovelMenu {
         border: round white;
         border-title-style: b;
         color: $text;
+        height: 6;
+        overflow-y: auto;
+        .dialogue-content { width: 1fr; height: auto; }
     }
 }
 

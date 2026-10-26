@@ -404,7 +404,7 @@ class MainMenuStartBtn(Vertical):
         yield Label('   Дорогой пионер!\n' \
         'Ты — на пороге удивительных открытий.\n' \
         '   Перед тобой распахнулись двери самого прекрасного места в мире — ' \
-        'нашего любимого лагеря "Совёнок". Эта смена запомниться тебе на всю жизнь.\n' \
+        'нашего любимого лагеря "Совёнок". Эта смена запомнится тебе на всю жизнь.\n' \
         'Добро пожаловать!')
 
 class MainMenuLoadBtn(Vertical):
@@ -413,7 +413,7 @@ class MainMenuLoadBtn(Vertical):
         yield Button("Сохранение 📒", id="btn-save-load")
         yield Label('   Бережно относись к истории своего лагеря. Тщательно записывай ' \
         'свои наблюдения и мысли о прошедших днях.\nПри помощи сохранений ты всегда ' \
-        'сможешь вернутся назад к пройденному эпизоду и осмыслить его заново. ' \
+        'сможешь вернуться назад к пройденному эпизоду и осмыслить его заново. ' \
         'Удачи тебе в твоих начинаниях!\n' \
         '   Если что-то пойдёт не так, ты знаешь, что делать')
 
@@ -422,7 +422,7 @@ class MainMenuGalleryBtn(Vertical):
     def compose(self):
         yield Button("Галерея 📷", id="btn-gallery")
         yield Label('   Здесь представлены работы участников нашего фотокружка. ' \
-        'Твои товарищи всегда готовы запечатлеть важные моменты из жини лагеря, ' \
+        'Твои товарищи всегда готовы запечатлеть важные моменты из жизни лагеря, ' \
         'а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим ' \
         'поведением подавай пример окружающим.')
 
@@ -642,7 +642,7 @@ class DescriptionSettingTextSpeed(Widget):
     def render(self):
         return """Скорость появления текста в текстовом окне.\n
 Медленно    - 0.04
-Средние     - 0.025
+Средне      - 0.025
 Быстро      - 0.01
 Моментально - 0"""
 
@@ -657,18 +657,28 @@ class NovelMenu(Static):
             yield Label("", id="skip-status")
             yield Button("Продолжить", id="btn-next")
 
-class TextBar(Widget):
+class TextBar(VerticalScroll):
     """Виджет текст бара"""
     BORDER_TITLE = ""   # Имя персонажа
     
     def __init__(self, id=None):
         super().__init__(id=id)
-        self.text = ""  # Текущий текст
+        self._text = ""
+        self._content = Static("", classes="dialogue-content")
 
-    def render(self):
-        return Text.from_markup(self.text)  # Отображаем содержимое текста
+    def compose(self):
+        yield self._content
 
-    async def animate_text(self, new_text, speed=None, append=False):
+    @property
+    def text(self):
+        return self._text
+
+    @text.setter
+    def text(self, value):
+        self._text = value
+        self._content.update(Text.from_markup(value))
+
+    async def animate_text(self, new_text, append=False):
         """Анимация текста, символ за символом
 
         Если append=True  - добавляет текст к текущему,\n
@@ -678,21 +688,18 @@ class TextBar(Widget):
         
         if not append:
             self.text = ""
-            self.refresh()
+            self.scroll_home(animate=False)
 
         for index, char in enumerate(new_text):
             await self.app.wait_until_game_resumed()
             if self.app.skipping:
                 self.text += new_text[index:]
-                self.refresh()
                 # Быстрые части <w> тоже должны отдавать управление вводу.
                 await asyncio.sleep(0)
                 break
             self.text += char
-            self.refresh()
             await asyncio.sleep(speed)
 
-        self.refresh()
         self.scroll_end(animate=False)
 
 
@@ -1387,6 +1394,13 @@ class TerminalSummer(App):
         choice_bar = self.query_one("#choice-bar")
         log_menu = self.query_one("#log-menu")
 
+        if not log_menu.has_class("hidden"):
+            self.action_log()
+            return
+        if not settings_menu.has_class("hidden"):
+            self.action_open_settings()
+            return
+
         # Escape закрывает сохранения и возвращает пользователя туда, откуда
         # меню было открыто: в главное меню или в окно новеллы.
         if not save_menu.has_class("hidden"):
@@ -1403,41 +1417,21 @@ class TerminalSummer(App):
             return
         
 
-        if main_menu.has_class("hidden") and gallery_menu.has_class("hidden") and save_menu.has_class("hidden"): # Если НЕ открыто главное меню
-            # Если открыто из главного меню ИЛИ НЕ скрыто окно выбора И окно истории
-            if settings_menu.has_class("open-from-menu") or not (choice_bar.has_class("hidden") and log_menu.has_class("hidden")):
-                pass # Пропуск
-
-            elif settings_menu.has_class("hidden"): # Если НЕ открыто меню настроек
-                # Переключение видимости элементов
-                if pause_menu.has_class("hidden"):
-                    self.set_game_paused(True)
-                    # Cкрытие диологового окна, кнопок перемотки и задника
-                    novel_menu.add_class("hidden")
-                    novel_window.add_class("hidden")
-
-                    # Показ меню паузы
-                    pause_menu.remove_class("hidden")
-
-                    # Фокус на первую кнопку в меню паузы
-                    self.query_one("#btn-continue", Button).focus()
-                else:
-                    self.set_game_paused(False)
-                    # Выключаем паузу: скрытие меню паузы
-                    pause_menu.add_class("hidden")
-
-                    # Показ диологового окна, кнопок перемотки и задника
-                    novel_menu.remove_class("hidden")
-                    novel_window.remove_class("hidden")
-                    self.sync_text_mode_display()
-
-                    # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
-                    self.query_one("#btn-next", Button).focus()
-            else:
-                # Escape и кнопка «Назад» должны одинаково очищать источник
-                # открытия настроек и восстанавливать игровой интерфейс.
-                self.action_open_settings()
-        else: pass # Не открывать в главном меню
+        if not main_menu.has_class("hidden") or not choice_bar.has_class("hidden"):
+            return
+        if pause_menu.has_class("hidden"):
+            self.set_game_paused(True)
+            novel_menu.add_class("hidden")
+            novel_window.add_class("hidden")
+            pause_menu.remove_class("hidden")
+            self.query_one("#btn-continue", Button).focus()
+        else:
+            self.set_game_paused(False)
+            pause_menu.add_class("hidden")
+            novel_menu.remove_class("hidden")
+            novel_window.remove_class("hidden")
+            self.sync_text_mode_display()
+            self.query_one("#btn-next", Button).focus()
 
     def start_menu_music(self) -> None:
         """Запускает фон меню один раз, не перезапуская его в дочерних разделах."""
