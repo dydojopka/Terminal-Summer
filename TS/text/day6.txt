@@ -952,7 +952,7 @@ label day6_clubs
     $day6_map += 1
     goto day6_map
 label day6_map
-    if (day6_map >= 1)
+    if ($day6_map >= 1)
     {
         goto day6_after_map
     }

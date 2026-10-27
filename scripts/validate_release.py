@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import re
 import sys
 from dataclasses import dataclass
@@ -11,6 +12,8 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
@@ -19,9 +22,14 @@ from script_parser import (
     DEFAULT_SCRIPT_STATE,
     DISPLAY_NAMES,
     ScriptParser,
+    SCRIPT_STATE_TYPES,
+    apply_script_assignment,
     parse_script_assignment,
 )
 from sprites_builder import load_yaml_dict, parse_show_like, resolve_sprite
+from script_conditions import evaluate_script_condition, parse_script_condition
+from script_resources import RELEASE_SCRIPTS, find_scene_path, visual_asset_problems
+from script_structure import read_block_range, structure_errors
 
 
 LABEL_RE = re.compile(r"label\s+([a-zA-Z0-9_]+):?$")
@@ -70,63 +78,15 @@ def _route_document(path: Path, cache: dict[Path, RouteDocument]) -> RouteDocume
 
 
 def _block_range(lines: tuple[str, ...], start: int) -> tuple[int, int]:
-    if start >= len(lines) or lines[start] != "{":
-        raise ValueError("ожидалась открывающая скобка блока")
-    depth = 1
-    cursor = start + 1
-    while cursor < len(lines):
-        if lines[cursor] == "{":
-            depth += 1
-        elif lines[cursor] == "}":
-            depth -= 1
-            if depth == 0:
-                return start + 1, cursor
-        cursor += 1
-    raise ValueError("незакрытый блок")
+    return read_block_range(lines, start)
 
 
 def _evaluate_route_condition(expression: str, variables: dict) -> bool:
-    expression = expression.strip()
-    if expression.startswith("(") and expression.endswith(")"):
-        expression = expression[1:-1].strip()
-    expression = re.sub(
-        r"\$[a-zA-Z0-9_.]+",
-        lambda match: f'V("{match.group(0)[1:]}")',
-        expression,
-    )
-    expression = expression.replace("&&", " and ").replace("||", " or ")
-    expression = re.sub(r"!(?!=)", " not ", expression)
-    expression = re.sub(r"\btrue\b", "True", expression, flags=re.IGNORECASE)
-    expression = re.sub(r"\bfalse\b", "False", expression, flags=re.IGNORECASE)
-    expression = re.sub(r"\bnull\b", "None", expression, flags=re.IGNORECASE)
-
-    def value(name: str):
-        if name not in variables:
-            raise ValueError(f"неизвестная переменная ${name}")
-        return variables[name]
-
-    try:
-        return bool(eval(expression, {"__builtins__": {}}, {"V": value}))
-    except Exception as exc:
-        raise ValueError(f"некорректное условие: {exc}") from exc
+    return evaluate_script_condition(expression, variables, SCRIPT_STATE_TYPES)
 
 
 def _apply_route_assignment(line: str, variables: dict) -> None:
-    key, operation, value = parse_script_assignment(line)
-    if key not in variables:
-        raise ValueError(f"неизвестная переменная ${key}")
-    current = variables[key]
-    if operation == "=":
-        variables[key] = value
-        return
-    if isinstance(current, bool):
-        current = int(current)
-    if isinstance(value, bool):
-        value = int(value)
-    if operation == "+=":
-        variables[key] = current + value
-    elif operation == "-=":
-        variables[key] = current - value
+    apply_script_assignment(line, variables)
 
 
 def _route_load_target(document: RouteDocument, line: str) -> Path:
@@ -295,7 +255,7 @@ def explore_routes(
                             break
                     continue
 
-                if line == "menu":
+                if line in ("menu", "menu:"):
                     options, return_pc = _menu_options(document, pc, variables)
                     if not options:
                         raise ValueError("меню не содержит доступных вариантов")
@@ -336,9 +296,9 @@ def explore_routes(
     return results
 
 
-def _scene_exists(category: str, name: str) -> bool:
-    base = ROOT_DIR / "TS" / "game" / category / name
-    return any(base.with_suffix(f".{extension}").exists() for extension in ("jpg", "jpeg", "png", "webp"))
+def _scene_exists(category: str, name: str, assets_root: Path | None = None) -> bool:
+    path = find_scene_path(assets_root or ROOT_DIR / "TS/images", category, name)
+    return path is not None and path.is_file()
 
 
 def _load_target(script_path: Path, line: str) -> Path | None:
@@ -352,10 +312,22 @@ def _load_target(script_path: Path, line: str) -> Path | None:
 
 
 def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
+    return validate_script(
+        ROOT_DIR / "TS" / "text" / f"day{day}.txt", stop_at=stop_at
+    )
+
+
+def validate_script(
+    script_path: Path, *, stop_at: str | None = None, root_dir: Path | None = None
+) -> list[str]:
+    """Применяет существующие статические проверки к любому TXT, без обхода."""
     errors: list[str] = []
-    script_path = ROOT_DIR / "TS" / "text" / f"day{day}.txt"
-    resources_path = ROOT_DIR / "TS" / "resources.yaml"
-    assets_root = ROOT_DIR / "TS" / "game"
+    from audio_catalog import load_audio_catalog
+    from script_audio import parse_audio_command
+    audio_catalog = load_audio_catalog()
+    project_root = ROOT_DIR if root_dir is None else root_dir
+    resources_path = project_root / "TS" / "resources.yaml"
+    assets_root = project_root / "TS" / "images"
 
     if not script_path.is_file():
         return [f"Сценарий не найден: {script_path}"]
@@ -382,16 +354,37 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
         source_lines = [(number, line) for number, line in source_lines if number <= cutoff]
     resources = load_yaml_dict(resources_path)
 
+    for pc, detail in structure_errors(lines):
+        errors.append(f"{script_path.name}:{source_lines[pc][0]}: {detail}")
+
     labels: dict[str, int] = {}
     gotos: list[tuple[str, int]] = []
     scene_count = 0
     show_count = 0
 
     for number, line in source_lines:
+        if line.split(maxsplit=1)[:1] in (["play"], ["stop"], ["volume"]):
+            try:
+                parse_audio_command(line, audio_catalog)
+            except ValueError as exc:
+                errors.append(f"{script_path.name}:{number}: {exc}")
+        condition = None
+        if line.startswith(("if ", "if(")):
+            condition = line[2:].strip()
+        elif line.startswith("else if "):
+            condition = line[len("else if "):].strip()
+        elif option := re.fullmatch(r'".+?"\s+if\s+(.+)', line):
+            condition = option.group(1)
+        if condition is not None:
+            try:
+                parse_script_condition(condition, SCRIPT_STATE_TYPES)
+            except ValueError as exc:
+                errors.append(f"{script_path.name}:{number}: {exc}; выражение: {condition}")
         if not (
-            line in {"{", "}", "else", "clear"}
+            line in {"{", "}", "else", "clear", "rollcredits"}
             or line.startswith("$")
-            or '"' in line
+            or re.fullmatch(r'(?:[a-zA-Z0-9_-]+\s+)?".*"', line)
+            or re.fullmatch(r'".+?"\s+if\s+.+', line)
             or line.startswith(SUPPORTED_PREFIXES)
         ):
             errors.append(
@@ -413,6 +406,8 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
                         f"{script_path.name}:{number}: неизвестная переменная "
                         f"${variable}"
                     )
+                else:
+                    apply_script_assignment(line, DEFAULT_SCRIPT_STATE.copy())
             except ValueError as exc:
                 errors.append(f"{script_path.name}:{number}: {exc}")
 
@@ -423,7 +418,7 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
 
         if line.startswith("scene") and not re.fullmatch(
             r"scene\s+(?:(?:bg|cg)\s+[a-zA-Z0-9_]+|color\s+(?:black|white))"
-            r"(?:\s+with\s+\w+(?:\s+(?:skip|\d+(?:\.\d+)?))?)?", line
+            r"(?:\s+with\s+\w+(?:\s+\d+(?:\.\d+)?)?(?:\s+skip)?)?", line
         ):
             errors.append(f"{script_path.name}:{number}: некорректная команда scene: {line}")
 
@@ -436,6 +431,16 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
                 errors.append(f"{script_path.name}:{number}: некорректная команда {command}: {line}")
 
         goto_match = GOTO_RE.fullmatch(line)
+        if line.startswith("menu") and line not in ("menu", "menu:"):
+            errors.append(f"{script_path.name}:{number}: некорректная команда menu: {line}")
+        if line.startswith("with") and not re.fullmatch(r"with\s+\w+(?:\s+\d+(?:\.\d+)?)?(?:\s+skip)?", line):
+            errors.append(f"{script_path.name}:{number}: некорректная команда with: {line}")
+        if line.startswith("goto") and goto_match is None:
+            errors.append(f"{script_path.name}:{number}: некорректная команда goto: {line}")
+        if line.startswith("label") and label_match is None:
+            errors.append(f"{script_path.name}:{number}: некорректная метка: {line}")
+        if line.startswith("hide") and not re.fullmatch(r"hide\s+[a-zA-Z0-9_]+(?:\s+with\s+\w+(?:\s+\d+(?:\.\d+)?)?(?:\s+skip)?)?", line):
+            errors.append(f"{script_path.name}:{number}: некорректная команда hide: {line}")
         if goto_match:
             gotos.append((goto_match.group(1), number))
 
@@ -452,10 +457,10 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
         if scene_match:
             scene_count += 1
             category, name = scene_match.groups()
-            if not _scene_exists(category, name):
+            if not _scene_exists(category, name, assets_root):
                 errors.append(
                     f"{script_path.name}:{number}: отсутствует сцена "
-                    f"TS/game/{category}/{name}.*"
+                    f"TS/images/{category}/{name}.*"
                 )
 
         if line.startswith("show "):
@@ -508,9 +513,12 @@ def validate_day(day: int, *, stop_at: str | None = None) -> list[str]:
     if depth:
         errors.append(f"{script_path.name}: незакрытых блоков: {depth}")
 
+    scope = script_path.name
+    if stop_at is not None:
+        scope += f" (до метки {stop_at} включительно)"
     print(
-        f"Проверен день {day}: {len(lines)} команд, {len(labels)} меток, "
-        f"{scene_count} сцен, {show_count} команд show."
+        f"Проверен {scope}: команд — {len(lines)}, меток — {len(labels)}, "
+        f"сцен — {scene_count}, show — {show_count}."
     )
     return errors
 
@@ -547,14 +555,14 @@ def validate_route_reduction(
 
 
 def validate_day3_routes() -> list[str]:
-    """Проверяет все развилки day3 и контракт входа в day4_main1."""
+    """Проверяет развилки day3 и вход в day4_main1 без статической проверки файлов."""
     errors: list[str] = []
     prologue_path = ROOT_DIR / "TS" / "text" / "prologue.txt"
     day3_path = ROOT_DIR / "TS" / "text" / "day3.txt"
     day4_path = ROOT_DIR / "TS" / "text" / "day4.txt"
-    errors.extend(validate_day(4, stop_at="day4_main1"))
-    if errors:
-        return errors
+    day4_document = _route_document(day4_path, {})
+    if "day4_main1" not in day4_document.labels:
+        return [f"{day4_path.name}: отсутствует целевая метка day4_main1"]
 
     predecessor_results = explore_routes(
         prologue_path,
@@ -580,7 +588,6 @@ def validate_day3_routes() -> list[str]:
         return ["day3: не найдено ни одного достижимого входного состояния"]
     control_keys = ("d1_keys", "d2_gave_keys", "day2_un")
     day3_document = _route_document(day3_path, {})
-    day4_document = _route_document(day4_path, {})
     checked_lines = day3_document.lines + day4_document.lines[
         :day4_document.labels["day4_main1"]
     ]
@@ -691,7 +698,6 @@ def validate_day3_routes() -> list[str]:
         tuple(state[name] for name in control_keys): state
         for state in representatives.values()
     }
-    checked_state_routes = 0
     for projection in relevant_entry_states:
         values = dict(projection)
         for lp_name in ("lp_sl", "lp_un", "lp_dv", "lp_us"):
@@ -711,31 +717,21 @@ def validate_day3_routes() -> list[str]:
                         f"day3: маршрут {result.choices!r} дал нечисловой "
                         f"{lp_name}: {final_value!r}"
                     )
-            checked_state_routes += 1
 
     if any(name.startswith("persistent.") for name in active_day3_variables):
         errors.append("day3: маршрут не должен менять persistent-переменные")
 
-    print(
-        "Обход day3: "
-        f"{len(entry_states)} полных входных состояний, "
-        f"{len(relevant_entry_states)} значимых проекций, "
-        f"{len(representatives)} комбинаций управления, "
-        f"{len(choice_traces)} маршрута; "
-        f"композиционно проверено {checked_state_routes} значимых и "
-        f"{len(entry_states) * len(choice_traces)} полных пар "
-        "состояние/маршрут."
-    )
     return errors
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    scope = parser.add_mutually_exclusive_group(required=True)
+    scope.add_argument("--all", dest="all_scripts", action="store_true", help="Весь релиз и 13 свидетелей концовок")
+    scope.add_argument(
         "--day",
         type=int,
         action="append",
-        required=True,
         help="Номер проверяемого дня; параметр можно повторять",
     )
     return parser.parse_args()
@@ -743,12 +739,26 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    days = tuple(dict.fromkeys(args.day or ()))
     try:
         errors = []
-        for day in args.day:
-            errors.extend(validate_day(day))
-        if 3 in args.day:
+        print("Проверка файлов сценария:")
+        if args.all_scripts:
+            for filename in RELEASE_SCRIPTS:
+                errors.extend(validate_script(ROOT_DIR / "TS/text" / filename))
+            missing, invalid = visual_asset_problems(ROOT_DIR / "TS", verify_images=True)
+            errors.extend(missing + invalid)
+        else:
+            for day in days:
+                errors.extend(validate_day(day))
+            if not errors and 3 in days and 4 not in days:
+                errors.extend(validate_day(4, stop_at="day4_main1"))
+        if not errors and (args.all_scripts or 3 in days):
+            print("\nПроверка маршрутов сценария:")
             errors.extend(validate_day3_routes())
+            if not errors and args.all_scripts:
+                from scripts.release_routes import validate_release_routes
+                errors.extend(asyncio.run(validate_release_routes(ROOT_DIR / "TS")))
     except Exception as exc:
         print(f"Ошибка валидатора: {exc}", file=sys.stderr)
         return 1

@@ -7,6 +7,11 @@ from pathlib import Path
 from textual.widget import Widget
 from textual.widgets import ListView, ListItem, Label
 from textual import _time
+from script_conditions import evaluate_script_condition
+from audio_catalog import load_audio_catalog
+from script_audio import parse_audio_command
+from script_resources import resource_manifest
+from script_structure import read_block_range
 
 # Словарь имён
 DISPLAY_NAMES = {
@@ -40,6 +45,7 @@ DISPLAY_NAMES = {
     "sh": "Шурик",
     "pi": "Пионер",
     "me": "Семён",
+    "my": "Я",
     "FIXME_voice": "Голос",
     "bush": "Голос", 
     "message": "Сообщение", 
@@ -56,7 +62,8 @@ DEFAULT_SCRIPT_STATE = {
     "day2_map_dinning_hall": False, "day2_map_aidpost": False,
     "day2_map_library": False, "day2_cards_with_sl": 0,
     "day2_dv_bet": 0, "day2_un": 0, "day2_card_result": None,
-    "d2_gave_keys": False, "d2_cardgame_block_rollback": False,
+    "d2_gave_keys": False,
+    "d2_cardgame_block_rollback": False,  # Legacy save: мини-игра заменена меню.
     "persistent.CardsDemo": False, "persistent.CardsWon1": False,
     "persistent.CardsWon2": False, "persistent.CardsWon3": False,
     "persistent.CardsFail": False,
@@ -73,8 +80,90 @@ DEFAULT_SCRIPT_STATE = {
     "goto_day4_std_morning": False,
     "goto_day4_fail_morning": False,
     "goto_day4_us_morning": False,
+    # Поздние дни: литеральные типы сохраняют числовую адаптацию TXT.
+    "day4_dv_compl": 0, "day4_sl_compl": 0,
+    "day4_un_compl": 0, "day4_us_compl": 0,
+    "day4_map_necessary_done": 0,
+    "day4_map_boathouse": False, "day4_map_busstop": False,
+    "day4_map_forest": False, "day4_map_house_of_mt": False,
+    "day4_mi_accept": 0, "day4_uv_apple": False, "day4_uv_mine": 0,
+    # Общий reset в day4.txt label mine_start соответствует оригинальному mine.
+    "point": 1, "previous_point": 1, "direction": 0, "mine_route": 0,
+    "first_turn": True, "back_to_start": False,
+    "halt_visited": False, "coalface_visited": False,
+    "day5_map_necessary_done": 0,
+    "day5_map_aidpost": False, "day5_map_clubs": False,
+    "day5_map_library": False,
+    "day5_sl_helped": 0, "day5_us_wire_accept": 0,
+    "day6_map": 0, "day6_map_aidpost": False, "day6_map_dinner": False,
+    "sl_root": False, "dv_root": False, "un_root": False, "us_root": False,
+    "fail_root": False, "mi_root": False, "uv_root": False, "harem_root": False,
+    "sl_good": False, "sl_bad": False,
+    "dv_good": 0, "dv_bad": 0,
+    "un_good": False, "un_bad": False,
+    "us_good": False, "us_bad": False,
+    "fail_good": False, "fail_bad": False,
+    "epilogue_uv_chosen": 0,
+    # Q05: окончания - bool; старый null мигрирует в False.
+    "persistent.endings_main_good": False, "persistent.endings_main_bad": False,
+    "persistent.endings_sl_good": False, "persistent.endings_sl_bad": False,
+    "persistent.endings_dv_good": False, "persistent.endings_dv_bad": False,
+    "persistent.endings_un_good": False, "persistent.endings_un_bad": False,
+    "persistent.endings_us_good": False, "persistent.endings_us_bad": False,
+    "persistent.endings_mi": False,
+    "persistent.endings_uv_city": False,
+    "persistent.endings_uv_unknown_fucken_shit": False,
+    # Q06: только производный признак, не самостоятельный unlock.
+    "persistent.scenario_complete": False,
+}
+ENDING_STATE_KEYS = tuple(key for key in DEFAULT_SCRIPT_STATE if key.startswith("persistent.endings_"))
+SCRIPT_STATE_TYPES = {
+    key: (type(default),) if default is not None else (int, type(None))
+    for key, default in DEFAULT_SCRIPT_STATE.items()
 }
 SCRIPT_STATE = DEFAULT_SCRIPT_STATE.copy()
+
+
+def _derive_progress(state: dict) -> None:
+    state["persistent.scenario_complete"] = any(state[key] for key in ENDING_STATE_KEYS)
+
+
+def normalize_script_state(state: dict) -> dict:
+    """Проверяет состояние до его применения; bool не является int DSL."""
+    if not isinstance(state, dict):
+        raise ValueError("Script state must be a dictionary")
+    normalized = DEFAULT_SCRIPT_STATE.copy()
+    for key, value in state.items():
+        if key not in SCRIPT_STATE_TYPES:
+            raise ValueError(f"Unknown script variable: ${key}")
+        if key in ENDING_STATE_KEYS and value is None:
+            value = False
+        if type(value) not in SCRIPT_STATE_TYPES[key]:
+            expected = "/".join(t.__name__ for t in SCRIPT_STATE_TYPES[key])
+            raise ValueError(f"Invalid type for ${key}: expected {expected}, got {type(value).__name__}")
+        normalized[key] = value
+    _derive_progress(normalized)
+    return normalized
+
+
+def apply_script_assignment(line: str, state: dict) -> None:
+    """Единый строгий контракт присваиваний для runtime и обходчика."""
+    key, operation, value = parse_script_assignment(line)
+    if key not in SCRIPT_STATE_TYPES or key not in state:
+        raise ValueError(f"Unknown script variable: ${key}")
+    if key == "persistent.scenario_complete":
+        raise ValueError("$persistent.scenario_complete is derived from ending flags")
+    current = state[key]
+    if type(current) not in SCRIPT_STATE_TYPES[key]:
+        raise ValueError(f"Invalid current type for ${key}: {type(current).__name__}")
+    if operation != "=":
+        if type(current) is not int or type(value) is not int:
+            raise ValueError(f"Arithmetic assignment requires integers: {line}")
+        value = current + value if operation == "+=" else current - value
+    if type(value) not in SCRIPT_STATE_TYPES[key]:
+        raise ValueError(f"Invalid assignment type for ${key}: {type(value).__name__}")
+    state[key] = value
+    _derive_progress(state)
 
 def format_script_state(
     state: dict | None = None,
@@ -110,31 +199,24 @@ def get_persistent_state() -> dict:
 
 
 def update_persistent_state(state: dict) -> None:
-    """Применяет только известные persistent-переменные из внешнего хранилища."""
+    """Строго и монотонно объединяет прогресс, не откатывая открытия."""
     if not isinstance(state, dict):
-        return
+        raise ValueError("Persistent state must be a dictionary")
+    for key in state:
+        if not isinstance(key, str) or not key.startswith("persistent."):
+            raise ValueError(f"Invalid persistent key: {key}")
+    normalized = normalize_script_state(state)
     updated = SCRIPT_STATE.copy()
-    for key, default in DEFAULT_SCRIPT_STATE.items():
-        if not key.startswith("persistent.") or key not in state:
-            continue
-        value = state[key]
-        if isinstance(value, type(default)):
-            updated[key] = value
+    for key in state:
+        updated[key] = bool(updated[key] or normalized[key])
     set_script_state(updated)
 
 
 def set_script_state(state: dict) -> None:
     """Восстанавливает состояние, дополняя его новыми значениями по умолчанию."""
+    normalized = normalize_script_state(state)
     SCRIPT_STATE.clear()
-    SCRIPT_STATE.update(DEFAULT_SCRIPT_STATE)
-    SCRIPT_STATE.update(state)
-
-
-def ensure_day2_state() -> None:
-    """Добавляет флаги второго дня при входе в его первую метку."""
-    for key in DEFAULT_SCRIPT_STATE:
-        if key.startswith("day2_") or key.startswith("d2_"):
-            SCRIPT_STATE.setdefault(key, DEFAULT_SCRIPT_STATE[key])
+    SCRIPT_STATE.update(normalized)
 
 
 def reset_globals(*, preserve_persistent: bool = True):
@@ -193,12 +275,15 @@ class ScriptParser:
         self.filename = filename
         self.app = app
         self.lines: tuple[str, ...] = ()
+        self.source_line_numbers: tuple[int, ...] = ()
         self.labels = {}
         self.index = 0
         self.frames: list[ExecutionFrame] = []
         self.content_hash = ""
         self.resource_manifest = {"scenes": (), "show_lines": ()}
-        self.backward = False
+        self.failed = False
+        self._advancing = False
+        self._continue_requested = False
         self.load_script()
 
     def _update_script_header(self) -> None:
@@ -215,30 +300,26 @@ class ScriptParser:
         if filename:
             self.filename = str(filename)
         with open(self.filename, 'r', encoding='utf-8') as f:
-            self.lines = tuple(
-                line.strip() for line in f
+            source_lines = tuple(
+                (number, line.strip()) for number, line in enumerate(f, 1)
                 if line.strip() and not line.strip().startswith("#")
             )
+        self.source_line_numbers = tuple(number for number, _ in source_lines)
+        self.lines = tuple(line for _, line in source_lines)
         self.content_hash = hashlib.sha256("\n".join(self.lines).encode("utf-8")).hexdigest()
         self._index_labels()
         self.index = 0
         self.frames.clear()
+        self.failed = False
+        self.finished = False
+        self.has_diagnostic = False
+        self.rolling_credits = False
+        self.credits_skipped = False
         self._build_resource_manifest()
 
     def _build_resource_manifest(self) -> None:
         """Лёгкий индекс ресурсов текущего файла, без открытия изображений."""
-        scenes = set()
-        shows = set()
-        for line in self.lines:
-            match = re.match(r"scene\s+(bg|cg)\s+([a-zA-Z0-9_]+)", line)
-            if match:
-                scenes.add(match.groups())
-            elif line.startswith("show "):
-                shows.add(line)
-        self.resource_manifest = {
-            "scenes": tuple(sorted(scenes)),
-            "show_lines": tuple(sorted(shows)),
-        }
+        self.resource_manifest = resource_manifest(self.lines)
 
     def get_runtime_state(self) -> dict:
         """Компактное, не зависящее от копии сценария состояние выполнения."""
@@ -251,15 +332,23 @@ class ScriptParser:
 
     def restore_runtime_state(self, state: dict) -> bool:
         """Восстанавливает позицию и вложенные выбранные блоки save format 3."""
+        self.runtime_error = "Invalid script runtime"
+        self.runtime_outdated = False
         if not isinstance(state, dict):
             return False
         saved_hash = state.get("content_hash")
-        if saved_hash and saved_hash != self.content_hash:
-            self.app.sub_title = "[Load error] Script was changed since this save was created"
+        if not isinstance(saved_hash, str) or not saved_hash:
+            self.runtime_error = "Missing script content_hash"
+            return False
+        if saved_hash != self.content_hash:
+            self.runtime_error = "Script was changed since this save was created"
+            self.runtime_outdated = True
+            if self.app is not None:
+                self.app.sub_title = f"[Load error] {self.runtime_error}"
             return False
         pc = state.get("pc", 0)
         frames_data = state.get("frames", [])
-        if not isinstance(pc, int) or not 0 <= pc <= len(self.lines):
+        if type(pc) is not int or not 0 <= pc <= len(self.lines):
             return False
         frames = []
         if not isinstance(frames_data, list):
@@ -269,13 +358,61 @@ class ScriptParser:
                 return False
             end = frame.get("end")
             return_pc = frame.get("return_pc")
-            if not all(isinstance(value, int) and 0 <= value <= len(self.lines)
+            if not all(type(value) is int and 0 <= value <= len(self.lines)
                        for value in (end, return_pc)):
                 return False
             frames.append(ExecutionFrame(end=end, return_pc=return_pc))
+        try:
+            ranges = self._runtime_frame_ranges() if frames else {}
+        except ValueError:
+            return False
+        outer_start, outer_end = 0, len(self.lines) + 1
+        for frame in frames:
+            start = ranges.get(frame)
+            if start is None or not (outer_start <= start < frame.end < outer_end
+                                     and frame.return_pc <= outer_end):
+                return False
+            outer_start, outer_end = start, frame.end
+        if frames and not outer_start <= pc <= outer_end:
+            return False
         self.index = pc
         self.frames = frames
+        self.finished = False
+        self.has_diagnostic = False
+        self.runtime_error = ""
         return True
+
+    def _runtime_frame_ranges(self) -> dict[ExecutionFrame, int]:
+        """Допустимые выбранные блоки и адреса продолжения исходного TXT."""
+        ranges = {}
+        for pc, line in enumerate(self.lines):
+            if line.startswith(("if ", "if(")):
+                bodies = []
+                cursor = pc + 1
+                while True:
+                    start, end = self._read_block_range(cursor)
+                    bodies.append((start, end))
+                    cursor = end + 1
+                    if cursor < len(self.lines) and self.lines[cursor].startswith("else if"):
+                        cursor += 1
+                        continue
+                    if cursor < len(self.lines) and self.lines[cursor] == "else":
+                        start, end = self._read_block_range(cursor + 1)
+                        bodies.append((start, end))
+                        cursor = end + 1
+                    break
+                for start, end in bodies:
+                    ranges[ExecutionFrame(end, cursor)] = start
+            elif line in ("menu", "menu:"):
+                start, end = self._read_block_range(pc + 1)
+                cursor = start
+                while cursor < end:
+                    if not re.fullmatch(r'"(.+?)"(?:\s+if\s+(.+))?', self.lines[cursor]):
+                        raise ValueError("Invalid menu option")
+                    body, body_end = self._read_block_range(cursor + 1)
+                    ranges[ExecutionFrame(body_end, end + 1)] = body
+                    cursor = body_end + 1
+        return ranges
 
     def _index_labels(self) -> None:
         """Строит индекс меток для текущего набора строк."""
@@ -286,21 +423,51 @@ class ScriptParser:
                 self.labels[match.group(1)] = index
 
     async def next_line(self):
-        """Шаг вперёд"""
-        wait_until_resumed = getattr(self.app, "wait_until_game_resumed", None)
-        if wait_until_resumed is not None:
-            await wait_until_resumed()
-        while self.frames and self.index >= self.frames[-1].end:
-            self.index = self.frames.pop().return_pc
-        if self.index >= len(self.lines):
-            return None
-        self.backward = False
-        line = self.lines[self.index]
-        self.index += 1
-        await self.parse_line(line)
+        """Исполняет служебные команды итеративно до следующего ожидания.
+
+        Обработчики запрашивают продолжение тем же next_line, но внутри
+        диспетчера это только флаг, а не рекурсивный вызов/новая задача.
+        """
+        if self.failed or self.finished:
+            return
+        if self._advancing:
+            self._continue_requested = True
+            return
+        # После нефатальной ошибки только новый явный next_line снимает
+        # диагностику: автоматический планировщик до этого заблокирован.
+        self.has_diagnostic = False
+        self._advancing = True
+        steps = 0
+        try:
+            while not self.failed:
+                self._continue_requested = False
+                wait_until_resumed = getattr(self.app, "wait_until_game_resumed", None)
+                if wait_until_resumed is not None:
+                    await wait_until_resumed()
+                while self.frames and self.index >= self.frames[-1].end:
+                    self.index = self.frames.pop().return_pc
+                if self.index >= len(self.lines):
+                    self.finished = True
+                    self._stop_skipping()
+                    if self.rolling_credits:
+                        self.app.finish_game(self)
+                    return
+                line = self.lines[self.index]
+                self.index += 1
+                await self.parse_line(line)
+                if not self._continue_requested:
+                    return
+                steps += 1
+                if steps % 256 == 0:
+                    await asyncio.sleep(0)
+        finally:
+            self._advancing = False
+            self._continue_requested = False
 
     async def parse_line(self, line):
         """Считывание строки сценария (асинхронно)"""
+        if self.failed:
+            return
 
         # Header строится динамически, поэтому новые флаги сценария не нужно
         # вручную добавлять сюда при каждом расширении состояния.
@@ -315,13 +482,17 @@ class ScriptParser:
             await self._handle_if(line)
         elif line.startswith("pause"):
             await self._handle_pause(line)
+        elif line == "rollcredits":
+            await self._handle_rollcredits()
         elif line.startswith("scene"):
             await self._handle_scene(line)
         elif line.startswith("show"):
             await self._handle_show(line)
         elif line.startswith("hide"):
             await self._handle_hide(line)
-        elif line.startswith(("play", "stop", "volume", "with")):
+        elif line.startswith(("play", "stop", "volume")):
+            await self._handle_audio(line)
+        elif line.startswith("with"):
             await self._handle_play(line)
         elif line.startswith("window"):
             await self._handle_window(line)
@@ -350,50 +521,30 @@ class ScriptParser:
 
     async def _handle_label(self, line):
         """Пропускает метку: она нужна только для переходов."""
-        match = re.fullmatch(r"label\s+([a-zA-Z0-9_]+):?", line)
-        if match and match.group(1) == "day2_main1":
-            ensure_day2_state()
-        if not self.backward:
-            await self.next_line()
+        await self.next_line()
 
     async def _handle_goto(self, line):
         """Переходит на строку с именованной меткой."""
         match = re.fullmatch(r"goto\s+([a-zA-Z0-9_]+)", line)
         if not match:
-            self.app.sub_title = f"[Script error] Invalid goto: {line}"
+            self._report_script_error(f"Invalid goto: {line}", stop_execution=False)
             return
 
         label = match.group(1)
         target_index = self.labels.get(label)
         if target_index is None:
-            self.app.sub_title = f"[Script error] Label not found: {label}"
+            self._report_script_error(f"Label not found: {label}", stop_execution=False)
             return
 
         self.index = target_index
         # Переход по метке выходит из текущих структурных блоков так же,
         # как это происходило при старой подмене общего массива строк.
         self.frames.clear()
-        if not self.backward:
-            await self.next_line()
+        await self.next_line()
 
     def _read_block_range(self, start: int) -> tuple[int, int]:
         """Возвращает полуоткрытый диапазон тела `{ ... }` в исходном сценарии."""
-        if start >= len(self.lines) or self.lines[start] != "{":
-            raise ValueError("Expected `{` after conditional")
-
-        depth = 1
-        index = start + 1
-        while index < len(self.lines) and depth:
-            line = self.lines[index]
-            if line == "{":
-                depth += 1
-            elif line == "}":
-                depth -= 1
-                if depth == 0:
-                    return start + 1, index
-            index += 1
-
-        raise ValueError("Unclosed conditional block")
+        return read_block_range(self.lines, start)
 
     def _enter_range(self, start: int, end: int, return_pc: int) -> None:
         """Переходит в неизменяемый диапазон, запоминая адрес продолжения."""
@@ -403,57 +554,37 @@ class ScriptParser:
         self.frames.append(ExecutionFrame(end=end, return_pc=return_pc))
         self.index = start
 
-    def _state_value(self, name: str, state: dict | None = None):
-        key = name.strip().lstrip("$")
-        values = SCRIPT_STATE if state is None else state
-        if key not in values:
-            raise ValueError(f"Unknown script variable: ${key}")
-        return values[key]
-
     def _evaluate_condition(self, expression: str, state: dict | None = None) -> bool:
         """Вычисляет ограниченное логическое выражение DSL."""
-        expression = expression.strip()
-        if expression.startswith("(") and expression.endswith(")"):
-            expression = expression[1:-1].strip()
-
-        expression = re.sub(
-            r"\$[a-zA-Z0-9_.]+",
-            lambda match: f'V("{match.group(0)[1:]}")',
-            expression,
+        return evaluate_script_condition(
+            expression, SCRIPT_STATE if state is None else state, SCRIPT_STATE_TYPES
         )
-        expression = expression.replace("&&", " and ").replace("||", " or ")
-        expression = re.sub(r"!(?!=)", " not ", expression)
-        expression = re.sub(r"\btrue\b", "True", expression, flags=re.IGNORECASE)
-        expression = re.sub(r"\bfalse\b", "False", expression, flags=re.IGNORECASE)
-        expression = re.sub(r"\bnull\b", "None", expression, flags=re.IGNORECASE)
 
-        try:
-            return bool(
-                eval(
-                    expression,
-                    {"__builtins__": {}},
-                    {"V": lambda name: self._state_value(name, state)},
-                )
-            )
-        except Exception as exc:
-            self.app.sub_title = f"[Script error] Invalid condition: {exc}"
-            return False
+    def _stop_skipping(self) -> None:
+        stop = getattr(self.app, "stop_skipping", None)
+        if stop is not None:
+            stop()
+
+    def _report_script_error(
+        self, detail: str, *, pc: int | None = None, stop_execution: bool = True
+    ) -> None:
+        if stop_execution:
+            self.failed = True
+        self.has_diagnostic = True
+        self._stop_skipping()
+        position = max(0, self.index - 1) if pc is None else pc
+        number = self.source_line_numbers[position] if position < len(self.source_line_numbers) else "EOF"
+        labels = [(index, name) for name, index in self.labels.items() if index <= position]
+        label = max(labels)[1] if labels else "<entry>"
+        self.app.sub_title = f"[Script error] {Path(self.filename).name}:{number} [{label}]: {detail}"
 
     @staticmethod
     def _predict_change_state(line: str, state: dict) -> None:
         """Применяет простое присваивание к копии состояния для look-ahead."""
         try:
-            key, operation, value = parse_script_assignment(line)
+            apply_script_assignment(line, state)
         except ValueError:
             return
-        if key not in state:
-            return
-        if operation == "=":
-            state[key] = value
-        elif operation == "+=":
-            state[key] = int(state[key]) + int(value)
-        elif operation == "-=":
-            state[key] = int(state[key]) - int(value)
 
     def predict_visual_commands(
         self,
@@ -513,9 +644,11 @@ class ScriptParser:
                     break
                 pc = cursor
                 for branch_condition, block_start, block_end in branches:
-                    if branch_condition is None or self._evaluate_condition(
-                        branch_condition, state
-                    ):
+                    try:
+                        selected = branch_condition is None or self._evaluate_condition(branch_condition, state)
+                    except ValueError:
+                        return tuple(visual_commands)
+                    if selected:
                         predicted_frames.append(
                             ExecutionFrame(end=block_end, return_pc=cursor)
                         )
@@ -526,7 +659,7 @@ class ScriptParser:
                 break
             if line.startswith("load"):
                 break
-            # Пауза — граница видимого кадра. Команды перед ней должны быть
+            # Пауза - граница видимого кадра. Команды перед ней должны быть
             # показаны игроку, а не слиты с визуальными командами после неё.
             if line.startswith("pause"):
                 break
@@ -559,7 +692,7 @@ class ScriptParser:
             try:
                 start, end = self._read_block_range(cursor)
             except ValueError as exc:
-                self.app.sub_title = f"[Script error] {exc}"
+                self._report_script_error(str(exc))
                 return
             cursor = end + 1
             branches.append((condition, start, end))
@@ -576,7 +709,7 @@ class ScriptParser:
                 try:
                     start, end = self._read_block_range(cursor)
                 except ValueError as exc:
-                    self.app.sub_title = f"[Script error] {exc}"
+                    self._report_script_error(str(exc))
                     return
                 cursor = end + 1
                 branches.append((None, start, end))
@@ -584,7 +717,12 @@ class ScriptParser:
 
         selected = None
         for branch_condition, start, end in branches:
-            if branch_condition is None or self._evaluate_condition(branch_condition):
+            try:
+                selected_branch = branch_condition is None or self._evaluate_condition(branch_condition)
+            except ValueError as exc:
+                self._report_script_error(f"{exc}; expression: {branch_condition}", pc=max(0, start - 2))
+                return
+            if selected_branch:
                 selected = (start, end)
                 break
 
@@ -594,10 +732,34 @@ class ScriptParser:
         else:
             self.index = return_pc
 
-        if not self.backward:
-            await self.next_line()
+        await self.next_line()
            
 
+
+    async def _handle_rollcredits(self):
+        try:
+            start, end = self._read_block_range(self.index)
+            duration = sum(
+                float(match.group(1))
+                for command in self.lines[start:end]
+                if (match := re.fullmatch(r"pause\s+(?:hard\s+)?(\d+(?:\.\d+)?)", command))
+            )
+            self.app.start_credits(self, duration)
+        except (OSError, ValueError) as exc:
+            self._report_script_error(str(exc))
+            return
+        self.rolling_credits = True
+        # В конце блока титров игра завершается, а не проваливается в другой рут.
+        self._enter_range(start, end, len(self.lines))
+        await self.next_line()
+
+    def skip_credits(self) -> bool:
+        if not self.rolling_credits or self.finished or self.failed:
+            return False
+        self.credits_skipped = True
+        self.index = len(self.lines)
+        self.frames.clear()
+        return True
 
     async def _handle_pause(self, line):
         """Обработка строки pause"""
@@ -605,19 +767,19 @@ class ScriptParser:
         if match:
             is_hard_pause = bool(match.group(1))
             seconds = float(match.group(2))
-            if not self.backward:
-                # В сценариях встречаются короткие pause между scene cg:
-                # фиксируем текущий кадр до ожидания, иначе отложенный рендер
-                # покажет только последний фон из всей последовательности.
-                await self.app.flush_scene_render()
-                self.app.prefetch_next_scene(self)
-                self.app._space_require_idle = True
+            # Фиксируем кадр до ожидания, не сливая последовательность сцен.
+            await self.app.flush_scene_render()
+            self.app.prefetch_next_scene(self)
+            self.app._space_require_idle = True
+            if self.rolling_credits:
+                await self.app.wait_credit_pause(self, seconds, skippable=not is_hard_pause)
+            else:
                 await self.app.wait_script_delay(
                     seconds,
                     "hard_pause" if is_hard_pause else "pause",
                     skippable=not is_hard_pause,
                 )
-                await self.next_line()
+            await self.next_line()
 
 
     async def _handle_scene(self, line):
@@ -628,8 +790,7 @@ class ScriptParser:
             self.app.current_scene_category = "color"
             self.app.clear_active_sprites()
             self.app.mark_scene_dirty()
-            if not self.backward:
-                await self.next_line()
+            await self.next_line()
             return
     
         match = re.search(r'scene\s+(cg|bg)\s+([a-zA-Z0-9_]+)', line)
@@ -644,8 +805,7 @@ class ScriptParser:
 
             self.app.mark_scene_dirty()
     
-            if not self.backward:
-                await self.next_line()
+            await self.next_line()
 
 
     async def _handle_show(self, line):
@@ -653,8 +813,7 @@ class ScriptParser:
         self.app.show_sprite_from_script_line(line)
         self.app.mark_scene_dirty()
 
-        if not self.backward:
-            await self.next_line()
+        await self.next_line()
 
 
     async def _handle_hide(self, line):
@@ -665,75 +824,74 @@ class ScriptParser:
             self.app.hide_sprite_by_id(character_id)
             self.app.mark_scene_dirty()
 
-        if not self.backward:
-            await self.next_line()
+        await self.next_line()
 
 
     async def _handle_play(self, line):
-        """Явно поддерживаемые заглушки аудио и визуальных переходов."""
-        if not self.backward:
-            await self.next_line()
+        """Заглушка визуальных переходов; аудио обрабатывается отдельно."""
+        await self.next_line()
+
+    async def _handle_audio(self, line):
+        try:
+            audio = getattr(self.app, "audio", None)
+            if audio is not None:
+                audio.execute(line)
+            else:
+                if not hasattr(self, "_audio_catalog"):
+                    self._audio_catalog = load_audio_catalog()
+                parse_audio_command(line, self._audio_catalog)
+        except (OSError, ValueError) as exc:
+            self._report_script_error(str(exc))
+            return
+        await self.next_line()
 
 
     async def _handle_window(self, line):
         """Обработка строки window"""
         novel_menu = self.app.query_one("#novel-menu", expect_type=Widget)
         novel_menu.set_class("show" not in line, "invisible")
-        if not self.backward:
-            await self.next_line()
+        await self.next_line()
 
+
+    def choice_targets(self, pc: int | None = None) -> tuple[dict[str, ChoiceTarget], int]:
+        """Разбирает меню в исходных строках для UI и безоконных проверок."""
+        start, end = self._read_block_range(self.index if pc is None else pc)
+        cursor, options = start, {}
+        while cursor < end:
+            match = re.fullmatch(r'"(.+?)"(?:\s+if\s+(.+))?', self.lines[cursor])
+            if match is None:
+                raise ValueError("Invalid menu option")
+            text, condition = match.groups()
+            body, body_end = self._read_block_range(cursor + 1)
+            if condition is None or self._evaluate_condition(condition):
+                if text in options:
+                    raise ValueError(f"Duplicate menu option: {text}")
+                options[text] = ChoiceTarget(body, body_end, end + 1)
+            cursor = body_end + 1
+        if not options:
+            raise ValueError("Menu has no available choices")
+        return options, end + 1
 
     async def _handle_choice(self, line):
         """Обработка строки menu и логика выбора"""
+        # Логическая граница устанавливается до первого await и включает
+        # пустое меню: CSS ещё может не успеть показать ChoiceBar.
+        self.app.pending_choices = {}
+        self._stop_skipping()
 
-        options = {}
-        cursor = self.index  # строка после "menu"
-
-        while cursor < len(self.lines):
-            line = self.lines[cursor].strip()
-
-            # конец всего блока меню
-            if line == "}":
-                cursor += 1
-                break
-
-            # начало варианта
-            if line.startswith('"'):
-                choice_match = re.match(r'"(.+?)"(?:\s+if\s+(.+))?$', line)
-                if not choice_match:
-                    cursor += 1
-                    continue
-                choice_text, condition = choice_match.groups()
-                cursor += 1
-
-                if condition and not self._evaluate_condition(condition):
-                    # Пропускаем тело недоступного пункта.
-                    if cursor < len(self.lines) and self.lines[cursor] == "{":
-                        _, cursor = self._read_block_range(cursor)
-                        cursor += 1
-                    continue
-
-                if cursor < len(self.lines) and self.lines[cursor] == "{":
-                    start, end = self._read_block_range(cursor)
-                    cursor = end + 1
-                    options[choice_text] = ChoiceTarget(start, end, 0)
-            else:
-                cursor += 1
-
-        # Выполнение продолжится после закрывающей скобки выбранного меню.
-        options = {
-            text: ChoiceTarget(target.start, target.end, cursor)
-            for text, target in options.items()
-        }
+        try:
+            options, cursor = self.choice_targets()
+        except ValueError as exc:
+            self._report_script_error(str(exc))
+            return
         self.index = cursor
 
         # показать ChoiceBar
         choice_bar = self.app.query_one("#choice-bar")
         list_view = choice_bar.query_one(ListView)
 
-        list_view.clear()
-        for opt in options:
-            list_view.append(ListItem(Label(opt)))
+        await list_view.clear()
+        await list_view.extend(ListItem(Label(opt)) for opt in options)
 
         # сохранить варианты в app
         self.app.pending_choices = options
@@ -747,14 +905,6 @@ class ScriptParser:
         if self.app.current_text_mode == "nvl":
             self.app.query_one("#novel-window").remove_class("hidden")
             self.app.query_one("#novel-menu").add_class("hidden")
-
-        # дождаться одного кадра, чтобы Textual успел пересчитать фокус
-        await asyncio.sleep(0.01)
-
-        # изменение высоты окна от кол-ва элементов
-        rows = len(list_view.children)
-        row_height = 3
-        list_view.styles.height = max(1, rows) * row_height
 
         # найти ListView и перевести на него фокус 
         if list_view.children:
@@ -809,6 +959,9 @@ class ScriptParser:
 
             # В исходных Ren'Py-сценариях литерал процента экранирован как %%.
             text = text.replace("%%", "%")
+            # Только объявленные текстовые escape-последовательности, без eval
+            # или unicode_escape (который портит кириллицу и неизвестные слеши).
+            text = re.sub(r'\\([n"\\])', lambda m: {"n": "\n", '"': '"', "\\": "\\"}[m[1]], text)
 
             self.app.add_log_entry(
                 text=self._normalize_log_text(text),
@@ -824,15 +977,11 @@ class ScriptParser:
             widget.border_title = "" if is_nvl else speaker
 
             # Конвертируем <i>, <b> в rich-разметку
-            text = re.sub(r'<i>(.*?)</i>', r'[italic]\1[/italic]', text)
-            text = re.sub(r'<b>(.*?)</b>', r'[bold]\1[/bold]', text)
+            text = re.sub(r'<i>(.*?)</i>', r'[italic]\1[/italic]', text, flags=re.S)
+            text = re.sub(r'<b>(.*?)</b>', r'[bold]\1[/bold]', text, flags=re.S)
 
             if is_nvl:
-                if widget.text:
-                    widget.text += "\n"
-                if speaker:
-                    widget.text += f"[bold]{speaker}:[/bold] "
-                widget.refresh()
+                widget.append_nvl_paragraph(speaker, id_to_set)
 
             # Разбиваем текст на части по <w> с паузами
             parts = text.split("<w>")
@@ -872,9 +1021,12 @@ class ScriptParser:
                 # Показать кнопку обратно
                 btn.remove_class("invisible")
 
-                # Фокусируем кнопку только если меню выбора НЕ открыто
-                choice_bar = self.app.query_one("#choice-bar")
-                if choice_bar.has_class("hidden"):
+                # Не возвращаем фокус из истории/паузы или уже закрытой игры.
+                gameplay_context = getattr(self.app, "is_gameplay_context", None)
+                if (
+                    gameplay_context() if gameplay_context is not None
+                    else self.app.query_one("#choice-bar").has_class("hidden")
+                ):
                     btn.focus()
 
 
@@ -882,48 +1034,27 @@ class ScriptParser:
         """Обработка изменения поинтов и флагов"""
         # Парсим строку ($lp_sl += 1, $day2_flag = true, $persistent.flag = false)
         try:
-            state_key, operation, value = parse_script_assignment(line)
+            state_key, _, _ = parse_script_assignment(line)
+            was_unlocked = SCRIPT_STATE.get(state_key) is True
+            apply_script_assignment(line, SCRIPT_STATE)
         except ValueError as exc:
-            self.app.sub_title = f"[Script error] {exc}"
+            self._report_script_error(str(exc), stop_execution=False)
             # Не стираем диагностику немедленным автоматическим переходом
             # к следующей строке. Продолжить можно явным действием «Далее».
             return
-        if state_key not in SCRIPT_STATE:
-            self.app.sub_title = f"[Script error] Unknown script variable: ${state_key}"
-            return
-
-        # Извлекаем текущее значение
-        current = SCRIPT_STATE[state_key]
-
-        # Применяем операцию
-        if operation == "+=":
-            if isinstance(current, bool):
-                current = int(current)
-            if isinstance(value, bool):
-                value = int(value)
-            current += value
-        elif operation == "-=":
-            if isinstance(current, bool):
-                current = int(current)
-            if isinstance(value, bool):
-                value = int(value)
-            current -= value
-        elif operation == "=":
-            current = value
-        else:
-            return
-
         # Обновляем единое состояние и Header.
-        SCRIPT_STATE[state_key] = current
         self._update_script_header()
         if state_key.startswith("persistent."):
+            if state_key in ENDING_STATE_KEYS and not was_unlocked and SCRIPT_STATE[state_key] is True:
+                record_unlock = getattr(self.app, "record_ending_unlock", None)
+                if record_unlock is not None:
+                    record_unlock(state_key)
             save_persistent = getattr(self.app, "save_persistent_state", None)
             if save_persistent is not None:
                 save_persistent()
 
         # Продолжаем выполнение
-        if not self.backward:
-            await self.next_line()
+        await self.next_line()
 
     async def _handle_load(self, line):
         """Переход к файлу сценария"""
@@ -944,17 +1075,12 @@ class ScriptParser:
             target_path = current_dir / target_path
 
         target_path = target_path.resolve()
-        show_release_end = getattr(self.app, "show_release_end", None)
-        if target_path.stem.lower() == "day4" and show_release_end is not None:
-            show_release_end()
-            return
         if not target_path.exists():
-            self.app.sub_title = f"[Load error] File not found: {target_path}"
+            self._report_script_error(f"File not found: {target_path}", stop_execution=False)
             return
 
         self.load_script(target_path)
         preload_task = self.app.start_script_preload(self)
         if preload_task is not None:
             await preload_task
-        if not self.backward:
-            await self.next_line()
+        await self.next_line()

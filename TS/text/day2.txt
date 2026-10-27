@@ -2392,7 +2392,7 @@ label day2_dv
     window show
     "Было уже поздно, но я решил ещё некоторое время полежать и посмотреть на звёзды."
     window hide
-    scene cg stars_1 with dissolve
+    scene cg stars with dissolve
     window show
     "В конце концов, раньше мне редко представлялась такая возможность."
     "Или просто я сам редко себе её создавал."

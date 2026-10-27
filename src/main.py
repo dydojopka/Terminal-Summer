@@ -4,9 +4,17 @@ import sys
 import asyncio
 import hashlib
 import threading
+import time
+import tempfile
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
+from audio_manager import AUDIO_DEFAULTS, AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
+from audio_catalog import finite_number, validate_audio_assets
+from file_io import atomic_output, write_json_atomic
+from save_data import validate_save_view, plain_save_text
+from single_instance import single_instance, AlreadyRunningError
+from terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
 # --- ЛОГИКА ПУТЕЙ ---
 IS_FROZEN = hasattr(sys, "_MEIPASS")
@@ -55,7 +63,9 @@ MENU_LOGO_PATH = get_resource_path("menu_logo.ansi")
 SETTINGS_PATH = get_settings_path()
 SAVES_PATH = get_saves_path()
 PERSISTENT_PATH = get_persistent_path()
-APP_VERSION = "0.3.0"
+APP_VERSION = "1.0.0"
+# Original game/options.rpy: config.main_menu_music = "sound/music/blow_with_the_fires.ogg".
+MENU_MUSIC_KEY = "blow_with_the_fires"
 
 
 # ============ Сохранения ============
@@ -75,8 +85,7 @@ def save_game_state(page: int, slot: int, game_state: dict, timestamp: str = "")
         "timestamp": timestamp,
         "game_state": game_state,
     }
-    with save_file.open("w", encoding="utf-8") as f:
-        json.dump(save_data, f, indent=2, ensure_ascii=False)
+    write_json_atomic(save_file, save_data)
 
 
 def load_game_state(page: int, slot: int) -> dict | None:
@@ -86,6 +95,10 @@ def load_game_state(page: int, slot: int) -> dict | None:
         return None
     with save_file.open("r", encoding="utf-8") as f:
         save_data = json.load(f)
+    if not isinstance(save_data, dict):
+        raise ValueError("Invalid save file")
+    if not isinstance(save_data.get("game_state"), dict):
+        raise ValueError("Invalid game state")
     return save_data.get("game_state")
 
 
@@ -119,24 +132,43 @@ def get_all_saves() -> dict[str, dict]:
             try:
                 with save_file.open("r", encoding="utf-8") as f:
                     data = json.load(f)
+                if not isinstance(data, dict):
+                    raise ValueError("Invalid save file")
+                if not isinstance(data.get("game_state"), dict):
+                    raise ValueError("Invalid game state")
                 slot_num = int(save_file.stem)
                 save_id = f"{page_num - 1}/{slot_num - 1}"
                 saves[save_id] = data
-            except Exception:
-                continue
+            except (OSError, ValueError, UnicodeError):
+                try:
+                    slot_num = int(save_file.stem)
+                except ValueError:
+                    continue
+                saves[f"{page_num - 1}/{slot_num - 1}"] = {"error": "Повреждённое сохранение"}
     return saves
 
-import asyncio
+
+def _backup_invalid_json(path: Path) -> None:
+    if path.exists():
+        backup = path.with_name(f"{path.name}.invalid-{time.time_ns()}.bak")
+        with path.open("rb") as source, atomic_output(backup, overwrite=False) as target:
+            import shutil
+            shutil.copyfileobj(source, target)
+
+
+def _file_signature(path: Path) -> tuple:
+    stat = path.stat()
+    return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
+
 import json
 from PIL import Image
-from pil2ansi import convert_img, Palettes
+from art_renderer import ART_STYLES, render_art
 
 from textual import events, errors, _time
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
-from textual.reactive import reactive
-from textual.screen import Screen
-from textual.widgets import Button, Label, Footer, Header, Static, ListView, ListItem, Log, LoadingIndicator
+from textual.screen import Screen, ModalScreen
+from textual.widgets import Button, Label, Footer, Header, Static, ListView, Log, LoadingIndicator
 from textual.widget import Widget
 from textual.binding import Binding
 
@@ -145,12 +177,25 @@ from rich.segment import Segment
 from rich.text import Text
 
 from script_parser import ScriptParser, format_script_state
+from gallery_catalog import load_gallery_catalog, resolve_gallery_image
+from music_room import MusicRoom
+from endings_menu import EndingsMenu, EndingsList, EndingResult
+from endings_catalog import current_ending
+from credits import CREDIT_PAGES, CreditsTimeline
+from ending_progress import (
+    ending_unlock_time, normalize_ending_dates, split_persistent_progress, merge_ending_dates,
+)
 from sprites_builder import (
     parse_show_like,
     load_yaml_dict as load_sprite_resources_yaml,
     resolve_sprite,
     compose_layers,
+    normalize_sprite_position, SPRITE_POSITIONS, SPRITE_SIZES,
 )
+
+
+# Только сценарные фильтры; полноэкранные записки и opening-слои ими не являются.
+SCENE_FILTER_IDS = frozenset({"prologue_filter"})
 
 
 @dataclass(frozen=True)
@@ -179,6 +224,7 @@ class SceneRenderSnapshot:
             (
                 sprite.character,
                 sprite.show_line,
+                sprite.image_path,
                 sprite.at,
                 sprite.size,
                 sprite.behind,
@@ -186,47 +232,26 @@ class SceneRenderSnapshot:
             )
             for sprite in self.sprites
         )
-        return self.category, self.name, sprite_key, str(self.width), self.style, 2
+        return self.category, self.name, sprite_key, str(self.width), self.style, self.cache_epoch, 3
 
 def main():
-    if IS_FROZEN:
-        from scripts.assets_manager import restore_bundled_scripts
-        restore_bundled_scripts()
-    ts_dir = get_ts_path()
-    required_paths = [
-        ts_dir / "gallery",
-        ts_dir / "game",
-        ts_dir / "text",
-        ts_dir / "resources.yaml",
-    ]
-
-    missing_paths = [path for path in required_paths if not path.exists()]
-    if not missing_paths:
-        return
-
-    print("Ассеты не найдены. Запускаю загрузку...", file=sys.stderr)
-
-    scripts_dir = PROJECT_ROOT / "scripts"
-    if scripts_dir.exists():
-        sys.path.insert(0, str(scripts_dir))
-
+    if not IS_FROZEN:
+        sys.path.insert(0, str(PROJECT_ROOT))
     try:
-        from scripts.assets_manager import ensure_assets
-        ensure_assets()
+        with single_instance(PERSISTENT_PATH.parent):
+            from scripts.assets_manager import ensure_assets
+            ensure_assets(quiet=True, require_endings=True)
+            TerminalSummer().run()
+    except AlreadyRunningError as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(1)
     except Exception as exc:
-        print(f"Ошибка загрузки ассетов: {exc}", file=sys.stderr)
-        raise SystemExit(1)
-
-    missing_paths = [path for path in required_paths if not path.exists()]
-    if missing_paths:
-        print("Ошибка: ассеты после загрузки всё ещё отсутствуют.", file=sys.stderr)
-        for path in missing_paths:
-            print(f"  - {path}", file=sys.stderr)
+        print(f"Ошибка запуска: {exc}", file=sys.stderr)
         raise SystemExit(1)
 
 
 
-# Цвета персонажей в истории
+# Цвета имён персонажей в истории и NVL-тексте
 SPEAKER_NAME_COLORS = {
     "dreamgirl":   "rgb(192,192,192)",
     "sl":          "rgb(255,210,0)",
@@ -258,6 +283,7 @@ SPEAKER_NAME_COLORS = {
     "sh":          "rgb(255,242,38)",
     "pi":          "rgb(230,0,0)",
     "me":          "rgb(225,221,125)",
+    "my":          "rgb(225,221,125)",
     "FIXME_voice": "rgb(192,192,192)",
     "bush":        "rgb(192,192,192)",
     "message":     "rgb(192,192,192)",
@@ -342,19 +368,6 @@ class MainMenuBrand(AnsiView):
                 Text("Terminal Summer", style="bold #E3B778", justify="center")
             )
     
-class ReleaseEnd(Vertical):
-    """Конец доступного сюжета без изменения файлов сценария."""
-
-    def compose(self):
-        with VerticalScroll(id="release-end-dialog"):
-            yield Label("Спасибо за игру!", id="release-end-title")
-            yield Label(
-                "Вы прошли доступный сюжет Terminal Summer 0.3.0.\n"
-                "Четвёртый день появится в следующих версиях."
-            )
-            yield Button("В главное меню", id="btn-release-end-menu", variant="primary")
-
-
 class MainMenuMiddleBtns(HorizontalGroup):
     """Виджет-контейнер для центарльных кнопок"""
     BORDER_TITLE="Информация"
@@ -366,7 +379,7 @@ class MainMenuMiddleBtns(HorizontalGroup):
 class MainMenuBottomBtns(HorizontalGroup):
     """Виджет-контейнер для нижних кнопок"""
     def compose(self):
-        yield Button("Достижения (скоро) 🏅", id="btn-achievements", disabled=True)
+        yield Button("Достижения 🏅", id="btn-achievements")
         yield Button("Настройки 🪛", id="btn-settings-menu")
         yield Button("Выход 🚪", id="btn-exit-menu")
 
@@ -377,7 +390,7 @@ class MainMenuStartBtn(Vertical):
         yield Label('   Дорогой пионер!\n' \
         'Ты — на пороге удивительных открытий.\n' \
         '   Перед тобой распахнулись двери самого прекрасного места в мире — ' \
-        'нашего любимого лагеря "Совёнок". Эта смена запомниться тебе на всю жизнь.\n' \
+        'нашего любимого лагеря "Совёнок". Эта смена запомнится тебе на всю жизнь.\n' \
         'Добро пожаловать!')
 
 class MainMenuLoadBtn(Vertical):
@@ -386,7 +399,7 @@ class MainMenuLoadBtn(Vertical):
         yield Button("Сохранение 📒", id="btn-save-load")
         yield Label('   Бережно относись к истории своего лагеря. Тщательно записывай ' \
         'свои наблюдения и мысли о прошедших днях.\nПри помощи сохранений ты всегда ' \
-        'сможешь вернутся назад к пройденному эпизоду и осмыслить его заново. ' \
+        'сможешь вернуться назад к пройденному эпизоду и осмыслить его заново. ' \
         'Удачи тебе в твоих начинаниях!\n' \
         '   Если что-то пойдёт не так, ты знаешь, что делать')
 
@@ -395,7 +408,7 @@ class MainMenuGalleryBtn(Vertical):
     def compose(self):
         yield Button("Галерея 📷", id="btn-gallery")
         yield Label('   Здесь представлены работы участников нашего фотокружка. ' \
-        'Твои товарищи всегда готовы запечатлеть важные моменты из жини лагеря, ' \
+        'Твои товарищи всегда готовы запечатлеть важные моменты из жизни лагеря, ' \
         'а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим ' \
         'поведением подавай пример окружающим.')
 
@@ -420,10 +433,11 @@ class GalleryMenuMidBtns(Vertical):
     """Виджет-контейнер для кнопок и арт-пространства галереи в центре"""
     BORDER_TITLE=""
     def compose(self):
-        with HorizontalGroup():
+        with HorizontalGroup(id="gallery-art-panel"):
 
             with ScrollableContainer(id="bg-cg-gallery", can_focus=False, can_focus_children=False):
                 yield AnsiView("", id="ansi-content", classes="mouse-passive-art")
+            yield MusicRoom(id="music-room", classes="hidden")
             
         yield GalleryMenuBottomBtns()
         
@@ -437,7 +451,7 @@ class GalleryMenuBottomBtns(HorizontalGroup):
         yield Button("->", id="btn-next-gallery")
 
 
-class SaveMenuLeftBtns(Vertical):
+class SaveMenuLeftBtns(VerticalScroll):
     """Виджет-контейнер для кнопок сохранений слева (Назад + номера страниц)"""
     def compose(self):
         yield Button("Назад ↩", id="btn-close-save-menu")
@@ -450,7 +464,8 @@ class SaveMenuMidBtns(Vertical):
     """Виджет-контейнер для слотов и кнопок действий в центре"""
     BORDER_TITLE = "Сохранения"
     def compose(self):
-        yield SaveMenuSlots(id="save-menu-slots")
+        with VerticalScroll(id="save-slots-scroll"):
+            yield SaveMenuSlots(id="save-menu-slots")
         yield SaveMenuActionBtns(id="save-action-btns")
 
 
@@ -492,6 +507,33 @@ class SaveMenu(HorizontalGroup):
         yield SaveMenuMidBtns()
 
 
+class OutdatedSaveDialog(ModalScreen):
+    BINDINGS = [("escape", "keep", "Оставить")]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.keep_button = Button("Оставить", id="outdated-save-keep", variant="primary")
+
+    def compose(self):
+        with Vertical(id="outdated-save-panel"):
+            yield Label("Сохранение устарело", id="outdated-save-title")
+            yield Static("Оно несовместимо с текущей версией сценария.\nУдалить выбранное сохранение?")
+            with HorizontalGroup():
+                yield self.keep_button
+                yield Button("Удалить", id="outdated-save-delete", variant="error")
+
+    def on_mount(self):
+        if self.keep_button.is_mounted:
+            self.keep_button.focus()
+
+    def action_keep(self):
+        self.dismiss(False)
+
+    def on_button_pressed(self, event: Button.Pressed):
+        event.stop()
+        self.dismiss(event.button.id == "outdated-save-delete")
+
+
 class PauseMenu(Static):
     """Виджет меню паузы"""
     def compose(self):
@@ -513,17 +555,34 @@ class SettingsMenu(VerticalScroll):
     BORDER_TITLE = "Настройки"
 
     def compose(self):
-        yield SettingHeader()
-        yield SettingQuality()
-        yield SettingASCIIorANSI()
-        yield SettingTextSpeed()
+        yield SettingHeader(classes="setting-with-description")
+        yield SettingQuality(classes="setting-with-description")
+        yield SettingASCIIorANSI(classes="setting-with-description")
+        yield SettingSceneFilters(classes="setting-with-description")
+        yield SettingTextSpeed(classes="setting-with-description")
+        yield SettingAudio()
         yield Button("Назад ↩", id="btn-close-settings")
 
-class SettingHeader(Widget):
+class SettingAudio(Vertical):
+    """Независимые пользовательские уровни, не сценарные volume-команды."""
+    BORDER_TITLE = "Звук"
+    GROUPS = {"master": "Общая громкость", "music": "Музыка",
+              "environment": "Окружение", "effects": "Разовые эффекты"}
+
+    def compose(self):
+        for group, title in self.GROUPS.items():
+            with HorizontalGroup(classes="audio-setting-row"):
+                yield Label(title, classes="audio-setting-title")
+                yield Button("−10%", id=f"btn-audio-{group}-minus")
+                yield Label("", id=f"audio-{group}-level", classes="audio-setting-level")
+                yield Button("+10%", id=f"btn-audio-{group}-plus")
+        yield Button("Без звука", id="btn-audio-mute")
+
+class SettingHeader(HorizontalGroup):
     """Виджет с настройкой Header"""
     BORDER_TITLE = "Верхняя панель(Header)"
     def compose(self):
-        with Vertical(id="header-controls"):
+        with Vertical(id="header-controls", classes="setting-controls setting-controls-wide"):
             with HorizontalGroup(classes="header-setting-row"):
                 yield Button("Включить", variant="default", id="btn-header-on")
                 yield Button("Выключить", variant="error", id="btn-header-off")
@@ -531,7 +590,7 @@ class SettingHeader(Widget):
             with HorizontalGroup(classes="header-setting-row"):
                 yield Button("LP-поинты", id="btn-header-lp-points")
                 yield Button("Флаги", id="btn-header-flags")
-        yield DescriptionSettingHeader()
+        yield DescriptionSettingHeader(classes="setting-description")
 
 class DescriptionSettingHeader(Widget):
     """Описание настройки 'Верхняя панель(Header)'"""
@@ -541,15 +600,15 @@ class DescriptionSettingHeader(Widget):
 LP-поинты и флаги можно включать независимо.
 (может слегка уменьшить обзор)"""
 
-class SettingQuality(Widget):
+class SettingQuality(HorizontalGroup):
     """Виджет с настройкой размера ASCII-артов"""
     BORDER_TITLE = "Размер ANSI/ASCII артов"
     def compose(self):
-        with Vertical():
+        with Vertical(classes="setting-controls"):
             yield Button("маленький\n(50)", variant="default", id="btn-small")
             yield Button("Средний\n(150)", variant="default", id="btn-medium")
             yield Button("ОГРОМНЫЙ\n(200)", variant="default", id="btn-large")
-            yield DescriptionSettingQuality()
+        yield DescriptionSettingQuality(classes="setting-description")
 
 class DescriptionSettingQuality(Widget):
     """Описание настройки 'Размер ANSI/ASCII артов'"""
@@ -559,38 +618,65 @@ class DescriptionSettingQuality(Widget):
 Можно так же попробовать уменьшить размер шрифта самой консоли 
 (Обычно это Ctrl+"+" и Ctrl+"-")"""
 
-class SettingASCIIorANSI(Widget):
+class SettingASCIIorANSI(HorizontalGroup):
     """Виджет с настройкой стиля артов"""
     BORDER_TITLE = "Стиль артов"
+    STYLE_BUTTONS = {
+        "btn-ANSI": "ANSI",
+        "btn-ASCII": "ASCII",
+        "btn-COLOR-ASCII": "COLOR_ASCII",
+    }
+
     def compose(self):
-        with HorizontalGroup():
+        with Vertical(classes="setting-controls"):
             yield Button("ANSI", variant="default", id="btn-ANSI")
-            yield Button("ASCII", variant="default", id="btn-ASCII")
-            yield DescriptionSettingASCIIorANSI()
+            yield Button("ЧБ ASCII", variant="default", id="btn-ASCII")
+            yield Button("Цветной ASCII", variant="default", id="btn-COLOR-ASCII")
+        yield DescriptionSettingASCIIorANSI(classes="setting-description")
 
 class DescriptionSettingASCIIorANSI(Widget):
     """Описание настройки 'Стиль артов'"""
     def render(self):
-        return """ANSI  - изображение будет цветным
-ASCII - изображение будет состоять из символов .,:+*? и других"""
+        return """ANSI — цветные блоки
+ЧБ ASCII — одноцветные символы .,:+*?%@
+Цветной ASCII — те же символы в цветах изображения"""
 
-class SettingTextSpeed(Widget):
+class SettingSceneFilters(HorizontalGroup):
+    """Пользовательская видимость фильтров, независимо от стиля артов."""
+    BORDER_TITLE = "Фильтры изображения"
+    BUTTON_VALUES = {
+        "btn-scene-filters-on": True,
+        "btn-scene-filters-off": False,
+    }
+
+    def compose(self):
+        with HorizontalGroup(id="scene-filter-controls", classes="setting-controls setting-controls-wide"):
+            yield Button("Включить", id="btn-scene-filters-on")
+            yield Button("Выключить", id="btn-scene-filters-off")
+        yield Static(
+            "В ASCII фильтры можно отключить для лучшей различимости изображения. "
+            "Персонажи и их тонировка сохраняются.",
+            classes="setting-description scene-filter-description",
+        )
+
+
+class SettingTextSpeed(HorizontalGroup):
     """Виджет с настройкой скорости текста"""
     BORDER_TITLE = "Скорость текста"
     def compose(self):
-        with Vertical():
+        with Vertical(classes="setting-controls"):
             yield Button("Медленно", variant="default", id="btn-speed-slow")
             yield Button("Средне", variant="default", id="btn-speed-medium")
             yield Button("Быстро", variant="default", id="btn-speed-fast")
             yield Button("Моментально", variant="default", id="btn-speed-instantly")
-            yield DescriptionSettingTextSpeed()
+        yield DescriptionSettingTextSpeed(classes="setting-description")
 
 class DescriptionSettingTextSpeed(Widget):
     """Описание настройки 'Скорость текста'"""
     def render(self):
         return """Скорость появления текста в текстовом окне.\n
 Медленно    - 0.04
-Средние     - 0.025
+Средне      - 0.025
 Быстро      - 0.01
 Моментально - 0"""
 
@@ -604,18 +690,38 @@ class NovelMenu(Static):
         with Vertical(id="novel-next-control", classes="novel-control"):
             yield Button("Продолжить", id="btn-next")
 
-class TextBar(Widget):
+class TextBar(VerticalScroll):
     """Виджет текст бара"""
     BORDER_TITLE = ""   # Имя персонажа
     
     def __init__(self, id=None):
         super().__init__(id=id)
-        self.text = ""  # Текущий текст
+        self._text = ""
+        self._content = Static("", classes="dialogue-content")
 
-    def render(self):
-        return Text.from_markup(self.text)  # Отображаем содержимое текста
+    def compose(self):
+        yield self._content
 
-    async def animate_text(self, new_text, speed=None, append=False):
+    @property
+    def text(self):
+        return self._text
+
+    @text.setter
+    def text(self, value):
+        self._text = value
+        self._content.update(Text.from_markup(value))
+
+    def append_nvl_paragraph(self, speaker: str, speaker_id: str | None) -> None:
+        prefix = "\n" if self.text else ""
+        if speaker:
+            name = Text(
+                f"{speaker}:",
+                style=Style(bold=True, color=SPEAKER_NAME_COLORS.get(speaker_id or "")),
+            )
+            prefix += name.markup + " "
+        self.text += prefix
+
+    async def animate_text(self, new_text, append=False):
         """Анимация текста, символ за символом
 
         Если append=True  - добавляет текст к текущему,\n
@@ -625,15 +731,18 @@ class TextBar(Widget):
         
         if not append:
             self.text = ""
-            self.refresh()
+            self.scroll_home(animate=False)
 
-        for char in new_text:
+        for index, char in enumerate(new_text):
             await self.app.wait_until_game_resumed()
+            if self.app.skipping:
+                self.text += new_text[index:]
+                # Быстрые части <w> тоже должны отдавать управление вводу.
+                await asyncio.sleep(0)
+                break
             self.text += char
-            self.refresh()
             await asyncio.sleep(speed)
 
-        self.refresh()
         self.scroll_end(animate=False)
 
 
@@ -704,25 +813,35 @@ class TerminalSummer(App):
         "header_flags": True,
         "quality": "150",
         "style": "ANSI",
+        "scene_filters_enabled": True,
         "text_speed": "0.025",
+        **AUDIO_DEFAULTS,
     }
 
     def __init__(self):
         super().__init__()
         self.settings = self.DEFAULT_SETTINGS.copy()
+        self._settings_read_error = False
+        self._persistent_read_error = False
 
         self.ts_path = get_ts_path()
+        self.audio = AudioManager(self.ts_path)
+        self._menu_music_active = False
+        self.ending_dates = {}
+        self._new_ending_flags: set[str] = set()
+        self._credits: CreditsTimeline | None = None
+        self._credits_script: ScriptParser | None = None
+        self._credit_ending = None
 
         self._sprite_resources = None
-        self._sprite_resources_loaded = False
-        self._sprite_assets_root = self.ts_path / "game"
-        self._sprite_runtime_dir = self.ts_path / "game/sprites/generated_runtime"
+        self._sprite_resources_signature = None
+        self._sprite_assets_root = self.ts_path / "images"
+        self._sprite_runtime_dir = self.ts_path / "images/sprites/generated_runtime"
         self._active_sprites = {}
         self._sprite_order_seq = 0
         self.current_time = "day"
         self.current_text_mode = "adv"
         self._interface_hidden = False
-        #self.audio_player = AudioPlayer()
         self._next_scene_in_progress = False
         self._text_animating = False
         self._text_animating_since = None
@@ -733,19 +852,28 @@ class TerminalSummer(App):
         self._space_last_event_at = 0.0
         self._space_idle_gap = 0.12
         self._space_require_idle = False
+        self.skipping = False
+        self._skip_last_event_at = 0.0
+        self._skip_input_after = _time.get_time()
+        self._skip_next_advance_at = 0.0
+        self._skip_timer = None
+        self._skip_binding_available = None
         self._script_advance_task: asyncio.Task | None = None
         self._script_delay_event: asyncio.Event | None = None
         self._script_delay_kind: str | None = None
         self._script_delay_skippable = False
         self._script_delay_generation = 0
         self._game_paused = False
+        self._terminal_too_small = False
+        self._terminal_size_focus = None
         self._game_pause_changed_event = asyncio.Event()
         self.scene_dirty = False
         self._scene_generation = 0
         self._cache_epoch = 0
         self._cache_lock = threading.RLock()
         self._scene_render_cache: OrderedDict[tuple, Text] = OrderedDict()
-        self._sprite_build_cache: OrderedDict[str, str] = OrderedDict()
+        self._asset_fingerprints: OrderedDict[str, tuple] = OrderedDict()
+        self._generated_validation: OrderedDict[str, tuple] = OrderedDict()
         self._decoded_image_cache: OrderedDict[str, tuple[Image.Image, int]] = OrderedDict()
         self._decoded_image_cache_bytes = 0
         self._decoded_image_cache_limit = 128 * 1024 * 1024
@@ -759,6 +887,9 @@ class TerminalSummer(App):
         self._preload_after_settings = False
         self._render_cache_limit = 96
         self._sprite_cache_limit = 256
+        self.gallery_images = []
+        self._gallery_catalog = None
+        self._gallery_error = None
 
     text_speed = "0.025" # Скорость текста 0.04 | 0.025 | 0.01 | 0
 
@@ -768,10 +899,40 @@ class TerminalSummer(App):
     gallery_images = []
 
     BINDINGS = [
-        Binding("escape", "pause_game", "Пауза",   show=True, id="bind-pause"),
-        Binding("space",  "",           "Далее",   show=True, id="bind-next"),
-        Binding("h",      "log",        "История", show=True, id="bind-log"),
-        Binding("f",      "toggle_interface", "Скрыть интерфейс", show=True, id="bind-toggle-interface"),
+        Binding(
+            "escape",
+            "pause_game",
+            "Пауза",
+            show=True,
+            key_display = "ESC",
+            id="bind-pause"),
+        Binding(
+            "space",
+            "",
+            "Далее",
+            show=True,
+            key_display = "SPACE",
+            id="bind-next"),
+        Binding(
+            "s,ы,S,Ы",
+            "toggle_skipping",
+            "Пропуск",
+            key_display="S",
+            id="bind-skip"),
+        Binding(
+            "h, р",
+            "log",
+            "История",
+            show=True,
+            key_display = "H",
+            id="bind-log"),
+        Binding(
+            "f, а",
+            "toggle_interface",
+            "Скрыть интерфейс",
+            key_display = "F",
+            show=True,
+            id="bind-toggle-interface"),
     ]
 
     TEXT_MODES = {"adv", "nvl"}
@@ -790,9 +951,10 @@ class TerminalSummer(App):
         yield PauseMenu(   id="pause-menu",    classes="hidden")
         yield SettingsMenu(id="settings-menu", classes="hidden")
         yield GalleryMenu( id="gallery-menu",  classes="hidden")
+        yield EndingsMenu( id="endings-menu",  classes="hidden")
         yield SaveMenu(    id="save-menu",     classes="hidden")
         yield ScriptLoadingOverlay(id="script-loading", classes="hidden")
-        yield ReleaseEnd(id="release-end", classes="hidden")
+        yield TerminalSizeWarning()
 
     def set_text_mode(self, mode: str) -> None:
         """Сохраняет режим текста и обновляет его отображение."""
@@ -841,12 +1003,26 @@ class TerminalSummer(App):
     # ============ Функции - on_ ============
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Обработка событий при нажатии кнопок"""
+        if self._terminal_too_small:
+            event.stop()
+            return
         button_id = event.button.id
+        if button_id == "btn-audio-mute":
+            self.settings["audio_muted"] = not self.settings["audio_muted"]
+            self.apply_audio_settings()
+            self.save_settings()
+            return
+        if match := re.fullmatch(r"btn-audio-(master|music|environment|effects)-(minus|plus)", button_id or ""):
+            group, direction = match.groups()
+            key = "audio_" + group
+            self.settings[key] = max(0.0, min(1.0, round(self.settings[key] + (0.1 if direction == "plus" else -0.1), 2)))
+            self.apply_audio_settings()
+            self.save_settings()
+            return
 
         # Кнопки в NovelMenu:
         if   button_id == "btn-next":             # Кнопка "Продолжить"
             await self._advance_from_button()
-        # TODO: Добавить закрытие через escape
         elif button_id == "btn-log":              # Кнопка "История"
             self.action_log()
 
@@ -940,25 +1116,20 @@ class TerminalSummer(App):
             self.save_settings()
             await self.update_current_scene_art()
 
-        # ASCIIorANSI
-        elif button_id == "btn-ANSI":             # Кнопка "ANSI"
-            # Меняем стили кнопок
-            self.query_one("#btn-ANSI", Button).variant = "primary"
-            self.query_one("#btn-ASCII", Button).variant = "default"
-
-            # Сохранение в файл настроек и обновляем текущую сцену
-            self.settings["style"] = "ANSI"
+        # Стиль артов
+        elif button_id in SettingASCIIorANSI.STYLE_BUTTONS:
+            self.settings["style"] = SettingASCIIorANSI.STYLE_BUTTONS[button_id]
+            self.sync_art_style_buttons()
             self.save_settings()
             await self.update_current_scene_art()
-        elif button_id == "btn-ASCII":            # Кнопка "ASCII"
-            # Меняем стили кнопок
-            self.query_one("#btn-ANSI", Button).variant = "default"
-            self.query_one("#btn-ASCII", Button).variant = "primary"
 
-            # Сохранение в файл настроек и обновляем текущую сцену
-            self.settings["style"] = "ASCII"
-            self.save_settings()
-            await self.update_current_scene_art()
+        elif button_id in SettingSceneFilters.BUTTON_VALUES:
+            enabled = SettingSceneFilters.BUTTON_VALUES[button_id]
+            if self.settings["scene_filters_enabled"] != enabled:
+                self.settings["scene_filters_enabled"] = enabled
+                self.sync_scene_filter_buttons()
+                self.save_settings()
+                await self.update_current_scene_art()
 
         # TextSpeed
         elif button_id == "btn-speed-slow":       # Кнопка "Медленно"
@@ -1019,6 +1190,10 @@ class TerminalSummer(App):
         # Кнопки в MainMenu:
         elif button_id == "btn-start-game":       # Кнопка "Начать игру"
             self.cancel_script_advance()
+            self.stop_credits()
+            self._new_ending_flags.clear()
+            self._menu_music_active = False
+            self.audio.reset()
 
             # Скрытие главного меню
             self.action_open_menu()
@@ -1046,42 +1221,23 @@ class TerminalSummer(App):
             self.open_save_menu("menu")
         elif button_id == "btn-gallery":          # Кнопка "Галерея"
             self.action_open_gallery()
+        elif button_id in {"btn-achievements", "btn-close-endings"}:
+            self.action_open_endings()
         elif button_id == "btn-settings-menu":    # Кнопка "Настройки"
             self.query_one("#settings-menu").remove_class("open-from-pause")
             self.query_one("#settings-menu").add_class("open-from-menu") # Класс-флаг что настройки открыты из MainMenu
             self.action_open_settings()
-        elif button_id == "btn-release-end-menu":
-            self.reset_game_view()
-            self.query_one("#release-end").add_class("hidden")
-            self.action_open_menu()
         elif button_id == "btn-exit-menu":        # Кнопка "Выход"
             self.app.exit()
 
         # Кнопки в GalleryMenu:
         # LeftBtns
         elif button_id == "btn-gallery-music":    # Кнопка "Музыка"
-            # Меняем стили кнопок
-            self.query_one("#btn-gallery-music", Button).variant = "primary"
-            self.query_one("#btn-gallery-cg", Button).variant = "default"
-            self.query_one("#btn-gallery-bg", Button).variant = "default"
+            self.switch_gallery_tab("music")
         elif button_id == "btn-gallery-cg":       # Кнопка "Иллюстрации"
-            # Меняем стили кнопок
-            self.query_one("#btn-gallery-music", Button).variant = "default"
-            self.query_one("#btn-gallery-cg", Button).variant = "primary"
-            self.query_one("#btn-gallery-bg", Button).variant = "default"
-
-            self.gallery_mode = "cg"
-            self.load_gallery_images()
-            self.update_gallery_display()
+            self.switch_gallery_tab("cg")
         elif button_id == "btn-gallery-bg":       # Кнопка "Фоны"
-            # Меняем стили кнопок
-            self.query_one("#btn-gallery-music", Button).variant = "default"
-            self.query_one("#btn-gallery-cg", Button).variant = "default"
-            self.query_one("#btn-gallery-bg", Button).variant = "primary"
-
-            self.gallery_mode = "bg"
-            self.load_gallery_images()
-            self.update_gallery_display()
+            self.switch_gallery_tab("bg")
 
         # Перелистывание bg и cg
         elif button_id == "btn-back-gallery":     # Кнопка "<<<"
@@ -1146,13 +1302,111 @@ class TerminalSummer(App):
 
     def on_mount(self) -> None:
         """Загрузка настроек при запуске"""
+        # Headless UI tests never open a real device. Backend tests opt in explicitly.
+        if self.is_headless and self.audio.backend_factory is PygameAudioBackend:
+            self.audio.backend_factory = NullAudioBackend
         self.load_persistent_state()
         self.load_settings()
         self.apply_settings()
+        self.start_menu_music()
+        self.set_interval(0.5, self.poll_audio_errors)
+        self._skip_timer = self.set_interval(0.05, self._skip_tick)
+        self.app_suspend_signal.subscribe(
+            self, lambda _: self.stop_skipping(), immediate=True
+        )
+        self.screen_change_signal.subscribe(self, lambda _: self.sync_terminal_size())
+        self.sync_terminal_size()
+        if not self.is_headless:
+            errors = validate_audio_assets(self.ts_path, self.audio.catalog)
+            if errors:
+                self.notify("Часть аудиофайлов отсутствует. Установите TS/sound из нового архива ассетов.",
+                            title="Звук", severity="warning", timeout=10)
+
+    def on_resize(self, event: events.Resize) -> None:
+        self.sync_terminal_size(event.size)
+
+    def sync_terminal_size(self, size=None) -> None:
+        """Скрывает все экраны, не меняя состояния меню, фокуса и обычной паузы."""
+        size = self.size if size is None else size
+        too_small = (size.width < MINIMUM_TERMINAL_SIZE.width
+                     or size.height < MINIMUM_TERMINAL_SIZE.height)
+        # Отладочный Header уступает место маленькому арту, а не увеличивает
+        # минимальный размер окна на семь дополнительных строк.
+        for header in self.query(ScriptStateHeader):
+            header.styles.max_height = min(8, max(1, size.height - MINIMUM_TERMINAL_SIZE.height + 1))
+        changed = too_small != self._terminal_too_small
+        if changed:
+            if too_small and self.focused is not None:
+                self._terminal_size_focus = self.focused
+            self._terminal_too_small = too_small
+            self.stop_skipping()
+            self._space_require_idle = True
+            self._space_last_event_at = _time.get_time()
+            self._signal_game_pause_changed()
+        for screen in self.screen_stack:
+            screen.set_class(too_small, "terminal-too-small")
+            # 27 + 27 — боковые панели; 50 + 2 — текст с рамкой.
+            screen.set_class(size.width < 106, "compact-terminal")
+            warnings = screen.query(TerminalSizeWarning)
+            if not warnings:
+                # В том числе встроенные экраны Textual, например Ctrl+P.
+                screen.call_after_refresh(self._ensure_terminal_size_warning, screen)
+            for warning in warnings:
+                warning.update_size(size)
+        if changed:
+            self.refresh_bindings()
+            if not too_small:
+                self.call_after_refresh(self._restore_terminal_size_focus)
+
+    def _ensure_terminal_size_warning(self, screen: Screen) -> None:
+        if screen.is_mounted and screen in self.screen_stack and not screen.query(TerminalSizeWarning):
+            screen.mount(TerminalSizeWarning())
+
+    def _restore_terminal_size_focus(self) -> None:
+        if self._terminal_too_small:
+            return
+        focused = self._terminal_size_focus
+        self._terminal_size_focus = None
+        focus_chain = self.screen.focus_chain
+        if focused in focus_chain:
+            focused.focus(scroll_visible=False)
+        elif self.focused not in focus_chain:
+            self.set_focus(None)
+            self.screen.focus_next()
+
+    async def on_event(self, event: events.Event) -> None:
+        # Перехват до фокуса и priority-bindings модальных экранов: невидимые
+        # кнопки/выборы не получают ввод. Resize и события фокуса проходят.
+        if self._terminal_too_small and isinstance(event, (events.InputEvent, events.Paste)):
+            if isinstance(event, events.Key) and event.key == "ctrl+q":
+                self.exit()
+            event.stop()
+            event.prevent_default()
+            return
+        await super().on_event(event)
+
+    def poll_audio_errors(self) -> None:
+        errors = self.audio.drain_errors()
+        if errors:
+            self.notify("\n".join(errors[:3]), title="Звук", severity="warning", timeout=10)
+
+    async def on_unmount(self) -> None:
+        self.cancel_script_advance()
+        if self._skip_timer is not None:
+            self._skip_timer.stop()
+        await asyncio.to_thread(self.audio.close)
+
+    def on_app_blur(self) -> None:
+        self.stop_skipping()
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
+        if self._terminal_too_small:
+            event.stop()
+            return
         choice_bar = self.query_one("#choice-bar")
+        if event.list_view is not choice_bar.query_one(ListView):
+            return
         pending_choices = getattr(self, "pending_choices", None)
         if choice_bar.has_class("hidden") or not pending_choices:
             return
@@ -1163,6 +1417,7 @@ class TerminalSummer(App):
         if choice is None:
             return
 
+        self.stop_skipping()
         self.script.select_choice(choice)
 
         # Очищаем pending_choices до продолжения сценария.
@@ -1185,6 +1440,11 @@ class TerminalSummer(App):
 
     def action_log(self) -> None:
         """Открытие меню истории"""
+        if self._credits is not None:
+            return
+        self.stop_skipping()
+        if not self.query_one("#endings-menu").has_class("hidden"):
+            return
         log_menu = self.query_one("#log-menu")
         novel_menu = self.query_one("#novel-menu")
         novel_window = self.query_one("#novel-window")
@@ -1211,18 +1471,19 @@ class TerminalSummer(App):
 
     def action_toggle_interface(self) -> None:
         """Показывает или скрывает интерфейс новеллы, оставляя сцену видимой."""
+        self.stop_skipping()
         if not hasattr(self, "script"):
             return
 
         main_menu = self.query_one("#main-menu")
         choice_bar = self.query_one("#choice-bar")
         blocked_menus = (
-            self.query_one("#release-end"),
             self.query_one("#log-menu"),
             self.query_one("#pause-menu"),
             self.query_one("#settings-menu"),
             self.query_one("#save-menu"),
             self.query_one("#gallery-menu"),
+            self.query_one("#endings-menu"),
         )
         if (
             not main_menu.has_class("hidden")
@@ -1249,8 +1510,7 @@ class TerminalSummer(App):
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
-        if not self.query_one("#release-end").has_class("hidden"):
-            return
+        self.stop_skipping()
         # Preload временно скрывает игровой интерфейс и затем самостоятельно
         # восстанавливает его. Не позволяем Escape открыть PauseMenu под
         # полноэкранным оверлеем и получить два конкурирующих состояния UI.
@@ -1267,10 +1527,21 @@ class TerminalSummer(App):
         choice_bar = self.query_one("#choice-bar")
         log_menu = self.query_one("#log-menu")
 
+        if not log_menu.has_class("hidden"):
+            self.action_log()
+            return
+        if not settings_menu.has_class("hidden"):
+            self.action_open_settings()
+            return
+
         # Escape закрывает сохранения и возвращает пользователя туда, откуда
         # меню было открыто: в главное меню или в окно новеллы.
         if not save_menu.has_class("hidden"):
             self.close_save_menu()
+            return
+
+        if not self.query_one("#endings-menu").has_class("hidden"):
+            self.action_open_endings()
             return
 
         # Галерея всегда открывается из главного меню.
@@ -1279,44 +1550,59 @@ class TerminalSummer(App):
             return
         
 
-        if main_menu.has_class("hidden") and gallery_menu.has_class("hidden") and save_menu.has_class("hidden"): # Если НЕ открыто главное меню
-            # Если открыто из главного меню ИЛИ НЕ скрыто окно выбора И окно истории
-            if settings_menu.has_class("open-from-menu") or not (choice_bar.has_class("hidden") and log_menu.has_class("hidden")):
-                pass # Пропуск
+        if not main_menu.has_class("hidden") or not choice_bar.has_class("hidden"):
+            return
+        if pause_menu.has_class("hidden"):
+            self.set_game_paused(True)
+            novel_menu.add_class("hidden")
+            novel_window.add_class("hidden")
+            pause_menu.remove_class("hidden")
+            self.query_one("#btn-continue", Button).focus()
+        else:
+            self.set_game_paused(False)
+            pause_menu.add_class("hidden")
+            novel_menu.remove_class("hidden")
+            novel_window.remove_class("hidden")
+            self.sync_text_mode_display()
+            self.query_one("#btn-next", Button).focus()
 
-            elif settings_menu.has_class("hidden"): # Если НЕ открыто меню настроек
-                # Переключение видимости элементов
-                if pause_menu.has_class("hidden"):
-                    self.set_game_paused(True)
-                    # Cкрытие диологового окна, кнопок перемотки и задника
-                    novel_menu.add_class("hidden")
-                    novel_window.add_class("hidden")
+    def start_menu_music(self) -> None:
+        """Запускает фон меню один раз, не перезапуская его в дочерних разделах."""
+        if self._menu_music_active or hasattr(self, "script"):
+            return
+        self.audio.play_menu(MENU_MUSIC_KEY)
+        self._menu_music_active = True
 
-                    # Показ меню паузы
-                    pause_menu.remove_class("hidden")
+    def start_music_preview(self, key, *, repeat=False):
+        self._menu_music_active = False
+        self.audio.start_preview(key, repeat=repeat)
 
-                    # Фокус на первую кнопку в меню паузы
-                    self.query_one("#btn-continue", Button).focus()
-                else:
-                    self.set_game_paused(False)
-                    # Выключаем паузу: скрытие меню паузы
-                    pause_menu.add_class("hidden")
+    def leave_music_preview(self):
+        if self.audio.music_status()["owner"] == "preview":
+            self.audio.stop_preview()
+            self.start_menu_music()
 
-                    # Показ диологового окна, кнопок перемотки и задника
-                    novel_menu.remove_class("hidden")
-                    novel_window.remove_class("hidden")
-                    self.sync_text_mode_display()
-
-                    # Возвращаем фокус на кнопку "Вперёд" в игровом меню 
-                    self.query_one("#btn-next", Button).focus()
-            else:
-                # Escape и кнопка «Назад» должны одинаково очищать источник
-                # открытия настроек и восстанавливать игровой интерфейс.
-                self.action_open_settings()
-        else: pass # Не открывать в главном меню
+    def switch_gallery_tab(self, mode):
+        if mode != "music":
+            self.leave_music_preview()
+        self.gallery_mode = mode
+        self.query_one("#bg-cg-gallery").set_class(mode == "music", "hidden")
+        self.query_one(GalleryMenuBottomBtns).set_class(mode == "music", "hidden")
+        room = self.query_one(MusicRoom)
+        room.set_class(mode != "music", "hidden")
+        for tab in ("music", "cg", "bg"):
+            self.query_one(f"#btn-gallery-{tab}", Button).variant = "primary" if tab == mode else "default"
+        if mode == "music":
+            self.query_one(GalleryMenuMidBtns).border_title = "Музыка"
+            room.query_one("#music-list", ListView).focus()
+            room.update_player()
+        else:
+            self.load_gallery_images()
+            self.update_gallery_display()
 
     def action_open_menu(self) -> None:
         """Открытие главного меню"""
+        self.stop_skipping()
         pause_menu = self.query_one("#pause-menu")
         settings_menu = self.query_one("#settings-menu")
         main_menu = self.query_one("#main-menu")
@@ -1333,6 +1619,7 @@ class TerminalSummer(App):
 
             # Показ главного меню
             main_menu.remove_class("hidden")
+            self.start_menu_music()
 
             # Фокус на кнопке "Начать игру"
             self.query_one("#btn-start-game", Button).focus()
@@ -1341,20 +1628,9 @@ class TerminalSummer(App):
             main_menu.add_class("hidden")
             self.query_one(Footer).remove_class("hidden")
 
-    def show_release_end(self) -> None:
-        """Останавливает сюжет перед загрузкой четвёртого дня."""
-        self.set_game_paused(True)
-        for widget_id in (
-            "main-menu", "novel-menu", "novel-window", "pause-menu",
-            "settings-menu", "save-menu", "choice-bar", "log-menu", "gallery-menu",
-        ):
-            self.query_one(f"#{widget_id}").add_class("hidden")
-        self.query_one(Footer).add_class("hidden")
-        self.query_one("#release-end").remove_class("hidden")
-        self.query_one("#btn-release-end-menu", Button).focus()
-
     def action_open_settings(self) -> None:
         """Открытие меню настроек"""
+        self.stop_skipping()
         settings_menu = self.query_one("#settings-menu")
         pause_menu = self.query_one("#pause-menu")
         main_menu = self.query_one("#main-menu")
@@ -1407,6 +1683,7 @@ class TerminalSummer(App):
 
     def action_open_gallery(self) -> None:
         """Открытие меню галереи"""
+        self.stop_skipping()
         main_menu = self.query_one("#main-menu")
         gallery_menu = self.query_one("#gallery-menu")
 
@@ -1422,17 +1699,16 @@ class TerminalSummer(App):
             self.query_one("#btn-close-gallery", Button).focus()
 
             # Загружаем иллюстрации
-            self.gallery_mode = "cg"
             self.gallery_size = "150"
             self.gallery_index = 0
-            self.load_gallery_images()
-            self.update_gallery_display()
+            self.switch_gallery_tab("cg")
 
             # Стильи кнопок при открытии 
             self.query_one("#btn-small-gallery", Button).variant = "default"
             self.query_one("#btn-medium-gallery", Button).variant = "warning"
             self.query_one("#btn-large-gallery", Button).variant = "default"
         else:
+            self.leave_music_preview()
             # Скрываем меню галереи
             gallery_menu.add_class("hidden")
 
@@ -1441,6 +1717,24 @@ class TerminalSummer(App):
             #main_menu.remove_class("hidden")
 
 
+    def action_open_endings(self) -> None:
+        """Самостоятельное меню только из главного экрана, без изменения аудио."""
+        self.stop_skipping()
+        menu = self.query_one(EndingsMenu)
+        main_menu = self.query_one("#main-menu")
+        if menu.has_class("hidden"):
+            if main_menu.has_class("hidden"):
+                return
+            main_menu.add_class("hidden")
+            self.query_one(Footer).add_class("hidden")
+            menu.remove_class("hidden")
+            menu.refresh_progress()
+            menu.query_one(EndingsList).focus()
+        else:
+            menu.add_class("hidden")
+            main_menu.remove_class("hidden")
+            self.query_one("#btn-achievements", Button).focus()
+
     # ============ Сохранения ============
     def is_savable_game_state(self) -> bool:
         """Проверка: можно ли сохраняться в текущем состоянии.
@@ -1448,7 +1742,7 @@ class TerminalSummer(App):
         Запрещает сохранение во время анимации текста, блокировки ввода,
         показа меню выбора или отсутствия запущенного сценария.
         """
-        if not self.query_one("#release-end").has_class("hidden"):
+        if self._terminal_too_small or self._credits is not None:
             return False
         if self._text_animating:
             return False
@@ -1458,7 +1752,9 @@ class TerminalSummer(App):
             return False
         if self._next_scene_in_progress:
             return False
-        if not hasattr(self, "script") or not self.script:
+        if not hasattr(self, "script") or not self.script or self.script.finished:
+            return False
+        if self.script.failed or self.script.has_diagnostic:
             return False
         if not self.query_one("#choice-bar").has_class("hidden"):
             return False
@@ -1466,6 +1762,7 @@ class TerminalSummer(App):
 
     def open_save_menu(self, opened_from: str) -> None:
         """Открытие меню сохранений"""
+        self.stop_skipping()
         save_menu = self.query_one("#save-menu")
         pause_menu = self.query_one("#pause-menu")
         main_menu = self.query_one("#main-menu")
@@ -1511,6 +1808,7 @@ class TerminalSummer(App):
 
     def close_save_menu(self) -> None:
         """Закрытие меню сохранений"""
+        self.stop_skipping()
         save_menu = self.query_one("#save-menu")
         save_menu.add_class("hidden")
 
@@ -1544,13 +1842,23 @@ class TerminalSummer(App):
 
             save_data = all_saves.get(save_id)
             if save_data:
+                save_data = save_data if isinstance(save_data, dict) else {"error": "Повреждённое сохранение"}
                 game_state = save_data.get("game_state", {})
+                game_state = game_state if isinstance(game_state, dict) else {}
                 dialogue = game_state.get("dialogue", {})
+                dialogue = dialogue if isinstance(dialogue, dict) else {}
                 speaker = dialogue.get("speaker", "")
+                speaker = speaker if isinstance(speaker, str) else ""
                 text = dialogue.get("text", "")
+                text = text if isinstance(text, str) else "Повреждённое сохранение"
+                error = save_data.get("error")
+                if error is not None:
+                    text = error if isinstance(error, str) else "Повреждённое сохранение"
+                speaker, text = plain_save_text(speaker), plain_save_text(text)
                 timestamp = save_data.get("timestamp", "")
+                timestamp = timestamp if isinstance(timestamp, str) else ""
 
-                # Обрезаем текст до 5 слов
+                # Превью не исполняет разметку из внешнего JSON.
                 words = text.split()
                 if len(words) > 6:
                     short_text = " ".join(words[:6]) + "..."
@@ -1565,7 +1873,7 @@ class TerminalSummer(App):
                 else:
                     label = "Пусто"
 
-                btn.label = f"{label}\n{timestamp}"
+                btn.label = Text(f"{label}\n{timestamp}")
                 btn.remove_class("save-slot-empty")
                 btn.add_class("save-slot-filled")
             else:
@@ -1632,13 +1940,51 @@ class TerminalSummer(App):
         slot_index = int(save_menu.selected_slot.split("-")[-1])
         page = save_menu.current_page
 
-        delete_save(page, slot_index)
+        try:
+            delete_save(page, slot_index)
+        except OSError as exc:
+            self._show_load_error(str(exc))
+            return
         save_menu.all_saves = get_all_saves()
         save_menu.selected_slot = None
         self.update_save_menu_display()
 
+    def _show_load_error(self, detail: str) -> None:
+        self.sub_title = f"[Load error] {detail}"
+        self.notify(detail, title="Ошибка загрузки", severity="error", timeout=8)
+
+    def _offer_outdated_save(self, page: int, slot: int) -> None:
+        if isinstance(self.screen, OutdatedSaveDialog):
+            return
+        path = _save_path(page, slot)
+        try:
+            signature = hashlib.sha256(path.read_bytes()).digest()
+        except OSError:
+            signature = None
+
+        def confirmed(remove: bool) -> None:
+            if not remove:
+                return
+            try:
+                if signature is None or hashlib.sha256(path.read_bytes()).digest() != signature:
+                    raise ValueError("Слот изменился; сохранение не удалено")
+                delete_save(page, slot)
+            except (OSError, ValueError) as exc:
+                self._show_load_error(str(exc))
+                return
+            menu = self.query_one("#save-menu")
+            menu.all_saves = get_all_saves()
+            if menu.current_page == page and menu.selected_slot == f"save-slot-{slot}":
+                menu.selected_slot = None
+            self.update_save_menu_display()
+
+        self.push_screen(OutdatedSaveDialog(id="outdated-save"), confirmed)
+
     def load_selected_save(self) -> None:
         """Загрузка выбранного сохранения"""
+        # Повторное нажатие, уже стоящее в очереди, не обрабатывается под модальным окном.
+        if isinstance(self.screen, OutdatedSaveDialog):
+            return
         save_menu = self.query_one("#save-menu")
         if not save_menu.selected_slot:
             return
@@ -1646,14 +1992,21 @@ class TerminalSummer(App):
         slot_index = int(save_menu.selected_slot.split("-")[-1])
         page = save_menu.current_page
 
-        game_state = load_game_state(page, slot_index)
+        try:
+            game_state = load_game_state(page, slot_index)
+        except (OSError, ValueError, UnicodeError) as exc:
+            self._show_load_error(str(exc))
+            return
         if game_state is None:
             return
         if not isinstance(game_state, dict):
-            self.sub_title = "[Load error] Invalid game state"
+            self._show_load_error("Invalid game state")
             return
-        if game_state.get("save_format") != 3:
-            self.sub_title = "[Load error] Unsupported save format; expected 3"
+        version = game_state.get("save_format")
+        if type(version) is not int or version != 3:
+            self._show_load_error("Unsupported save format; expected 3")
+            if version is None or (type(version) is int and version < 3):
+                self._offer_outdated_save(page, slot_index)
             return
 
         variables = game_state.get("variables", {})
@@ -1664,10 +2017,19 @@ class TerminalSummer(App):
             isinstance(section, dict)
             for section in (variables, scene, sprites_data, dialogue)
         ):
-            self.sub_title = "[Load error] Invalid save section"
+            self._show_load_error("Invalid save section")
             return
         if not isinstance(variables.get("state"), dict):
-            self.sub_title = "[Load error] Invalid script variables"
+            self._show_load_error("Invalid script variables")
+            return
+        from script_parser import normalize_script_state
+        try:
+            restored_variables = normalize_script_state(variables["state"])
+            restored_ending_dates = normalize_ending_dates(game_state.get("ending_dates", {}), restored_variables)
+            restored_audio = self.audio.validate_snapshot(game_state.get("audio"))
+            scene, sprites_data, dialogue = validate_save_view(game_state)
+        except (TypeError, ValueError) as exc:
+            self._show_load_error(str(exc))
             return
 
         # До изменения текущей игры полностью проверяем файл и runtime-state.
@@ -1675,28 +2037,34 @@ class TerminalSummer(App):
         # повторно выполнить уже начисленные поинты.
         script_runtime = game_state.get("script", {})
         if not isinstance(script_runtime, dict):
-            self.sub_title = "[Load error] Invalid script runtime"
+            self._show_load_error("Invalid script runtime")
             return
         script_filename = script_runtime.get("filename", "")
-        if not script_filename:
-            self.sub_title = "[Load error] Save has no script filename"
+        if not isinstance(script_filename, str) or not script_filename:
+            self._show_load_error("Save has no script filename")
             return
-        if not Path(script_filename).is_absolute():
-            script_filename = str(self.ts_path / script_filename)
 
         try:
+            if not Path(script_filename).is_absolute():
+                script_filename = str(self.ts_path / script_filename)
             loaded_script = ScriptParser(script_filename, self)
             if not loaded_script.restore_runtime_state(script_runtime):
+                self._show_load_error(loaded_script.runtime_error)
+                if loaded_script.runtime_outdated:
+                    self._offer_outdated_save(page, slot_index)
                 return
-        except (OSError, TypeError, ValueError) as exc:
-            self.sub_title = f"[Load error] {exc}"
-            return
-
-        if Path(script_filename).stem.lower() == "day4":
-            self.show_release_end()
+            for sprite in sprites_data["active_sprites"].values():
+                built = self._build_sprite_png(sprite["show_line"])
+                if built is None:
+                    raise ValueError(f"Не удалось восстановить спрайт: {sprite['character']}")
+                sprite["image_path"] = str(built[1])
+        except (OSError, TypeError, ValueError, UnicodeError) as exc:
+            self._show_load_error(str(exc))
             return
 
         # Закрытие меню сохранений
+        from script_parser import get_persistent_state, update_persistent_state
+        previous_progress = get_persistent_state()
         self.close_save_menu()
 
         # Сброс текущего состояния
@@ -1704,9 +2072,14 @@ class TerminalSummer(App):
 
         # Восстановление состояния сценария.
         from script_parser import set_script_state
-        set_script_state(variables["state"])
+        set_script_state(restored_variables)
+        update_persistent_state(previous_progress)
         # Persistent-флаги не должны откатываться загрузкой старого слота.
         self.load_persistent_state()
+        merged_dates = merge_ending_dates(self.ending_dates, restored_ending_dates)
+        self.ending_dates = merged_dates
+        # Новые флаги могут прийти из старого save без дат.
+        self.save_persistent_state()
         self.update_script_header()
 
         # Восстановление сцены
@@ -1717,13 +2090,12 @@ class TerminalSummer(App):
         self.set_text_mode(scene.get("current_text_mode", "adv"))
 
         # Восстановление спрайтов
-        self.restore_active_sprites(
-            sprites_data.get("active_sprites", {}),
-            sprites_data.get("sprite_order_seq", 0),
-        )
+        self._active_sprites = sprites_data["active_sprites"]
+        self._sprite_order_seq = sprites_data["sprite_order_seq"]
 
         # Проверенный выше parser становится активным только после сброса.
         self.script = loaded_script
+        self.audio.restore(restored_audio)
 
         # Скрытие главного меню (если загрузка из главного меню)
         if save_menu.opened_from == "menu":
@@ -1782,7 +2154,7 @@ class TerminalSummer(App):
         text_bar = self.query_one("#text-bar", Widget)
         current_speaker = str(text_bar.border_title) if text_bar.border_title else ""
         current_text = text_bar.text if text_bar.text else ""
-        # speaker_id — CSS-класс персонажа (sl, un, dv и т.д.)
+        # speaker_id - CSS-класс персонажа (sl, un, dv и т.д.)
         speaker_classes = [cls for cls in text_bar.classes if cls != "text-bar"]
         speaker_id = speaker_classes[0] if speaker_classes else None
 
@@ -1799,6 +2171,8 @@ class TerminalSummer(App):
 
         game_state = {
             "save_format": 3,
+            "ending_dates": self.ending_dates.copy(),
+            "audio": self.audio.snapshot(),
             "script": script_runtime,
             "variables": {
                 "state": script_parser.get_script_state(),
@@ -1825,15 +2199,130 @@ class TerminalSummer(App):
 
         from datetime import datetime
         timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
-        save_game_state(page, slot_index, game_state, timestamp)
+        try:
+            save_game_state(page, slot_index, game_state, timestamp)
+        except (OSError, ValueError, TypeError) as exc:
+            self.notify(str(exc), title="Не удалось сохранить игру", severity="error")
+            return
 
         # Обновление отображения
         save_menu.all_saves = get_all_saves()
         self.update_save_menu_display()
 
     # ============ Функции - прочие ============
+    def on_key(self, event: events.Key) -> None:
+        # Обычное всплытие: Input сначала получает буквы сам. Binding нужен
+        # Footer, но не должен второй раз исполнить уже обработанное событие.
+        if event.key not in {"s", "ы", "S", "Ы"}:
+            return
+        event.stop()
+        event.prevent_default()
+        now = event.time
+        idle_for = now - self._skip_last_event_at
+        self._skip_last_event_at = max(now, self._skip_last_event_at)
+        if now <= self._skip_input_after or idle_for < 0.12:
+            return
+        self.toggle_skipping()
+
+    def _is_script_loading(self) -> bool:
+        return (
+            self._script_preload_task is not None
+            and not self._script_preload_task.done()
+        ) or not self.query_one("#script-loading").has_class("hidden")
+
+    def is_gameplay_context(self, *, allow_preload: bool = False) -> bool:
+        """Игровой контекст, независимо от печати/занятости parser-task."""
+        if (
+            not self.is_running
+            or not self.screen_stack
+            or not isinstance(getattr(self, "script", None), ScriptParser)
+            or not self.app_focus
+            or self.screen.id != "_default"
+            or self._game_paused
+            or self._terminal_too_small
+            or self._interface_hidden
+            or getattr(self, "pending_choices", None) is not None
+        ):
+            return False
+        if any(not self.query_one(selector).has_class("hidden") for selector in (
+            "#main-menu", "#pause-menu", "#log-menu", "#settings-menu",
+            "#save-menu", "#gallery-menu", "#endings-menu", "#choice-bar",
+        )):
+            return False
+        if self._is_script_loading():
+            return allow_preload
+        # NVL скрывает novel-window, а window hide задаёт invisible, не hidden.
+        return not self.query_one("#novel-menu").has_class("hidden")
+
+    def can_start_skipping(self) -> bool:
+        return self._credits is None and self.is_gameplay_context() and not (
+            self.script.failed or self.script.finished or self.script.has_diagnostic
+        )
+
+    def set_skipping(self, enabled: bool) -> None:
+        if not enabled:
+            self.stop_skipping()
+        elif not self.skipping and self.can_start_skipping():
+            self.skipping = True
+            self._skip_next_advance_at = _time.get_time() + 0.1
+            self._refresh_skip_binding()
+
+    def toggle_skipping(self) -> None:
+        self.set_skipping(not self.skipping)
+
+    def action_toggle_skipping(self) -> None:
+        self.toggle_skipping()
+
+    def stop_skipping(self) -> None:
+        """Не отменяет исполняемый DSL; отсекает ввод из старого контекста."""
+        self.skipping = False
+        self._skip_input_after = _time.get_time()
+        self._refresh_skip_binding()
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if self._terminal_too_small and action != "quit":
+            return False
+        if action == "toggle_skipping":
+            return self.skipping or self.can_start_skipping()
+        return super().check_action(action, parameters)
+
+    def _refresh_skip_binding(self) -> None:
+        if not self.is_running or not self.screen_stack:
+            return
+        available = self.skipping or self.can_start_skipping()
+        if available == self._skip_binding_available:
+            return
+        self._skip_binding_available = available
+        self.refresh_bindings()
+
+    def _skip_tick(self) -> None:
+        self._refresh_skip_binding()
+        if not self.skipping:
+            return
+        if self._credits is not None or not self.is_gameplay_context(allow_preload=True) or (
+            self.script.failed or self.script.finished or self.script.has_diagnostic
+        ):
+            self.stop_skipping()
+            return
+        if self._is_script_loading():
+            return
+        if self.skip_script_delay(automatic=True):
+            return
+        if self._input_blocked or self._text_animating:
+            return
+        if _time.get_time() >= self._skip_next_advance_at:
+            self._start_script_advance()
+
     async def key_space(self, event: events.Key) -> None:
         """Обработка пробела как перехода с фильтрацией ввода во время анимации."""
+        if (not self.query_one("#gallery-menu").has_class("hidden")
+                or not self.query_one("#endings-menu").has_class("hidden")):
+            return
+        if self._credits is not None:
+            self.action_skip_credits()
+            event.stop()
+            event.prevent_default()
+            return
         now = getattr(event, "time", None) or _time.get_time()
         idle_for = now - self._space_last_event_at
         self._space_last_event_at = now
@@ -1858,28 +2347,28 @@ class TerminalSummer(App):
     def _get_scene_image_path(self, category: str, scene_name: str) -> str | None:
         """Возвращает путь до файла фона/CG."""
         for ext in ("jpg", "jpeg", "png", "webp"):
-            candidate = self.ts_path / "game" / category / f"{scene_name}.{ext}"
+            candidate = self.ts_path / "images" / category / f"{scene_name}.{ext}"
             if candidate.exists():
                 return str(candidate)
         return None
 
     def _load_sprite_resources(self):
         """Ленивая загрузка resources.yaml для сборщика спрайтов."""
-        if self._sprite_resources_loaded:
-            return self._sprite_resources
-
-        self._sprite_resources_loaded = True
         resource_candidates = (
-            (self.ts_path / "resources.yaml", self.ts_path / "game"),
-            (Path("resources.yaml"), self.ts_path / "game"),
+            (self.ts_path / "resources.yaml", self.ts_path / "images"),
+            (Path("resources.yaml"), self.ts_path / "images"),
         )
         for candidate, assets_root in resource_candidates:
             if not candidate.exists():
                 continue
 
             try:
+                signature = (str(candidate.resolve()), _file_signature(candidate))
+                if signature == self._sprite_resources_signature:
+                    return self._sprite_resources
                 self._sprite_resources = load_sprite_resources_yaml(candidate)
                 self._sprite_assets_root = assets_root
+                self._sprite_resources_signature = signature
             except Exception as e:
                 self._sprite_resources = None
                 self.sub_title = f"Sprite resources error: {e}"
@@ -1892,29 +2381,12 @@ class TerminalSummer(App):
     @staticmethod
     def _sprite_position_factor(position: str | None) -> float:
         """Позиция спрайта по горизонтали."""
-        mapping = {
-            "fleft": 0.18,
-            "left": 0.30,
-            "cleft": 0.40,
-            "center": 0.50,
-            "cright": 0.60,
-            "right": 0.70,
-            "fright": 0.82,
-        }
-        key = (position or "center").strip().lower()
-        return mapping.get(key, 0.50)
+        return SPRITE_POSITIONS[normalize_sprite_position(position or "center")]
 
     @staticmethod
     def _sprite_size_scale(size_name: str | None) -> float:
         """Доп. масштаб из show size <...>."""
-        mapping = {
-            "normal": 1.0,
-            "small": 0.86,
-            "large": 1.12,
-            "big": 1.12,
-        }
-        key = (size_name or "normal").strip().lower()
-        return mapping.get(key, 1.0)
+        return SPRITE_SIZES[size_name or "normal"]
 
     def _sorted_active_sprites(self, active_sprites: dict | None = None) -> list[dict]:
         """Возвращает активные спрайты в порядке от заднего к переднему."""
@@ -1973,6 +2445,8 @@ class TerminalSummer(App):
                 order=int(sprite.get("order", 0)),
             )
             for sprite in self._sorted_active_sprites(active_sprites)
+            if self.settings.get("scene_filters_enabled", True)
+            or sprite.get("character") not in SCENE_FILTER_IDS
         )
         return SceneRenderSnapshot(
             category=category,
@@ -2054,7 +2528,7 @@ class TerminalSummer(App):
         if not snapshot.name or not snapshot.category:
             return Text("")
 
-        palette = Palettes.color if snapshot.style == "ANSI" else Palettes.ascii
+        composed = None
         try:
             if snapshot.category == "color":
                 colors = {
@@ -2071,7 +2545,7 @@ class TerminalSummer(App):
                 scene_path = self._get_scene_image_path(snapshot.category, snapshot.name)
                 if scene_path is None:
                     return Text.from_markup(
-                        f"[Файл не найден: TS/game/{snapshot.category}/{snapshot.name}.*]"
+                        f"[Файл не найден: TS/images/{snapshot.category}/{snapshot.name}.*]"
                     )
                 composed = self._load_rgba_cached(scene_path, snapshot.cache_epoch)
             for sprite in snapshot.sprites:
@@ -2118,16 +2592,17 @@ class TerminalSummer(App):
                 composed.alpha_composite(sprite_img, dest=(x, y))
                 sprite_img.close()
 
-            ansi_art = convert_img(
+            art = render_art(
                 composed,
                 width=snapshot.width,
+                style=snapshot.style,
                 alpha=not snapshot.sprites,
-                palette=palette,
             )
-            composed.close()
-            art = Text.from_ansi(ansi_art)
         except Exception as exc:
             art = Text.from_markup(f"[Ошибка сборки сцены со спрайтами: {exc}]")
+        finally:
+            if composed is not None:
+                composed.close()
 
         if snapshot.cache_epoch == self._cache_epoch:
             self._remember_render(snapshot.key, art)
@@ -2212,7 +2687,7 @@ class TerminalSummer(App):
         try:
             task.result()
         except Exception:
-            # Prefetch — оптимизация; ошибка не должна останавливать сценарий.
+            # Prefetch - оптимизация; ошибка не должна останавливать сценарий.
             pass
 
     def _schedule_snapshot_prefetch(
@@ -2289,7 +2764,8 @@ class TerminalSummer(App):
         self._prefetch_tasks.clear()
         with self._cache_lock:
             self._scene_render_cache.clear()
-            self._sprite_build_cache.clear()
+            self._asset_fingerprints.clear()
+            self._generated_validation.clear()
             for image, _ in self._decoded_image_cache.values():
                 image.close()
             self._decoded_image_cache.clear()
@@ -2362,6 +2838,10 @@ class TerminalSummer(App):
             raise
         finally:
             if generation == self._preload_generation:
+                if not self.skipping:
+                    # Запоздавшая S, введённая под оверлеем, не запускает skip
+                    # после прогрева. Активному режиму оставляем возможность stop.
+                    self._skip_input_after = _time.get_time()
                 overlay.add_class("hidden")
                 if self._loading_restore_novel:
                     novel_menu.remove_class("hidden")
@@ -2376,16 +2856,6 @@ class TerminalSummer(App):
         snapshot = self._make_scene_snapshot(category, name, {})
         if self._get_cached_render(snapshot.key) is None:
             self._render_scene_snapshot(snapshot)
-
-    def generate_scene_ansi(self, category: str, scene_name: str):
-        """Конвертирует только сцену (без спрайтов) в ANSI/ASCII."""
-        return self._render_scene_snapshot(
-            self._make_scene_snapshot(category, scene_name, {})
-        )
-
-    def generate_scene_with_sprites_ansi(self):
-        """Собирает сцену + активные спрайты и конвертирует в ANSI/ASCII."""
-        return self._render_scene_snapshot(self._capture_scene_snapshot())
 
     def show_sprite_from_script_line(self, show_line: str):
         """Собирает PNG спрайта из show-строки и обновляет активный набор спрайтов."""
@@ -2413,77 +2883,77 @@ class TerminalSummer(App):
 
         return None
 
+    def _asset_fingerprint(self, path: Path) -> str:
+        name = str(path.resolve())
+        signature = _file_signature(path)
+        with self._cache_lock:
+            cached = self._asset_fingerprints.get(name)
+            if cached is not None and cached[0] == signature:
+                self._asset_fingerprints.move_to_end(name)
+                return cached[1]
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if signature != _file_signature(path):
+            raise ValueError(f"Ассет изменился во время чтения: {path}")
+        with self._cache_lock:
+            self._asset_fingerprints[name] = (signature, digest)
+            self._asset_fingerprints.move_to_end(name)
+            while len(self._asset_fingerprints) > 2048:
+                self._asset_fingerprints.popitem(last=False)
+        return digest
+
+    def _valid_generated_sprite(self, path: Path) -> bool:
+        try:
+            signature = _file_signature(path)
+            with self._cache_lock:
+                if self._generated_validation.get(str(path)) == signature:
+                    return True
+            with Image.open(path) as image:
+                image.verify()
+            with self._cache_lock:
+                self._generated_validation[str(path)] = signature
+                self._generated_validation.move_to_end(str(path))
+                while len(self._generated_validation) > self._sprite_cache_limit:
+                    self._generated_validation.popitem(last=False)
+            return True
+        except (OSError, ValueError):
+            return False
+
     def _build_sprite_png(self, show_line: str, generation: int | None = None):
         """Собирает или получает из кэша PNG, не изменяя состояние сцены."""
+        if generation is not None and generation != self._preload_generation:
+            return None
         resources = self._load_sprite_resources()
         if not resources:
             return None
 
         try:
             request = parse_show_like(show_line)
-            cached_path = self._sprite_build_cache.get(show_line)
-            if cached_path and os.path.exists(cached_path):
-                out_path = Path(cached_path)
-            else:
-                digest = hashlib.sha256(
-                    f"sprite-v2\0{show_line}".encode("utf-8")
-                ).hexdigest()[:16]
-                runtime_dir = self._sprite_runtime_dir
+            resolved = resolve_sprite(resources, request, self._sprite_assets_root)
+            root = self._sprite_assets_root.resolve()
+            if any(not pick.absolute_path.resolve().is_relative_to(root) for pick in resolved.picks):
+                raise ValueError("Слой спрайта выходит за пределы TS/images")
+            layers = [(pick.layer_name, pick.part_name, str(pick.absolute_path.resolve()),
+                       self._asset_fingerprint(pick.absolute_path)) for pick in resolved.picks]
+            digest = hashlib.sha256(repr(("sprite-v3", show_line, layers)).encode("utf-8")).hexdigest()
+            runtime_dir = self._sprite_runtime_dir
+            try:
+                runtime_dir.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                temporary_root = Path("/tmp/opencode") if Path("/tmp/opencode").is_dir() else Path(tempfile.gettempdir())
+                runtime_dir = temporary_root / "terminal-summer-sprites/generated_runtime"
+                runtime_dir.mkdir(parents=True, exist_ok=True)
+            out_path = runtime_dir / f"{request.character}_{digest}.png"
+            if not self._valid_generated_sprite(out_path):
+                sprite_img = compose_layers(resolved.picks, request.extras.get("spritecolor"))
                 try:
-                    runtime_dir.mkdir(parents=True, exist_ok=True)
-                except Exception:
-                    runtime_dir = Path("/tmp/terminal-summer-sprites/generated_runtime")
-                    runtime_dir.mkdir(parents=True, exist_ok=True)
-                out_path = runtime_dir / f"{request.character}_{digest}.png"
-                if not out_path.exists():
-                    resolved = resolve_sprite(resources, request, self._sprite_assets_root)
-                    sprite_img = compose_layers(
-                        resolved.picks, request.extras.get("spritecolor")
-                    )
-                    try:
-                        sprite_img.save(out_path, format="PNG")
-                    finally:
-                        sprite_img.close()
-                if generation is None or generation == self._preload_generation:
-                    self._sprite_build_cache[show_line] = str(out_path)
-                    self._sprite_build_cache.move_to_end(show_line)
-                    while len(self._sprite_build_cache) > self._sprite_cache_limit:
-                        self._sprite_build_cache.popitem(last=False)
+                    with atomic_output(out_path) as target:
+                        sprite_img.save(target, format="PNG")
+                finally:
+                    sprite_img.close()
         except Exception as e:
             self.sub_title = f"Sprite build error: {e}"
             return None
         return request, out_path
-
-    def restore_active_sprites(
-        self,
-        saved_sprites: dict,
-        saved_order_seq: int,
-    ) -> None:
-        """Собирает спрайты из show-команд, не используя устаревший PNG-кэш."""
-        self.clear_active_sprites()
-        if not isinstance(saved_sprites, dict):
-            return
-
-        sprites = sorted(
-            (sprite for sprite in saved_sprites.values() if isinstance(sprite, dict)),
-            key=lambda sprite: sprite.get("order", 0),
-        )
-        for saved_sprite in sprites:
-            show_line = saved_sprite.get("show_line")
-            character = saved_sprite.get("character")
-            if isinstance(show_line, str) and show_line.startswith("show "):
-                self.show_sprite_from_script_line(show_line)
-                restored_sprite = self._active_sprites.get(character)
-                if restored_sprite is not None:
-                    for key in ("at", "size", "behind", "order"):
-                        if key in saved_sprite:
-                            restored_sprite[key] = saved_sprite[key]
-                continue
-
-        self._sprite_order_seq = max(
-            saved_order_seq if isinstance(saved_order_seq, int) else 0,
-            max((sprite.get("order", 0) for sprite in self._active_sprites.values()), default=0),
-        )
 
     def hide_sprite_by_id(self, character_id: str):
         """Удаляет персонажа со сцены."""
@@ -2498,36 +2968,48 @@ class TerminalSummer(App):
     def load_persistent_state(self) -> bool:
         """Загружает общие для всех прохождений сценарные флаги."""
         if not self.PERSISTENT_FILE.exists():
+            self._persistent_read_error = False
             return False
         try:
             with self.PERSISTENT_FILE.open("r", encoding="utf-8") as file:
                 state = json.load(file)
             from script_parser import update_persistent_state
 
-            update_persistent_state(state)
+            flags, dates = split_persistent_progress(state)
+            update_persistent_state(flags)
+            self.ending_dates = merge_ending_dates(self.ending_dates, dates)
+            self._persistent_read_error = False
             self.update_script_header()
             return True
         except (OSError, ValueError, TypeError) as exc:
+            self._persistent_read_error = True
             self.sub_title = f"[Persistent state error] {exc}"
             return False
+
+    def record_ending_unlock(self, flag: str) -> None:
+        """Вызывается только при сценарном переходе False → True, не при загрузке."""
+        from script_parser import ENDING_STATE_KEYS, get_persistent_state
+
+        if flag in ENDING_STATE_KEYS and get_persistent_state().get(flag) is True:
+            self._new_ending_flags.add(flag)
+            if flag not in self.ending_dates:
+                self.ending_dates[flag] = ending_unlock_time()
 
     def save_persistent_state(self) -> None:
         """Атомарно сохраняет persistent-флаги рядом с настройками."""
         from script_parser import get_persistent_state
 
         state = get_persistent_state()
-        temporary_path = self.PERSISTENT_FILE.with_suffix(".json.tmp")
+        if self.ending_dates:
+            state["ending_dates"] = self.ending_dates.copy()
         try:
-            self.PERSISTENT_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with temporary_path.open("w", encoding="utf-8") as file:
-                json.dump(state, file, indent=2, ensure_ascii=False)
-            temporary_path.replace(self.PERSISTENT_FILE)
+            if self._persistent_read_error:
+                _backup_invalid_json(self.PERSISTENT_FILE)
+            write_json_atomic(self.PERSISTENT_FILE, state)
+            self._persistent_read_error = False
         except OSError as exc:
             self.sub_title = f"[Persistent state error] {exc}"
-            try:
-                temporary_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+            self.notify(str(exc), title="Не удалось сохранить прогресс", severity="error")
 
     def update_script_header(self) -> None:
         """Обновляет Header согласно выбранным группам сценарных переменных."""
@@ -2548,31 +3030,82 @@ class TerminalSummer(App):
         )
 
     def load_settings(self):
-        """Загрузка настроек"""
-        if self.CONFIG_FILE.exists():
-            with self.CONFIG_FILE.open("r", encoding="utf-8") as f:
-                loaded_settings = json.load(f)
-            if isinstance(loaded_settings, dict):
-                self.settings = {
-                    **self.DEFAULT_SETTINGS,
-                    **loaded_settings,
-                }
-                if any(
-                    key not in loaded_settings for key in self.DEFAULT_SETTINGS
-                ):
-                    self.save_settings()
-        else:
+        """Дополняет старый config; ошибочный файл заменяет полными defaults."""
+        self._settings_read_error = False
+
+        def reject_constant(value):
+            raise ValueError(f"Недопустимое число в настройках: {value}")
+
+        def parse_float(value):
+            return finite_number(float(value), minimum=-float("inf"))
+
+        try:
+            if not self.CONFIG_FILE.exists():
+                self.settings = self.DEFAULT_SETTINGS.copy()
+                self.save_settings()
+                return
+            with self.CONFIG_FILE.open("r", encoding="utf-8") as source:
+                loaded = json.load(source, parse_constant=reject_constant, parse_float=parse_float)
+            if not isinstance(loaded, dict):
+                raise ValueError("Настройки должны быть JSON-объектом")
+            self.settings = {**self.DEFAULT_SETTINGS, **loaded}
+            for key in ("header", "header_lp_points", "header_flags", "scene_filters_enabled"):
+                if type(self.settings[key]) is not bool:
+                    raise ValueError(f"Некорректная настройка: {key}")
+            for key, choices in (("quality", ("50", "150", "200")),
+                                 ("text_speed", ("0", "0.01", "0.025", "0.04"))):
+                raw = self.settings[key]
+                if type(raw) in (int, float):
+                    value = next((choice for choice in choices if raw == float(choice)), None)
+                else:
+                    value = raw
+                if not isinstance(value, str) or value not in choices:
+                    raise ValueError(f"Некорректная настройка: {key}")
+                self.settings[key] = value
+            style = self.settings["style"]
+            if not isinstance(style, str) or style not in ART_STYLES:
+                raise ValueError("Некорректная настройка: style")
+            for key in AUDIO_DEFAULTS:
+                if key == "audio_muted":
+                    if type(self.settings[key]) is not bool:
+                        raise ValueError(f"Некорректная настройка: {key}")
+                else:
+                    self.settings[key] = finite_number(self.settings[key], maximum=1)
+            if self.settings != loaded:
+                self.save_settings()
+        except (OSError, ValueError, UnicodeError) as exc:
             self.settings = self.DEFAULT_SETTINGS.copy()
+            self._settings_read_error = True
             self.save_settings()
+            detail = ("Используются настройки по умолчанию; файл не удалось перезаписать."
+                      if self._settings_read_error else "Файл настроек сброшен к значениям по умолчанию.")
+            self.notify(f"{detail} {exc}", title="Ошибка настроек", severity="warning", timeout=10)
     
     def save_settings(self):
         """Сохранение настроек"""
-        self.CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with self.CONFIG_FILE.open("w", encoding="utf-8") as f:
-            json.dump(self.settings, f, indent=4)
+        try:
+            if self._settings_read_error:
+                _backup_invalid_json(self.CONFIG_FILE)
+            write_json_atomic(self.CONFIG_FILE, self.settings)
+            self._settings_read_error = False
+        except (OSError, ValueError, TypeError) as exc:
+            self.notify(str(exc), title="Не удалось сохранить настройки", severity="error")
+
+    def sync_art_style_buttons(self) -> None:
+        """Ровно одна кнопка соответствует выбранному стилю кадра."""
+        for button_id, style in SettingASCIIorANSI.STYLE_BUTTONS.items():
+            self.query_one(f"#{button_id}", Button).variant = (
+                "primary" if self.settings["style"] == style else "default"
+            )
+
+    def sync_scene_filter_buttons(self) -> None:
+        enabled = self.settings["scene_filters_enabled"]
+        self.query_one("#btn-scene-filters-on", Button).variant = "success" if enabled else "default"
+        self.query_one("#btn-scene-filters-off", Button).variant = "default" if enabled else "error"
 
     def apply_settings(self):
         """Применение настроек при старте"""
+        self.apply_audio_settings()
         # Header
         if self.settings["header"]:
             self.query_one("Header").remove_class("hidden")
@@ -2594,12 +3127,8 @@ class TerminalSummer(App):
         elif quality == "200":
             self.query_one("#btn-large", Button).variant = "success"
 
-        # ASCIIorANSI
-        style = self.settings["style"]
-        if style == "ANSI":
-            self.query_one("#btn-ANSI", Button).variant = "primary"
-        elif style == "ASCII":
-            self.query_one("#btn-ASCII", Button).variant = "primary"
+        self.sync_art_style_buttons()
+        self.sync_scene_filter_buttons()
 
         # TextSpeed
         text_speed = self.settings["text_speed"]
@@ -2613,58 +3142,62 @@ class TerminalSummer(App):
         elif text_speed == "0":
             self.query_one("#btn-speed-instantly", Button).variant = "primary"
 
-    def load_gallery_images(self):
-        """Загружает список JPG/PNG файлов из папки TS/game/bg или TS/game/cg"""
-        # Папка с изображениями
-        folder = self.ts_path / "gallery" / self.gallery_mode
+    def apply_audio_settings(self) -> None:
+        self.settings.update(normalize_audio_settings(self.settings))
+        self.audio.set_settings(self.settings)
+        for group in SettingAudio.GROUPS:
+            self.query_one(f"#audio-{group}-level", Label).update(f"{round(self.settings['audio_' + group] * 100)}%")
+        self.query_one("#btn-audio-mute", Button).variant = "error" if self.settings["audio_muted"] else "default"
+        self.query_one(MusicRoom).update_player()
 
-        previous_filename = (
-            self.gallery_images[self.gallery_index]
+    def load_gallery_images(self):
+        """Загружает явно выбранные изображения из общего каталога TS/images."""
+        previous_id = (
+            self.gallery_images[self.gallery_index].id
             if self.gallery_images and 0 <= self.gallery_index < len(self.gallery_images)
             else None
         )
-
-        if os.path.exists(folder):
-            # Берём JPG/PNG
-            self.gallery_images = sorted([
-                f for f in os.listdir(folder)
-                if f.lower().endswith((".jpg", ".jpeg", ".png"))
-            ])
-        else:
+        try:
+            if self._gallery_catalog is None:
+                self._gallery_catalog = load_gallery_catalog(
+                    get_resource_path("gallery_manifest.json")
+                )
+            self.gallery_images = list(self._gallery_catalog[self.gallery_mode])
+            self._gallery_error = None
+        except (OSError, ValueError, KeyError) as exc:
             self.gallery_images = []
-
-        # Восстанавливаем индекс, если файл существует
-        if previous_filename in self.gallery_images:
-            self.gallery_index = self.gallery_images.index(previous_filename)
-        else:
-            self.gallery_index = 0
+            self._gallery_error = f"Ошибка каталога галереи: {exc}"
+        self.gallery_index = next(
+            (index for index, image in enumerate(self.gallery_images) if image.id == previous_id),
+            0,
+        )
 
     def update_gallery_display(self):
-        """Конвертация JPG в ANSI арт и обновление отображения"""
+        """Конвертация общего изображения в ANSI арт и обновление отображения."""
+        static = self.query_one("#ansi-content", Static)
         if not self.gallery_images:
-            self.query_one("#bg-cg-gallery", Static).update("[Ничего не найдено]")
-            self.query_one(GalleryMenuMidBtns).border_title = "Пусто"
+            static.update(Text(self._gallery_error or "[Ничего не найдено]"))
+            self.query_one(GalleryMenuMidBtns).border_title = "Ошибка" if self._gallery_error else "Пусто"
             return
 
-        filename = self.gallery_images[self.gallery_index]
-        image_path = self.ts_path / "gallery" / self.gallery_mode / filename
-        img = Image.open(image_path)
-
-        # gallery_size = "50" / "150" / "200"
-        width = int(self.gallery_size)
-
+        image = self.gallery_images[self.gallery_index]
         try:
-            ansi_art = convert_img(img, width=width, alpha=True, palette=Palettes.color)
-        except Exception as e:
-            ansi_art = f"[Ошибка конвертации изображения: {e}]"
-
-        static = self.query_one("#ansi-content", Static)
-        static.update(Text.from_ansi(ansi_art))
-
-        self.query_one(GalleryMenuMidBtns).border_title = os.path.splitext(filename)[0]
+            image_path = resolve_gallery_image(self.ts_path / "images", image)
+            with Image.open(image_path) as img:
+                art = render_art(img, width=int(self.gallery_size), alpha=True, style="ANSI")
+            static.update(art)
+        except FileNotFoundError:
+            static.update(Text(f"[Ошибка изображения {image.id}: файл не найден]"))
+        except PermissionError:
+            static.update(Text(f"[Ошибка изображения {image.id}: нет доступа к файлу]"))
+        except OSError:
+            static.update(Text(f"[Ошибка изображения {image.id}: не удалось прочитать файл изображения]"))
+        except Exception:
+            static.update(Text(f"[Ошибка изображения {image.id}: не удалось загрузить или преобразовать изображение в ANSI-арт]"))
+        self.query_one(GalleryMenuMidBtns).border_title = image.id
 
     async def update_current_scene_art(self):
-        """Перерисовывает текущий арт при смене качества."""
+        """Перерисовывает текущий арт при смене размера или стиля."""
         if not hasattr(self, "current_scene") or not self.current_scene:
             return
         if not hasattr(self, "current_scene_category") or not self.current_scene_category:
@@ -2681,8 +3214,102 @@ class TerminalSummer(App):
             else:
                 self._preload_after_settings = True
 
+    def start_credits(self, script: ScriptParser, duration: float) -> None:
+        from script_parser import get_script_state
+
+        ending = current_ending(get_script_state())
+        timeline = CreditsTimeline(duration)
+        self._credit_ending = ending
+        self._credits_script = script
+        self._credits = timeline
+        self.stop_skipping()
+        self._interface_hidden = False
+        self.set_text_mode("adv")
+        menu = self.query_one("#novel-menu")
+        menu.remove_class("hidden", "invisible")
+        menu.add_class("credits-mode")
+        menu.screen.add_class("rolling-credits")
+        self.show_credit_page()
+        # Скрытые сюжетные кнопки больше не должны удерживать фокус.
+        self.set_focus(None)
+
+    def show_credit_page(self) -> None:
+        if self._credits is None:
+            return
+        bar = self.query_one("#text-bar", TextBar)
+        bar.remove_class(*list(bar.classes))
+        bar.border_title = ""
+        bar.text = CREDIT_PAGES[self._credits.page]
+        bar.scroll_home(animate=False)
+        bar.refresh()
+
+    async def wait_credit_pause(
+        self, script: ScriptParser, seconds: float, *, skippable: bool = True
+    ) -> None:
+        timeline = self._credits
+        remaining = seconds
+        while (remaining > 1e-6 and timeline is not None
+               and self._credits_script is script and not script.credits_skipped):
+            page = timeline.page
+            delay = timeline.next_delay(remaining)
+            await self.wait_script_delay(
+                delay, "pause" if skippable else "hard_pause", skippable=skippable
+            )
+            if (self._credits is not timeline or self._credits_script is not script
+                    or script.credits_skipped):
+                return
+            timeline.advance(delay)
+            remaining -= delay
+            if timeline.page != page:
+                self.show_credit_page()
+
+    def action_skip_credits(self) -> None:
+        if self._credits_script is None or not self.is_gameplay_context():
+            return
+        script = self._credits_script
+        if script.skip_credits():
+            self.stop_skipping()
+            self.cancel_script_delay()
+            if not self._next_scene_in_progress:
+                self._start_script_advance()
+
+    def stop_credits(self) -> None:
+        self._credits = None
+        self._credits_script = None
+        self._credit_ending = None
+        menu = self.query_one("#novel-menu")
+        menu.remove_class("credits-mode")
+        menu.screen.remove_class("rolling-credits")
+
+    def finish_game(self, script: ScriptParser) -> None:
+        if self._credits_script is not script:
+            return
+        ending = self._credit_ending
+        newly_unlocked = ending.flag in self._new_ending_flags
+        self._new_ending_flags.discard(ending.flag)
+        self.stop_skipping()
+        self.stop_credits()
+        self.query_one("#novel-menu").add_class("hidden")
+        self.query_one(Footer).add_class("hidden")
+        self._menu_music_active = False
+        self.audio.reset()
+        self.push_screen(
+            EndingResult(ending, newly_unlocked=newly_unlocked, date=self.ending_dates.get(ending.flag)),
+            self.return_from_ending,
+        )
+
+    def return_from_ending(self, result=None) -> None:
+        self.reset_game_view()
+        self.action_open_menu()
+
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
+        self.stop_credits()
+        self._new_ending_flags.clear()
+        self._menu_music_active = False
+        self.audio.reset()
+        self.query_one("#gallery-menu").add_class("hidden")
+        self.query_one("#endings-menu").add_class("hidden")
         self.set_game_paused(False)
         self.cancel_script_advance()
         # Отменённый парсер больше не считается активным: его finally-блоки
@@ -2744,7 +3371,7 @@ class TerminalSummer(App):
 
     def can_advance_scene(self) -> bool:
         """Можно ли переходить к следующей строке по пользовательскому вводу."""
-        if self._next_scene_in_progress:
+        if self._terminal_too_small or self._next_scene_in_progress:
             return False
         if self._text_animating:
             return False
@@ -2789,6 +3416,8 @@ class TerminalSummer(App):
 
     async def _advance_script_line(self) -> None:
         """Запрашивает выполнение следующей строки без блокировки очереди UI."""
+        if self._credits is not None:
+            return
         if self.skip_script_delay():
             return
         self._start_script_advance()
@@ -2803,6 +3432,8 @@ class TerminalSummer(App):
             return False
 
         self._next_scene_in_progress = True
+        # Любой успешный запрос, включая ручной, отодвигает следующий skip-шаг.
+        self._skip_next_advance_at = _time.get_time() + 0.1
         task = asyncio.create_task(self.script.next_line())
         self._script_advance_task = task
         task.add_done_callback(self._on_script_advance_done)
@@ -2810,7 +3441,8 @@ class TerminalSummer(App):
 
     def _on_script_advance_done(self, task: asyncio.Task) -> None:
         """Освобождает переход после завершения только актуальной задачи."""
-        if self._script_advance_task is task:
+        is_current = self._script_advance_task is task
+        if is_current:
             self._script_advance_task = None
             self._next_scene_in_progress = False
 
@@ -2821,28 +3453,34 @@ class TerminalSummer(App):
             task.result()
         except Exception as exc:
             # Исключение уже извлечено из Task и не останется незамеченным.
-            self.sub_title = f"[Script error] {exc}"
+            if is_current:
+                self.script._report_script_error(str(exc))
 
     def set_game_paused(self, paused: bool) -> None:
         """Меняет состояние паузы и будит ожидающие сценарные задачи."""
         paused = bool(paused)
+        if paused:
+            self.stop_skipping()
         if self._game_paused == paused:
             return
         self._game_paused = paused
+        self._signal_game_pause_changed()
+
+    def _signal_game_pause_changed(self) -> None:
         previous_event = self._game_pause_changed_event
         self._game_pause_changed_event = asyncio.Event()
         previous_event.set()
 
     async def wait_until_game_resumed(self) -> None:
         """Не даёт сценарию и анимации текста идти под меню паузы."""
-        while self._game_paused:
+        while self._game_paused or self._terminal_too_small:
             pause_changed = self._game_pause_changed_event
             await pause_changed.wait()
 
     async def wait_script_delay(
         self, seconds: float, kind: str, *, skippable: bool = True
     ) -> bool:
-        """Ждёт сценарную задержку или её пропуск действием «Далее»."""
+        """Ждёт задержку; skippable ограничивает только ручное «Далее»."""
         if seconds <= 0:
             return False
 
@@ -2858,6 +3496,12 @@ class TerminalSummer(App):
 
         remaining = seconds
         try:
+            await self.wait_until_game_resumed()
+            if self.skipping and not self._is_script_loading():
+                await asyncio.sleep(0)
+                await self.wait_until_game_resumed()
+                if self.skipping:
+                    return True
             while remaining > 0:
                 await self.wait_until_game_resumed()
                 started_at = _time.get_time()
@@ -2897,13 +3541,14 @@ class TerminalSummer(App):
                 self._input_blocked = False
                 self._input_blocked_until = _time.get_time()
 
-    def skip_script_delay(self) -> bool:
-        """Завершает только активную сценарную задержку."""
+    def skip_script_delay(self, *, automatic: bool = False) -> bool:
+        """Завершает задержку; активный автопропуск разрешает и hard pause."""
         delay_event = self._script_delay_event
         if (
             self._game_paused
+            or self._terminal_too_small
             or delay_event is None
-            or not self._script_delay_skippable
+            or (not self._script_delay_skippable and not (automatic and self.skipping))
             or delay_event.is_set()
         ):
             return False
@@ -2925,6 +3570,7 @@ class TerminalSummer(App):
 
     def cancel_script_advance(self) -> None:
         """Отменяет старое выполнение сценария и его активную задержку."""
+        self.stop_skipping()
         task = self._script_advance_task
         self._script_advance_task = None
         self._next_scene_in_progress = False
@@ -2952,5 +3598,3 @@ class TerminalSummer(App):
 
 if __name__ == "__main__":
     main()
-    app = TerminalSummer()
-    app.run()
