@@ -17,6 +17,7 @@
 - [Технологии](#технологии)
 - [Требования](#требования)
 - [Использование](#использование)
+  - [Запуск из исходников](#запуск-из-исходников)
   - [Сборка](#сборка)
 - [FAQ](#faq)
 
@@ -55,7 +56,32 @@ Terminal-Summer-Windows.exe
 При отсутствии необходимых ресурсов приложение автоматически скачает и распакует архив ассетов в папку рядом с бинарником.
 
 
-Или собрать самому:
+Вместо готового бинарника можно запустить игру из исходников или собрать её самостоятельно.
+
+### Запуск из исходников
+Для запуска без сборки достаточно зависимостей из `requirements.txt`. PyInstaller и инструменты разработки не нужны.
+
+#### Linux:
+```bash
+git clone https://github.com/dydojopka/Terminal-Summer.git
+cd Terminal-Summer
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
+python3 src/main.py
+```
+
+#### Windows (cmd.exe):
+```bat
+git clone https://github.com/dydojopka/Terminal-Summer.git
+cd Terminal-Summer
+python -m venv .venv
+.venv\Scripts\activate.bat
+python -m pip install -r requirements.txt
+python src\main.py
+```
+
+При отсутствии необходимых ресурсов приложение автоматически скачает и распакует архив ассетов в папку `TS` в корне проекта. При повторном запуске достаточно активировать созданное окружение и выполнить команду запуска из корня проекта.
 
 ### Сборка
 `requirements.txt` содержит зависимости для запуска игры из исходников. Для сборки используйте `requirements-dev.txt`: он уже включает `requirements.txt`, а также PyInstaller и инструменты разработки Textual. Устанавливать оба файла отдельно не нужно.
