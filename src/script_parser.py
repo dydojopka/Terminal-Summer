@@ -890,9 +890,8 @@ class ScriptParser:
         choice_bar = self.app.query_one("#choice-bar")
         list_view = choice_bar.query_one(ListView)
 
-        list_view.clear()
-        for opt in options:
-            list_view.append(ListItem(Label(opt)))
+        await list_view.clear()
+        await list_view.extend(ListItem(Label(opt)) for opt in options)
 
         # сохранить варианты в app
         self.app.pending_choices = options
@@ -906,14 +905,6 @@ class ScriptParser:
         if self.app.current_text_mode == "nvl":
             self.app.query_one("#novel-window").remove_class("hidden")
             self.app.query_one("#novel-menu").add_class("hidden")
-
-        # дождаться одного кадра, чтобы Textual успел пересчитать фокус
-        await asyncio.sleep(0.01)
-
-        # изменение высоты окна от кол-ва элементов
-        rows = len(list_view.children)
-        row_height = 3
-        list_view.styles.height = max(1, rows) * row_height
 
         # найти ListView и перевести на него фокус 
         if list_view.children:
@@ -990,11 +981,7 @@ class ScriptParser:
             text = re.sub(r'<b>(.*?)</b>', r'[bold]\1[/bold]', text, flags=re.S)
 
             if is_nvl:
-                if widget.text:
-                    widget.text += "\n"
-                if speaker:
-                    widget.text += f"[bold]{speaker}:[/bold] "
-                widget.refresh()
+                widget.append_nvl_paragraph(speaker, id_to_set)
 
             # Разбиваем текст на части по <w> с паузами
             parts = text.split("<w>")

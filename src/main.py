@@ -251,7 +251,7 @@ def main():
 
 
 
-# Цвета персонажей в истории
+# Цвета имён персонажей в истории и NVL-тексте
 SPEAKER_NAME_COLORS = {
     "dreamgirl":   "rgb(192,192,192)",
     "sl":          "rgb(255,210,0)",
@@ -710,6 +710,16 @@ class TextBar(VerticalScroll):
     def text(self, value):
         self._text = value
         self._content.update(Text.from_markup(value))
+
+    def append_nvl_paragraph(self, speaker: str, speaker_id: str | None) -> None:
+        prefix = "\n" if self.text else ""
+        if speaker:
+            name = Text(
+                f"{speaker}:",
+                style=Style(bold=True, color=SPEAKER_NAME_COLORS.get(speaker_id or "")),
+            )
+            prefix += name.markup + " "
+        self.text += prefix
 
     async def animate_text(self, new_text, append=False):
         """Анимация текста, символ за символом

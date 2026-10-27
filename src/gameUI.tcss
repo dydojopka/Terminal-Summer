@@ -103,7 +103,7 @@ NovelWindow {
         max-height: 100%;
         margin: 0 2;
 
-        ListView { max-height: 100%; }
+        ListView { height: auto; max-height: 100%; }
 
         # Элементы в окне выбора
         Label {
