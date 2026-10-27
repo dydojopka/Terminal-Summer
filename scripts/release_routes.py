@@ -139,7 +139,7 @@ async def validate_release_routes(ts_dir: Path) -> list[str]:
                 if next(choices, None) is not None or parser.menu_digest.hexdigest() != route["menu_hash"]:
                     raise ValueError("Изменились меню или последовательность выборов свидетеля")
                 progress = sp.get_persistent_state()
-                print(f"Маршрут {app.ending.id}: {len(parser.choice_indices)} выборов, {parser.dialogues} реплик, титры завершены.")
+                print(f"Маршрут {app.ending.id}: выборов — {len(parser.choice_indices)}, реплик — {parser.dialogues}, титры завершены.")
             except (OSError, ValueError, RuntimeError) as exc:
                 errors.append(f"Маршрут {route['ending']}: {exc}")
                 break

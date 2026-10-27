@@ -513,9 +513,12 @@ def validate_script(
     if depth:
         errors.append(f"{script_path.name}: незакрытых блоков: {depth}")
 
+    scope = script_path.name
+    if stop_at is not None:
+        scope += f" (до метки {stop_at} включительно)"
     print(
-        f"Проверен {script_path.name}: {len(lines)} команд, {len(labels)} меток, "
-        f"{scene_count} сцен, {show_count} команд show."
+        f"Проверен {scope}: команд — {len(lines)}, меток — {len(labels)}, "
+        f"сцен — {scene_count}, show — {show_count}."
     )
     return errors
 
@@ -552,14 +555,14 @@ def validate_route_reduction(
 
 
 def validate_day3_routes() -> list[str]:
-    """Проверяет все развилки day3 и контракт входа в day4_main1."""
+    """Проверяет развилки day3 и вход в day4_main1 без статической проверки файлов."""
     errors: list[str] = []
     prologue_path = ROOT_DIR / "TS" / "text" / "prologue.txt"
     day3_path = ROOT_DIR / "TS" / "text" / "day3.txt"
     day4_path = ROOT_DIR / "TS" / "text" / "day4.txt"
-    errors.extend(validate_day(4, stop_at="day4_main1"))
-    if errors:
-        return errors
+    day4_document = _route_document(day4_path, {})
+    if "day4_main1" not in day4_document.labels:
+        return [f"{day4_path.name}: отсутствует целевая метка day4_main1"]
 
     predecessor_results = explore_routes(
         prologue_path,
@@ -585,7 +588,6 @@ def validate_day3_routes() -> list[str]:
         return ["day3: не найдено ни одного достижимого входного состояния"]
     control_keys = ("d1_keys", "d2_gave_keys", "day2_un")
     day3_document = _route_document(day3_path, {})
-    day4_document = _route_document(day4_path, {})
     checked_lines = day3_document.lines + day4_document.lines[
         :day4_document.labels["day4_main1"]
     ]
@@ -696,7 +698,6 @@ def validate_day3_routes() -> list[str]:
         tuple(state[name] for name in control_keys): state
         for state in representatives.values()
     }
-    checked_state_routes = 0
     for projection in relevant_entry_states:
         values = dict(projection)
         for lp_name in ("lp_sl", "lp_un", "lp_dv", "lp_us"):
@@ -716,21 +717,10 @@ def validate_day3_routes() -> list[str]:
                         f"day3: маршрут {result.choices!r} дал нечисловой "
                         f"{lp_name}: {final_value!r}"
                     )
-            checked_state_routes += 1
 
     if any(name.startswith("persistent.") for name in active_day3_variables):
         errors.append("day3: маршрут не должен менять persistent-переменные")
 
-    print(
-        "Обход day3: "
-        f"{len(entry_states)} полных входных состояний, "
-        f"{len(relevant_entry_states)} значимых проекций, "
-        f"{len(representatives)} комбинаций управления, "
-        f"{len(choice_traces)} маршрута; "
-        f"композиционно проверено {checked_state_routes} значимых и "
-        f"{len(entry_states) * len(choice_traces)} полных пар "
-        "состояние/маршрут."
-    )
     return errors
 
 
@@ -749,21 +739,26 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    days = tuple(dict.fromkeys(args.day or ()))
     try:
         errors = []
+        print("Проверка файлов сценария:")
         if args.all_scripts:
             for filename in RELEASE_SCRIPTS:
                 errors.extend(validate_script(ROOT_DIR / "TS/text" / filename))
             missing, invalid = visual_asset_problems(ROOT_DIR / "TS", verify_images=True)
             errors.extend(missing + invalid)
         else:
-            for day in args.day:
+            for day in days:
                 errors.extend(validate_day(day))
-        if not errors and (args.all_scripts or 3 in (args.day or [])):
+            if not errors and 3 in days and 4 not in days:
+                errors.extend(validate_day(4, stop_at="day4_main1"))
+        if not errors and (args.all_scripts or 3 in days):
+            print("\nПроверка маршрутов сценария:")
             errors.extend(validate_day3_routes())
-        if not errors and args.all_scripts:
-            from scripts.release_routes import validate_release_routes
-            errors.extend(asyncio.run(validate_release_routes(ROOT_DIR / "TS")))
+            if not errors and args.all_scripts:
+                from scripts.release_routes import validate_release_routes
+                errors.extend(asyncio.run(validate_release_routes(ROOT_DIR / "TS")))
     except Exception as exc:
         print(f"Ошибка валидатора: {exc}", file=sys.stderr)
         return 1
