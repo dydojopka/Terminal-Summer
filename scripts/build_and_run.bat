@@ -36,6 +36,8 @@ REM Проверка выпущенных сценариев и ресурсов
 
 "%PYTHON_BIN%" -m PyInstaller --onefile ^
                       --name "%APP_NAME%" ^
+                      --exclude-module readline ^
+                      --exclude-module rlcompleter ^
                       --add-data "%ROOT_DIR%\src\gameUI.tcss;." ^
                       --add-data "%ROOT_DIR%\src\menu_logo.ansi;." ^
                        --add-data "%ROOT_DIR%\src\gallery_manifest.json;." ^
