@@ -1,5 +1,5 @@
 label prologue_l
-    time day
+    time prologue
     play music a_promise_from_distant_days_v2
     pause 3
     scene cg prolog_1 with esfade3

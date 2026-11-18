@@ -171,6 +171,7 @@ from textual.screen import Screen, ModalScreen
 from textual.widgets import Label, Footer, Header, Static, ListItem, ListView, Log, LoadingIndicator
 from textual.widget import Widget
 from textual.binding import Binding
+from textual.reactive import reactive
 from textual.scrollbar import ScrollBar, ScrollBarCorner
 from console_button import ConsoleButton as Button
 from console_scrollbar import ConsoleScrollBarRender
@@ -180,7 +181,7 @@ from rich.segment import Segment
 from rich.text import Text
 from rich.cells import cell_len
 
-from script_parser import ScriptParser, format_script_state
+from script_parser import ScriptParser, format_script_state, TIMES_OF_DAY
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from music_room import MusicRoom
 from endings_menu import EndingsMenu, EndingsList, EndingResult
@@ -1031,6 +1032,12 @@ class TerminalSummer(App):
     ]
 
     TEXT_MODES = {"adv", "nvl"}
+    current_time = reactive("day", repaint=False)
+
+    def watch_current_time(self, time_of_day: str) -> None:
+        """Палитра интерфейса следует time, а не фильтрам изображения/спрайтов."""
+        for name in TIMES_OF_DAY:
+            self.set_class(time_of_day == name, f"time-{name}")
 
     def _start_widget(self, parent: Widget, widget: Widget) -> None:
         # Системные полосы и их угол Textual создаёт в обход обычного CSS-монтажа.
@@ -1304,6 +1311,7 @@ class TerminalSummer(App):
             self.action_open_menu()
             self.clear_log()
             self._interface_hidden = False
+            self.current_time = "prologue"
             self.set_text_mode("adv")
 
             # Сброс всех глобальных переменных
@@ -3453,6 +3461,7 @@ class TerminalSummer(App):
         self.clear_active_sprites()
         self.current_scene = ""
         self.current_scene_category = ""
+        self.current_time = "day"
         self.scene_dirty = False
         self.clear_script_cache()
 

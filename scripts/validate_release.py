@@ -23,6 +23,7 @@ from script_parser import (
     DISPLAY_NAMES,
     ScriptParser,
     SCRIPT_STATE_TYPES,
+    TIMES_OF_DAY,
     apply_script_assignment,
     parse_script_assignment,
 )
@@ -425,7 +426,7 @@ def validate_script(
         for command, arguments in (
             ("window", {"show", "hide"}),
             ("mode", {"adv", "nvl"}),
-            ("time", {"day", "sunset", "night"}),
+            ("time", TIMES_OF_DAY),
         ):
             if line.startswith(command + " ") and line.split(maxsplit=1)[1] not in arguments:
                 errors.append(f"{script_path.name}:{number}: некорректная команда {command}: {line}")

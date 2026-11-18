@@ -34,7 +34,7 @@ label epilogue_main
     # $ prolog_time()
     # scene black
     # pause 2
-    time night
+    time prologue
     pause 1
     scene cg backdrop0 with dissolve
 	pause 4
@@ -299,7 +299,7 @@ label epilogue_un_bad
     # $ prolog_time()
     # scene black
     # pause 5)
-    time night
+    time prologue
     pause 1
     scene cg backdrop0 with dissolve
 	pause 4
@@ -466,7 +466,7 @@ label epilogue_un_good
     # $ prolog_time()
     # scene black
     # pause 2
-    time night
+    time prologue
     pause 1
     scene cg backdrop0 with dissolve
 	pause 4
@@ -737,7 +737,7 @@ label epilogue_us
     scene color black with dissolve
     pause 2
     window show
-    time night
+    time prologue
     "Кажется, я совсем и не спал."
     "Такое часто бывает – только закрыл глаза и отключился, как стрелки часов сами собой делают несколько оборотов, и вот уже утро, сознание возвращается, а ощущение такое, что только и успел, что моргнуть."
     window hide
@@ -1086,7 +1086,7 @@ label epilogue_dv
     scene color black with dissolve
     pause 2
     window show
-    time night
+    time prologue
     "Похоже, староват я стал…"
     "Уже прошёл день, и похмелье должно было остаться в прошлом, но меня всё равно мутило, кружилась голова."
     "Я не смог открыть глаза, как ни старался, лишь перевернулся на другой бок."
@@ -1444,7 +1444,7 @@ label epilogue_sl
 	pause 4
     scene color black with dissolve
     pause 2
-    time night
+    time prologue
     window show
     "Бывают сны, от которых не хочется просыпаться."
     "Ты словно плывёшь по тёплой реке куда-то далеко за горизонт, блаженно созерцая суетный мир, скрывающийся за облаками."
@@ -1583,7 +1583,7 @@ label epilogue_sl
     scene bg bus_stop with esfade2
     # show snow
     # with esfade2
-    time day
+    time prologue
     window show
     "Я и сам не заметил, как оказался на автобусной остановке 410-го маршрута."
     me "Навевает воспоминания…"

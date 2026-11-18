@@ -1621,7 +1621,7 @@ label epilogue_uv_city
     scene color black with esfade3
     stop loop fadeout 5
     pause 5
-    #$ prolog_time()
+    time prologue
     scene color black with esfade3
     play music drown fadein 3
     window show
@@ -3157,7 +3157,7 @@ label epilogue_uv_ulya
     stop music fadeout 3
     pause 3
     scene color black with esfade2
-    #$ prolog_time()
+    time prologue
     play music meet_me_there fadein 3
     mode nvl
     window show

@@ -288,7 +288,6 @@ NovelMenu.nvl-mode {
         height: 100%;
         min-height: 6;
         background: $boost;
-        border: round white;
         overflow-y: auto;
     }
 }
@@ -411,6 +410,44 @@ LogMenu {
     height: 95%;
 }
 
+# Как persistent.timeofday в оригинале: палитра общая для ADV/NVL, истории,
+# паузы и сюжетных кнопок. Имена персонажей и формы рамок не меняются.
+$novel-day: #9dcd55;
+$novel-sunset: #dcd168;
+$novel-night: #527ba3;
+$novel-prologue: #98d8da;
+
+.time-day {
+    TextBar, PauseMenuContainer { border: round $novel-day; }
+    LogMenu { border: dashed $novel-day; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton { border: solid $novel-day; }
+    ChoiceBar ListItem.-highlight Label { color: $novel-day; }
+}
+.time-sunset {
+    TextBar, PauseMenuContainer { border: round $novel-sunset; }
+    LogMenu { border: dashed $novel-sunset; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton { border: solid $novel-sunset; }
+    ChoiceBar ListItem.-highlight Label { color: $novel-sunset; }
+}
+.time-night {
+    TextBar, PauseMenuContainer { border: round $novel-night; }
+    LogMenu { border: dashed $novel-night; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton { border: solid $novel-night; }
+    ChoiceBar ListItem.-highlight Label { color: $novel-night; }
+}
+.time-prologue {
+    TextBar, PauseMenuContainer { border: round $novel-prologue; }
+    LogMenu { border: dashed $novel-prologue; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton { border: solid $novel-prologue; }
+    ChoiceBar ListItem.-highlight Label { color: $novel-prologue; }
+}
+# Наведение заметно и в ночной палитре, а выбор остаётся без рамок и заливки.
+.time-day ChoiceBar ListItem.-hovered Label,
+.time-sunset ChoiceBar ListItem.-hovered Label,
+.time-night ChoiceBar ListItem.-hovered Label,
+.time-prologue ChoiceBar ListItem.-hovered Label {
+    color: #f3f0df;
+}
 
 # Настройки
 SettingsMenu {

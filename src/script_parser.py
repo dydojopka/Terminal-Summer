@@ -13,6 +13,8 @@ from script_audio import parse_audio_command
 from script_resources import resource_manifest
 from script_structure import read_block_range
 
+TIMES_OF_DAY = ("day", "sunset", "night", "prologue")
+
 # Словарь имён
 DISPLAY_NAMES = {
     "dreamgirl": "...",
@@ -497,7 +499,11 @@ class ScriptParser:
         elif line.startswith("window"):
             await self._handle_window(line)
         elif line.startswith("time"):
-            self.app.current_time = line.split(maxsplit=1)[1].strip() if " " in line else "day"
+            time_of_day = line.split(maxsplit=1)[1].strip() if " " in line else "day"
+            if time_of_day not in TIMES_OF_DAY:
+                self._report_script_error(f"Invalid time of day: {time_of_day}")
+                return
+            self.app.current_time = time_of_day
             await self.next_line()
         elif line.startswith("mode"):
             mode = line.split(maxsplit=1)[1].strip() if " " in line else "adv"

@@ -5,6 +5,7 @@ from rich.errors import MarkupError
 from rich.text import Text
 
 from sprites_builder import parse_show_like, normalize_sprite_position, SPRITE_SIZES
+from script_parser import TIMES_OF_DAY
 
 
 def plain_save_text(value: str) -> str:
@@ -26,7 +27,7 @@ def validate_save_view(data: dict) -> tuple[dict, dict, dict]:
             raise ValueError(f"Invalid scene field: {key}")
     if (not re.fullmatch(r"[a-zA-Z0-9_]*", scene["current_scene"])
             or scene["current_scene_category"] not in ("", "bg", "cg", "color")
-            or scene["current_time"] not in ("day", "sunset", "night")
+            or scene["current_time"] not in TIMES_OF_DAY
             or scene["current_text_mode"] not in ("adv", "nvl")
             or type(scene["window_visible"]) is not bool
             or (scene["current_scene_category"] == "color" and scene["current_scene"] not in ("black", "white"))):
