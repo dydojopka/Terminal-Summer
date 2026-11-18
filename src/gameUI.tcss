@@ -42,6 +42,21 @@ Screen {
     layers: base loading;
 }
 
+# Одна рамка вокруг всей кнопки; состояния выделяют только текст подписи.
+ConsoleButton {
+    border: solid #77736a;
+    background: transparent;
+    color: #d8d5c8;
+    text-style: none;
+    background-tint: transparent;
+    tint: transparent;
+}
+ConsoleButton:disabled {
+    color: #858278;
+    opacity: 1;
+    text-opacity: 1;
+}
+
 TerminalSizeWarning { display: none; }
 .terminal-too-small {
     layers: base loading terminal-size;
@@ -297,18 +312,6 @@ SaveMenu {
                 height: 8;
                 margin: 1;
                 text-align: center;
-            }
-
-            .save-slot-empty {
-                background: $boost;
-            }
-
-            .save-slot-filled {
-                background: $surface;
-            }
-
-            .save-slot-selected {
-                border: tall $accent;
             }
         }
 

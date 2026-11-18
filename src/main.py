@@ -168,9 +168,10 @@ from textual import events, errors, _time
 from textual.app import App, ComposeResult
 from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
 from textual.screen import Screen, ModalScreen
-from textual.widgets import Button, Label, Footer, Header, Static, ListView, Log, LoadingIndicator
+from textual.widgets import Label, Footer, Header, Static, ListView, Log, LoadingIndicator
 from textual.widget import Widget
 from textual.binding import Binding
+from console_button import ConsoleButton as Button
 
 from rich.style import Style
 from rich.segment import Segment
@@ -379,14 +380,14 @@ class MainMenuMiddleBtns(HorizontalGroup):
 class MainMenuBottomBtns(HorizontalGroup):
     """Виджет-контейнер для нижних кнопок"""
     def compose(self):
-        yield Button("Достижения 🏅", id="btn-achievements")
-        yield Button("Настройки 🪛", id="btn-settings-menu")
-        yield Button("Выход 🚪", id="btn-exit-menu")
+        yield Button("Достижения", id="btn-achievements")
+        yield Button("Настройки", id="btn-settings-menu")
+        yield Button("Выход", id="btn-exit-menu")
 
 class MainMenuStartBtn(Vertical):
     """Виджет для кнопки "Начать игру" с описанием"""
     def compose(self):
-        yield Button("Начать игру ▶", id="btn-start-game")
+        yield Button("Начать игру", id="btn-start-game")
         yield Label('   Дорогой пионер!\n' \
         'Ты — на пороге удивительных открытий.\n' \
         '   Перед тобой распахнулись двери самого прекрасного места в мире — ' \
@@ -396,7 +397,7 @@ class MainMenuStartBtn(Vertical):
 class MainMenuLoadBtn(Vertical):
     """Виджет для кнопки "Соханение" с описанием"""
     def compose(self):
-        yield Button("Сохранение 📒", id="btn-save-load")
+        yield Button("Сохранение", id="btn-save-load")
         yield Label('   Бережно относись к истории своего лагеря. Тщательно записывай ' \
         'свои наблюдения и мысли о прошедших днях.\nПри помощи сохранений ты всегда ' \
         'сможешь вернуться назад к пройденному эпизоду и осмыслить его заново. ' \
@@ -406,7 +407,7 @@ class MainMenuLoadBtn(Vertical):
 class MainMenuGalleryBtn(Vertical):
     """Виджет для кнопки "Галерея" с описанием"""
     def compose(self):
-        yield Button("Галерея 📷", id="btn-gallery")
+        yield Button("Галерея", id="btn-gallery")
         yield Label('   Здесь представлены работы участников нашего фотокружка. ' \
         'Твои товарищи всегда готовы запечатлеть важные моменты из жизни лагеря, ' \
         'а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим ' \
@@ -423,7 +424,7 @@ class GalleryMenu(HorizontalGroup):
 class GalleryMenuLeftBtns(Vertical):
     """Виджет-контейнер для кнопок галереи сверху"""
     def compose(self):
-        yield Button("Назад ↩", id="btn-close-gallery")
+        yield Button("Назад", id="btn-close-gallery")
         with Static(id="container-left-btns"):
             yield Button("Музыка", variant="default", id="btn-gallery-music")
             yield Button("Иллюстрации", variant="primary", id="btn-gallery-cg")
@@ -454,7 +455,7 @@ class GalleryMenuBottomBtns(HorizontalGroup):
 class SaveMenuLeftBtns(VerticalScroll):
     """Виджет-контейнер для кнопок сохранений слева (Назад + номера страниц)"""
     def compose(self):
-        yield Button("Назад ↩", id="btn-close-save-menu")
+        yield Button("Назад", id="btn-close-save-menu")
         with Static(id="container-save-page-btns"):
             for i in range(1, 10):
                 yield Button(str(i), id=f"btn-save-page-{i}", classes="save-page-btn")
@@ -520,7 +521,7 @@ class OutdatedSaveDialog(ModalScreen):
             yield Static("Оно несовместимо с текущей версией сценария.\nУдалить выбранное сохранение?")
             with HorizontalGroup():
                 yield self.keep_button
-                yield Button("Удалить", id="outdated-save-delete", variant="error")
+                yield Button("Удалить", id="outdated-save-delete", variant="error", classes="danger")
 
     def on_mount(self):
         if self.keep_button.is_mounted:
@@ -561,7 +562,7 @@ class SettingsMenu(VerticalScroll):
         yield SettingSceneFilters(classes="setting-with-description")
         yield SettingTextSpeed(classes="setting-with-description")
         yield SettingAudio()
-        yield Button("Назад ↩", id="btn-close-settings")
+        yield Button("Назад", id="btn-close-settings")
 
 class SettingAudio(Vertical):
     """Независимые пользовательские уровни, не сценарные volume-команды."""
@@ -1882,12 +1883,14 @@ class TerminalSummer(App):
                 btn.add_class("save-slot-empty")
 
             # Сброс выделения
+            btn.selected = False
             btn.remove_class("save-slot-selected")
 
         # Выделение выбранного слота
         if save_menu.selected_slot:
             try:
                 selected_btn = self.query_one(f"#{save_menu.selected_slot}", Button)
+                selected_btn.selected = True
                 selected_btn.add_class("save-slot-selected")
             except Exception:
                 pass
@@ -1918,6 +1921,7 @@ class TerminalSummer(App):
         if save_menu.selected_slot:
             try:
                 old_btn = self.query_one(f"#{save_menu.selected_slot}", Button)
+                old_btn.selected = False
                 old_btn.remove_class("save-slot-selected")
             except Exception:
                 pass
@@ -1927,6 +1931,7 @@ class TerminalSummer(App):
         # Новое выделение
         try:
             new_btn = self.query_one(f"#{slot_id}", Button)
+            new_btn.selected = True
             new_btn.add_class("save-slot-selected")
         except Exception:
             pass

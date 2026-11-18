@@ -7,8 +7,9 @@ from rich.text import Text
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Label, ListItem, ListView, Static
+from textual.widgets import Label, ListItem, ListView, Static
 
+from console_button import ConsoleButton as Button
 from endings_catalog import load_endings_catalog, runtime_ending_ansi
 from endings_ansi import read_ending_ansi
 from ending_progress import format_ending_date
@@ -100,7 +101,7 @@ class EndingsMenu(Vertical):
 
     def compose(self):
         with Horizontal(id="endings-toolbar"):
-            yield Button("Назад ↩", id="btn-close-endings")
+            yield Button("Назад", id="btn-close-endings")
             yield Label("Открыто: 0/13", id="endings-progress")
         yield Static("↑/↓ · Home/End — выбор · Колесо — прокрутка · Esc — назад", id="endings-help")
         yield Static("", id="endings-error", classes="hidden")
