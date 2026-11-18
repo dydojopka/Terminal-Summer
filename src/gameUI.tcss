@@ -42,6 +42,10 @@ Screen {
     layers: base loading;
 }
 
+ScriptStateHeader HeaderIcon {
+    display: none;
+}
+
 # Одна рамка вокруг всей кнопки; состояния выделяют только текст подписи.
 ConsoleButton {
     border: solid #77736a;
