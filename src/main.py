@@ -584,6 +584,27 @@ class SettingsMenu(VerticalScroll):
         yield SettingAudio()
         yield Button("Назад", id="btn-close-settings")
 
+    def on_key(self, event: events.Key) -> None:
+        focused = self.screen.focused
+        if event.key not in {"up", "down"} or not isinstance(focused, Button):
+            return
+        event.stop()
+        event.prevent_default()
+        sign = -1 if event.key == "up" else 1
+        x, y = focused.region.center
+        candidates = []
+        for button in self.screen.focus_chain:
+            if not isinstance(button, Button) or self not in button.ancestors or not button.region:
+                continue
+            bx, by = button.region.center
+            distance = sign * (by - y)
+            if distance > 0:
+                candidates.append((distance, abs(bx - x), button))
+        if candidates:
+            # Настройки идут рядами сверху вниз: ближайший ряд важнее колонки,
+            # иначе правая кнопка перескакивает блоки с одной левой колонкой.
+            min(candidates, key=lambda item: item[:2])[2].focus()
+
 class SettingAudio(Vertical):
     """Независимые пользовательские уровни, не сценарные volume-команды."""
     BORDER_TITLE = "Звук"

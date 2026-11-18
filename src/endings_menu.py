@@ -28,6 +28,12 @@ class EndingsList(ListView):
         Binding("end", "last", show=False),
     ]
 
+    def action_cursor_up(self) -> None:
+        if self.index is None or self.index == 0:
+            self.screen.query_one("#btn-close-endings", Button).focus()
+        else:
+            super().action_cursor_up()
+
     def action_first(self):
         if self.children:
             self.index = 0
@@ -103,7 +109,7 @@ class EndingsMenu(Vertical):
         with Horizontal(id="endings-toolbar"):
             yield Button("Назад", id="btn-close-endings")
             yield Label("Открыто: 0/13", id="endings-progress")
-        yield Static("↑/↓ · Home/End — выбор · Колесо — прокрутка · Esc — назад", id="endings-help")
+        yield Static("↑/↓ · Home/End — выбор · ↑ с первой строки — кнопка «Назад» · Esc — назад", id="endings-help")
         yield Static("", id="endings-error", classes="hidden")
         yield EndingsList(id="endings-list")
 
