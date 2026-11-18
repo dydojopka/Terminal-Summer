@@ -1545,7 +1545,6 @@ label epilogue_uv_part2
     show uv normal_ size normal spritecolor night at center with dspr
     uv "Так что ты решил?"
     "Надо было принять решение."
-    window hide
     menu
     {
         "Идти вперёд"
@@ -3373,7 +3372,6 @@ label epilogue_uv_ulya
     "Хотя до клинической картины мне было ещё далеко, так как всё же я разговаривал сам с собой, а не с другой личностью внутри меня."
     "Может быть, с подсознанием…"
     "Впрочем, всё это неважно!"
-    window hide
     pause 2
     menu
     {

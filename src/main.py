@@ -166,9 +166,9 @@ from art_renderer import ART_STYLES, render_art
 
 from textual import events, errors, _time
 from textual.app import App, ComposeResult
-from textual.containers import HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
+from textual.containers import Center, HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
 from textual.screen import Screen, ModalScreen
-from textual.widgets import Label, Footer, Header, Static, ListView, Log, LoadingIndicator
+from textual.widgets import Label, Footer, Header, Static, ListItem, ListView, Log, LoadingIndicator
 from textual.widget import Widget
 from textual.binding import Binding
 from textual.scrollbar import ScrollBar, ScrollBarCorner
@@ -178,6 +178,7 @@ from console_scrollbar import ConsoleScrollBarRender
 from rich.style import Style
 from rich.segment import Segment
 from rich.text import Text
+from rich.cells import cell_len
 
 from script_parser import ScriptParser, format_script_state
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
@@ -796,10 +797,59 @@ class NovelWindow(Widget):
         yield ChoiceBar(id="choice-bar", classes="hidden")
         yield AnsiView("", id="bg-cg", classes="mouse-passive-art")
         
+class ChoiceList(ListView):
+    """Сюжетные ответы с быстрым выбором по номеру."""
+    BINDINGS = [
+        Binding("tab", "cycle_choice(1)", show=False),
+        Binding("shift+tab", "cycle_choice(-1)", show=False),
+    ]
+
+    async def set_choices(self, options) -> None:
+        """Общие колонки номеров и центрированных подписей для всего меню."""
+        captions = tuple(options)
+        number_width = len(str(len(captions))) + 2
+        caption_width = max(
+            (cell_len(line) for caption in captions for line in caption.splitlines()),
+            default=0,
+        )
+        self.styles.width = caption_width + 2 * number_width
+        rows = []
+        for number, caption in enumerate(captions, start=1):
+            number_label = Label(f"{number}.", classes="choice-number")
+            number_label.styles.width = number_width
+            row = ListItem(
+                number_label,
+                Center(Label(caption, markup=False, classes="choice-caption")),
+                name=caption,
+            )
+            # Правое поле уравновешивает номер, чтобы центр текста не смещался.
+            row.styles.padding = (0, number_width, 1, 0)
+            rows.append(row)
+        await self.clear()
+        await self.extend(rows)
+
+    def action_cycle_choice(self, direction: int) -> None:
+        if self.children:
+            self.index = ((self.index or 0) + direction) % len(self.children)
+
+    def on_key(self, event: events.Key) -> None:
+        if len(event.key) != 1 or event.key not in "123456789":
+            return
+        if not self.is_on_screen:
+            return
+        index = int(event.key) - 1
+        if index >= len(self.children):
+            return
+        event.stop()
+        event.prevent_default()
+        self.index = index
+        self.action_select_cursor()
+
+
 class ChoiceBar(Widget):
     """Окно выбора"""
     def compose(self):
-        yield ListView()
+        yield ChoiceList()
 
 
 class LogMenu(Log):
@@ -1035,10 +1085,12 @@ class TerminalSummer(App):
         bg_cg = self.query_one("#bg-cg", Widget)
         choice_bar = self.query_one("#choice-bar", Widget)
         is_nvl = self.current_text_mode == "nvl"
+        is_choosing = not choice_bar.has_class("hidden")
 
         if self._interface_hidden:
             novel_menu.add_class("hidden")
-        novel_menu.set_class(is_nvl, "nvl-mode")
+        novel_menu.set_class(is_choosing, "choice-mode")
+        novel_menu.set_class(is_nvl and not is_choosing, "nvl-mode")
         novel_window.set_class(
             is_nvl
             and not self._interface_hidden
@@ -1464,9 +1516,7 @@ class TerminalSummer(App):
         if choice_bar.has_class("hidden") or not pending_choices:
             return
 
-        choice_label = event.item.query_one(Label)
-        choice_text = str(choice_label.content).strip()
-        choice = pending_choices.get(choice_text)
+        choice = pending_choices.get(event.item.name)
         if choice is None:
             return
 
@@ -1521,6 +1571,9 @@ class TerminalSummer(App):
             novel_menu.remove_class("hidden")
             novel_window.remove_class("hidden")
             self.sync_text_mode_display()
+            choice_bar = self.query_one("#choice-bar")
+            if not choice_bar.has_class("hidden"):
+                choice_bar.query_one(ListView).focus()
 
     def action_toggle_interface(self) -> None:
         """Показывает или скрывает интерфейс новеллы, оставляя сцену видимой."""
@@ -3406,6 +3459,7 @@ class TerminalSummer(App):
         # Очистка pending_choices
         if hasattr(self, "pending_choices"):
             self.pending_choices = None
+        self.query_one("#choice-bar").add_class("hidden")
 
         # Очистка истории диалогов
         self.clear_log()

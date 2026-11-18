@@ -922,7 +922,6 @@ label day6_un
     "Вся эта ситуация показалась очень забавной, и я решил обязательно выяснить, в чём же дело."
     stop ambience fadeout 2
     th "Интересно, куда мог побежать Электроник?"
-    window hide
     # $ disable_all_zones()
     # $ set_zone("medic_house","day6_aidpost")
     # $ set_zone("dining_hall","day6_dinner")
@@ -934,7 +933,6 @@ label day6_aidpost
     window show
     "Может быть, он побежал в медпункт?"
     th "Нет, это явно глупая идея..."
-    window hide
     #$ disable_current_zone()
     $day6_map_aidpost = true
     goto day6_map
@@ -944,7 +942,6 @@ label day6_dinner
     window show
     "В столовой укрыться было бы неплохим решением."
     "Впрочем, и тут его не было."
-    window hide
     #$ disable_current_zone()
     $day6_map_dinner = true
     goto day6_map
@@ -1577,7 +1574,6 @@ label day6_after_map
     "Нет, пощёчину я бы ещё понял, но таким ударом можно и челюсть сломать!"
     "Алиса упала и, похоже, потеряла сознание."
     th "Как же поступить мне?"
-    window hide
     #$ persistent.sprite_time = "night"
     scene bg ext_square_night with dissolve
     menu

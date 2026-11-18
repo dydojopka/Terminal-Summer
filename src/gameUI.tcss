@@ -144,14 +144,49 @@ NovelWindow {
         max-height: 100%;
         margin: 0 2;
 
-        ListView { height: auto; max-height: 100%; }
+        ListView {
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            padding: 0;
+            background: transparent;
+            background-tint: transparent;
+        }
 
-        # Элементы в окне выбора
+        ListItem, ListItem.-hovered, ListItem.-highlight {
+            layout: horizontal;
+            margin: 0;
+            background: transparent;
+            color: #d8d5c8;
+            text-style: none;
+        }
+
         Label {
-            width: 100%;
+            width: auto;
+            max-width: 100%;
+            height: auto;
             text-align: center;
-            border: hkey $boost;
-            color: $text-muted;
+            border: none;
+        }
+
+        .choice-number {
+            padding-right: 1;
+            text-align: right;
+        }
+
+        Center {
+            width: 1fr;
+            height: auto;
+        }
+
+        ListItem.-hovered Label {
+            color: #f3f0df;
+            text-style: underline;
+        }
+
+        ListItem.-highlight Label {
+            color: #e3b778;
+            text-style: underline;
         }
     }
 }
@@ -256,6 +291,11 @@ NovelMenu.nvl-mode {
         border: round white;
         overflow-y: auto;
     }
+}
+
+# Во время выбора скрыта только кнопка продолжения.
+NovelMenu.choice-mode {
+    #btn-next { visibility: hidden; }
 }
 
 # Пауза

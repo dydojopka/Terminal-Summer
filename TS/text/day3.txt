@@ -167,7 +167,6 @@ label day3_main1
     show mz normal_glasses_pioneer size normal at center with dspr
     mz "А что такого-то? Бери завтрак и садись."
     "Похоже, для неё такое поведение совершенно нормально."
-    window hide
     menu
     {
         "Извини, но я уже с Леной договорился"
@@ -386,7 +385,6 @@ label day3_main2
     "Тратить весь вечер на подобную работу мне совсем не хотелось, тем более есть дела и поважнее."
     "Но и отказываться вроде как неудобно."
     "Хотя, не будь здесь Лены, я бы что-нибудь обязательно придумал."
-    window hide
     menu
     {
         "Хорошо, я приду..."
@@ -502,7 +500,6 @@ label day3_main3
     th "Хотя откуда тут такая роскошь?"
     "Звуки доносились, очевидно, со стороны сцены."
     th "Интересно, кто бы это мог быть?"
-    window hide
     stop ambience fadeout 2
     menu
     {
@@ -575,7 +572,6 @@ label day3_house_of_mt:
     me "Уж как-нибудь сам..."
     stop music fadeout 3
     "Проворчал я себе под нос и вышел из домика."
-    window hide
     #$persistent.sprite_time = "day"
     scene bg ext_house_of_mt_day with dissolve
     menu
@@ -1048,7 +1044,6 @@ label day3_stage_dv
     show dv rage_pioneer size normal at center with dspr
     dv "Да плевать на неё!"
     "Сказала Алиса в сердцах."
-    window hide
     menu
     {
         "Ладно, я приду"
@@ -1301,7 +1296,6 @@ label day3_main4
     "В любом случае всё спишут на неё."
     th "Тем более заняться мне больше нечем, как убираться тут.<w> Надо искать ответы!"
     "«Истина где-то там» – пронеслось у меня в голове."
-    window hide
     menu
     {
         "Сбежать"
@@ -1990,7 +1984,6 @@ label day3_main5
         {
             "Но я же согласился помочь Лене..."
             th "И что прикажете теперь делать?"
-            window hide
             menu
             {
                 "Пойти к Алисе"
@@ -3774,7 +3767,6 @@ label day3_evening_dv:
     show mt surprise_dress size normal spritecolor sunset at center with dspr
     mt "Итак, Семён, где же ты был?"
     me "Я…"
-    window hide
     menu
     {
         "Рассказать, что был с Алисой"

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from textual.widget import Widget
-from textual.widgets import ListView, ListItem, Label
+from textual.widgets import ListView
 from textual import _time
 from script_conditions import evaluate_script_condition
 from audio_catalog import load_audio_catalog
@@ -890,8 +890,7 @@ class ScriptParser:
         choice_bar = self.app.query_one("#choice-bar")
         list_view = choice_bar.query_one(ListView)
 
-        await list_view.clear()
-        await list_view.extend(ListItem(Label(opt)) for opt in options)
+        await list_view.set_choices(options)
 
         # сохранить варианты в app
         self.app.pending_choices = options
@@ -899,12 +898,9 @@ class ScriptParser:
         await self.app.flush_scene_render()
         self.app.prefetch_choice_scenes(self, options.values())
 
-        # отобразить ChoiceBar и скрыть фон
+        # Видимость текстового окна задаёт сценарий, выбор её не переопределяет.
         choice_bar.remove_class("hidden")
-        self.app.query_one("#bg-cg").add_class("hidden")
-        if self.app.current_text_mode == "nvl":
-            self.app.query_one("#novel-window").remove_class("hidden")
-            self.app.query_one("#novel-menu").add_class("hidden")
+        self.app.sync_text_mode_display()
 
         # найти ListView и перевести на него фокус 
         if list_view.children:

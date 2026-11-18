@@ -103,6 +103,9 @@ class RouteParser(sp.ScriptParser):
         await self.next_line()
 
     async def _handle_choice(self, line):
+        if not self.app.window_visible:
+            number = self.source_line_numbers[self.index - 1]
+            raise ValueError(f"Невидимое окно перед выбором: {Path(self.filename).name}:{number}")
         options, _ = self.choice_targets()
         self.menu_digest.update(json.dumps(list(options), ensure_ascii=False).encode("utf-8") + b"\n")
         index = self.choose(self, options)

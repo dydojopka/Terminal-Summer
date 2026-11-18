@@ -330,7 +330,6 @@ label day2_main1
     th "Обед в час.<w> Хотя если я пойду есть, то могу не попасть в какое-нибудь место из списка."
     stop music fadeout 3
     th "Ладно, пока всё равно в столовую идти рано!"
-    window hide
     goto day2_map_checker
 label day2_map_checker
     if ($day2_map_necessary_done == 4)
@@ -450,7 +449,6 @@ label day2_musclub
     dv "Свободен!"
     hide dv with dissolve
     "Алиса вошла внутрь, а я поспешил покинуть это место."
-    window hide
     stop ambience fadeout 2
     $day2_map_necessary_done += 1
     $day2_map_musclub = true
@@ -530,7 +528,6 @@ label day2_clubs
     "Она посмотрела на него так, что возражать Шурик не решился."
     stop ambience fadeout 2
     "Он поставил свою закорючку, и я, поблагодарив Славю, с чистой совестью направился дальше."
-    window hide
     $day2_map_necessary_done += 1
     $day2_map_clubs = true
     goto day2_map_checker
@@ -612,7 +609,6 @@ label day2_library
     "Библиотекарша быстро расписалась и протянула мне его."
     "Вид у неё был такой, что продолжать разговор не возникало никакого желания."
     "Лена подошла к ней и отдала книжку, а я поблагодарил Женю и вышел."
-    window hide
     stop ambience fadeout 2
     $day2_map_necessary_done += 1
     $day2_map_library = true
@@ -689,7 +685,6 @@ label day2_aidpost
     scene bg ext_aidpost_day with dissolve
     window show
     th "Медсестра здесь, конечно, ещё та…"
-    window hide
     $day2_map_necessary_done += 1
     $day2_map_aidpost = true
     goto day2_map_checker
@@ -798,7 +793,6 @@ label day2_dinner
     us "Ты! Ты! Ты…"
     stop ambience fadeout 2
     "Я решил не дожидаться, пока она придёт в себя и посмеиваясь вышел из столовой, на ходу доедая булочку."
-    window hide
     $lp_us += 1
     $day2_map_dinning_hall = true
     goto day2_map_checker
@@ -975,7 +969,6 @@ label day2_main2
     me "Да я вообще-то…"
     show sl smile_pioneer size normal spritecolor sunset at right with dspr
     sl "Давайте я с ним схожу принесу!"
-    window hide
     menu
     {
         "Пойти за картами со Славей"
@@ -1268,7 +1261,6 @@ label day2_pre_cards
     "Лена спешно зашла в столовую."
     show dv normal_pioneer size normal spritecolor sunset at center with dspr
     dv "Ну?"
-    window hide
     menu
     {
         "Поспорить с Алисой"
@@ -1688,7 +1680,6 @@ label day_2_cards_continue
     el "И мы смотрим, у кого лучше карты."
     hide el with dissolve
     "Электроник вернулся к своему ватману."
-    window hide
     if ($persistent.CardsWon3)
     {
         menu
@@ -1859,7 +1850,6 @@ label un_play_win
     "Скомандовал он."
     "Я аккуратно открыл карты, стараясь не дать Ульянке заглянуть в них."
     hide us with dissolve
-    window hide
 label us_play
 #     python:
 #         dialogs = {
@@ -1940,7 +1930,6 @@ label us_play_win
     "Он пожал плечами."
     "Итак, матч-реванш начался."
     hide us with dissolve
-    window hide
 label us2_play
 #     python:
 #         dialogs = {
@@ -2008,7 +1997,6 @@ label us2_play_win
     show dv smile_pioneer size normal spritecolor sunset at center with dspr
     dv "Ладно, погнали!"
     hide dv with dissolve
-    window hide
     goto dv_play
 label dv_play
 #     python:
@@ -2109,7 +2097,6 @@ label day2_main3
     "Я вышел из столовой."
     "Спать ложиться было ещё рано, так что небольшая прогулка показалась отличным вариантом."
     th "Куда же направиться?"
-    window hide
     stop ambience fadeout 3
     menu
     {
