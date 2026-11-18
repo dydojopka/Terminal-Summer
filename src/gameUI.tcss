@@ -46,7 +46,7 @@ ScriptStateHeader HeaderIcon {
     display: none;
 }
 
-# Одна рамка вокруг всей кнопки; состояния выделяют только текст подписи.
+# Одна рамка вокруг всей кнопки; цвет рамки соответствует выделению подписи.
 ConsoleButton {
     border: solid #77736a;
     background: transparent;
@@ -55,7 +55,18 @@ ConsoleButton {
     background-tint: transparent;
     tint: transparent;
 }
+ConsoleButton:hover {
+    border: solid #f3f0df;
+}
+ConsoleButton.-selected, ConsoleButton.-primary, ConsoleButton.-success,
+ConsoleButton.-warning, ConsoleButton.-error {
+    border: solid #e3b778;
+}
+ConsoleButton.danger {
+    border: solid #ce8578;
+}
 ConsoleButton:disabled {
+    border: solid #858278;
     color: #858278;
     opacity: 1;
     text-opacity: 1;

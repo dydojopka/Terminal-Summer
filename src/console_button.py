@@ -6,7 +6,7 @@ from textual.widgets import Button
 
 
 class ConsoleButton(Button):
-    selected = reactive(False)
+    selected = reactive(False, toggle_class="-selected")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
