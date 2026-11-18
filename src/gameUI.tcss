@@ -46,6 +46,17 @@ ScriptStateHeader HeaderIcon {
     display: none;
 }
 
+# Консольная прокрутка: одна ячейка, без отдельной фоновой дорожки.
+* {
+    scrollbar-size: 1 1;
+    scrollbar-color: #d8d5c8;
+    scrollbar-color-hover: #f3f0df;
+    scrollbar-color-active: #e3b778;
+    scrollbar-background: transparent;
+    scrollbar-background-hover: transparent;
+    scrollbar-background-active: transparent;
+}
+
 # Одна рамка вокруг всей кнопки; цвет рамки соответствует выделению подписи.
 ConsoleButton {
     border: solid #77736a;
@@ -566,8 +577,6 @@ GalleryMenu {
 
         #bg-cg-gallery {
             overflow: scroll;
-            scrollbar-size: 1 1;
-            scrollbar-color: #888 #333;
         }
         #ansi-content {
             width: auto;

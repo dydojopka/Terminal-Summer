@@ -171,7 +171,9 @@ from textual.screen import Screen, ModalScreen
 from textual.widgets import Label, Footer, Header, Static, ListView, Log, LoadingIndicator
 from textual.widget import Widget
 from textual.binding import Binding
+from textual.scrollbar import ScrollBar, ScrollBarCorner
 from console_button import ConsoleButton as Button
+from console_scrollbar import ConsoleScrollBarRender
 
 from rich.style import Style
 from rich.segment import Segment
@@ -979,6 +981,14 @@ class TerminalSummer(App):
     ]
 
     TEXT_MODES = {"adv", "nvl"}
+
+    def _start_widget(self, parent: Widget, widget: Widget) -> None:
+        # Системные полосы и их угол Textual создаёт в обход обычного CSS-монтажа.
+        if isinstance(widget, ScrollBar):
+            widget.renderer = ConsoleScrollBarRender
+        elif isinstance(widget, ScrollBarCorner):
+            widget.styles.visibility = "hidden"
+        super()._start_widget(parent, widget)
 
     def get_default_screen(self) -> Screen:
         return PerformanceScreen(id="_default")
