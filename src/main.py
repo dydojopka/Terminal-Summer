@@ -167,13 +167,15 @@ from art_renderer import ART_STYLES, render_art
 from textual import events, errors, _time
 from textual.app import App, ComposeResult
 from textual.containers import Center, HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
+from textual.geometry import Size
 from textual.screen import Screen, ModalScreen
-from textual.widgets import Label, Footer, Header, Static, ListItem, ListView, Log, LoadingIndicator
+from textual.widgets import Label, Footer, Header, Static, ListItem, ListView, Log, LoadingIndicator, Input
 from textual.widget import Widget
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.scrollbar import ScrollBar, ScrollBarCorner
 from console_button import ConsoleButton as Button
+from console_button import directional_focus_target
 from console_scrollbar import ConsoleScrollBarRender
 
 from rich.style import Style
@@ -441,18 +443,113 @@ class MainMenuGalleryBtn(Vertical):
 class GalleryMenu(HorizontalGroup):
     """Виджет галереи"""
     BORDER_TITLE = "Галерея"
+    SIZE_BUTTONS = {
+        "btn-small-gallery": ("50", "error"),
+        "btn-medium-gallery": ("150", "warning"),
+        "btn-large-gallery": ("200", "success"),
+    }
+    STYLE_BUTTONS = {
+        "btn-gallery-ansi": "ANSI",
+        "btn-gallery-ascii": "ASCII",
+        "btn-gallery-color-ascii": "COLOR_ASCII",
+    }
+    BUTTON_LABELS = {
+        "btn-close-gallery": "Назад", "btn-gallery-music": "Музыка",
+        "btn-gallery-cg": "Иллюстрации", "btn-gallery-bg": "Фоны",
+        "btn-small-gallery": "маленький", "btn-medium-gallery": "Средний",
+        "btn-large-gallery": "ОГРОМНЫЙ",
+        "btn-gallery-ansi": "ANSI", "btn-gallery-ascii": "ЧБ ASCII",
+        "btn-gallery-color-ascii": "Цветной ASCII",
+    }
+    BINDINGS = [
+        Binding(key, f"gallery_direction('{key}')", show=False, priority=True)
+        for key in ("up", "down", "left", "right")
+    ]
+
     def compose(self):
         yield GalleryMenuLeftBtns()
         yield GalleryMenuMidBtns()
-        
+        yield GalleryMenuBottomBtns()
+
+    def update_size_selection(self, width: str) -> None:
+        for key, (size, variant) in self.SIZE_BUTTONS.items():
+            self.query_one(f"#{key}", Button).variant = variant if size == width else "default"
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action != "gallery_direction":
+            return super().check_action(action, parameters)
+        focused = self.app.focused
+        direction = parameters[0]
+        if isinstance(focused, Input):
+            # Редактирование текста, включая ←/→ и их модификаторы, — дело Input.
+            return direction in {"up", "down"}
+        if isinstance(focused, ListView):
+            if direction == "up":
+                return focused.index in (None, 0)
+            if direction == "down":
+                return not focused.children or focused.index == len(focused.children) - 1
+            return True
+        return isinstance(focused, Button)
+
+    def action_gallery_direction(self, direction: str) -> None:
+        """Переходы между зонами; выбор трека и редактирование остаются нативными."""
+        focused = self.app.focused
+        available = set(self.screen.focus_chain)
+        sidebar = [button for button in self.query_one(GalleryMenuLeftBtns).query(Button)
+                   if button in available]
+        active_tab = self.query_one(f"#btn-gallery-{self.app.gallery_mode}", Button)
+        search = self.query_one("#music-search", Input)
+        listing = self.query_one("#music-list", ListView)
+        music = self.app.gallery_mode == "music"
+        controls = self.query_one("#music-controls" if music else "GalleryMenuBottomBtns")
+        buttons = [button for button in controls.query(Button) if button in available]
+        target = None
+        if focused in sidebar:
+            if direction in {"up", "down"}:
+                index = sidebar.index(focused) + (-1 if direction == "up" else 1)
+                if 0 <= index < len(sidebar):
+                    target = sidebar[index]
+            elif direction == "right":
+                target = (
+                    search if focused.id == "btn-close-gallery" else listing
+                ) if music else next(iter(buttons), None)
+        elif focused is search:
+            target = self.query_one("#btn-close-gallery") if direction == "up" else listing
+        elif focused is listing:
+            if direction == "up":
+                target = search
+            elif direction == "left":
+                target = active_tab
+            else:
+                target = next(iter(buttons), None)
+        elif focused in buttons:
+            if direction in {"left", "right"}:
+                # Переходим между блоками управления, включая перенос сетки музыки.
+                index = buttons.index(focused) + (-1 if direction == "left" else 1)
+                if 0 <= index < len(buttons):
+                    target = buttons[index]
+            else:
+                target = directional_focus_target(focused, buttons, direction)
+            if target is None:
+                if direction == "left":
+                    target = active_tab
+                elif direction == "up":
+                    target = listing if music else active_tab
+        if target is not None and target in available:
+            target.focus()
+
 class GalleryMenuLeftBtns(Vertical):
     """Виджет-контейнер для кнопок галереи сверху"""
+    def on_resize(self) -> None:
+        self.set_class(self.size.height < 28, "short-gallery")
+
     def compose(self):
-        yield Button("Назад", id="btn-close-gallery")
+        labels = GalleryMenu.BUTTON_LABELS
+        yield Button(labels["btn-close-gallery"], id="btn-close-gallery")
         with Static(id="container-left-btns"):
-            yield Button("Музыка", variant="default", id="btn-gallery-music")
-            yield Button("Иллюстрации", variant="primary", id="btn-gallery-cg")
-            yield Button("Фоны", variant="default", id="btn-gallery-bg")
+            yield Button(labels["btn-gallery-music"], variant="default", id="btn-gallery-music")
+            yield Button(labels["btn-gallery-cg"], variant="primary", id="btn-gallery-cg")
+            yield Button(labels["btn-gallery-bg"], variant="default", id="btn-gallery-bg")
 
 class GalleryMenuMidBtns(Vertical):
     """Виджет-контейнер для кнопок и арт-пространства галереи в центре"""
@@ -463,16 +560,31 @@ class GalleryMenuMidBtns(Vertical):
             with ScrollableContainer(id="bg-cg-gallery", can_focus=False, can_focus_children=False):
                 yield AnsiView("", id="ansi-content", classes="mouse-passive-art")
             yield MusicRoom(id="music-room", classes="hidden")
-            
-        yield GalleryMenuBottomBtns()
-        
+
+
+class GalleryOptionButton(Button):
+    def watch_label(self) -> None:
+        # Смена языка должна заново измерить кнопку с width: auto.
+        self.refresh(layout=True)
+
+    def get_content_width(self, container: Size, viewport: Size) -> int:
+        # Подпись однострочная (nowrap), поэтому запас Textual для переноса не нужен.
+        return self.label.cell_length
+
+
 class GalleryMenuBottomBtns(HorizontalGroup):
-    """Виджет-контейнер для кнопок качества"""
+    """Перелистывание, размер и формат артов галереи."""
     def compose(self):
+        labels = GalleryMenu.BUTTON_LABELS
         yield Button("<-", id="btn-back-gallery")
-        yield Button("маленький", variant="default", id="btn-small-gallery")
-        yield Button("Средний", variant="warning", id="btn-medium-gallery")
-        yield Button("ОГРОМНЫЙ", variant="default", id="btn-large-gallery")
+        with HorizontalGroup(id="gallery-size-controls"):
+            for key, (width, variant) in GalleryMenu.SIZE_BUTTONS.items():
+                variant = variant if width == self.app.gallery_size else "default"
+                yield GalleryOptionButton(labels[key], variant=variant, id=key, classes="gallery-quality")
+        with HorizontalGroup(id="gallery-style-controls"):
+            for key, style in GalleryMenu.STYLE_BUTTONS.items():
+                variant = "primary" if style == self.app.gallery_style else "default"
+                yield GalleryOptionButton(labels[key], variant=variant, id=key)
         yield Button("->", id="btn-next-gallery")
 
 
@@ -991,6 +1103,7 @@ class TerminalSummer(App):
 
     gallery_mode = "cg"
     gallery_size = "150" # small - 50 | medium - 150 | large - 200
+    gallery_style = "ANSI"
     gallery_index = 0
     gallery_images = []
 
@@ -1362,34 +1475,19 @@ class TerminalSummer(App):
                 self.gallery_index += 1
                 self.update_gallery_display()
 
-        # Quality
-        elif button_id == "btn-small-gallery":    # Кнопка "маленький"
-            # Меняем стили кнопок
-            self.query_one("#btn-small-gallery", Button).variant = "error"
-            self.query_one("#btn-medium-gallery", Button).variant = "default"
-            self.query_one("#btn-large-gallery", Button).variant = "default"
+        elif button_id in GalleryMenu.SIZE_BUTTONS:
+            self.gallery_size, _ = GalleryMenu.SIZE_BUTTONS[button_id]
+            self.query_one(GalleryMenu).update_size_selection(self.gallery_size)
+            self.load_gallery_images()
+            self.update_gallery_display()
 
-            self.gallery_size = "50"
-            self.load_gallery_images()
-            self.update_gallery_display()
-        elif button_id == "btn-medium-gallery":   # Кнопка "Средний"
-            # Меняем стили кнопок
-            self.query_one("#btn-small-gallery", Button).variant = "default"
-            self.query_one("#btn-medium-gallery", Button).variant = "warning"
-            self.query_one("#btn-large-gallery", Button).variant = "default"
-        
-            self.gallery_size = "150"
-            self.load_gallery_images()
-            self.update_gallery_display()
-        elif button_id == "btn-large-gallery":    # Кнопка "ОГРОМНЫЙ"
-            # Меняем стили кнопок
-            self.query_one("#btn-small-gallery", Button).variant = "default"
-            self.query_one("#btn-medium-gallery", Button).variant = "default"
-            self.query_one("#btn-large-gallery", Button).variant = "success"
-
-            self.gallery_size = "200"
-            self.load_gallery_images()
-            self.update_gallery_display()
+        elif button_id in GalleryMenu.STYLE_BUTTONS:
+            style = GalleryMenu.STYLE_BUTTONS[button_id]
+            if style != self.gallery_style:
+                self.gallery_style = style
+                for key in GalleryMenu.STYLE_BUTTONS:
+                    self.query_one(f"#{key}", Button).variant = "primary" if key == button_id else "default"
+                self.update_gallery_display()
 
         elif button_id == "btn-close-gallery":    # Кнопка "Назад"
             self.action_open_gallery()
@@ -1799,7 +1897,7 @@ class TerminalSummer(App):
         """Открытие меню галереи"""
         self.stop_skipping()
         main_menu = self.query_one("#main-menu")
-        gallery_menu = self.query_one("#gallery-menu")
+        gallery_menu = self.query_one(GalleryMenu)
 
         if gallery_menu.has_class("hidden"):
             # Скрываем главное меню
@@ -1817,10 +1915,7 @@ class TerminalSummer(App):
             self.gallery_index = 0
             self.switch_gallery_tab("cg")
 
-            # Стильи кнопок при открытии 
-            self.query_one("#btn-small-gallery", Button).variant = "default"
-            self.query_one("#btn-medium-gallery", Button).variant = "warning"
-            self.query_one("#btn-large-gallery", Button).variant = "default"
+            gallery_menu.update_size_selection(self.gallery_size)
         else:
             self.leave_music_preview()
             # Скрываем меню галереи
@@ -3291,7 +3386,7 @@ class TerminalSummer(App):
         )
 
     def update_gallery_display(self):
-        """Конвертация общего изображения в ANSI арт и обновление отображения."""
+        """Показывает текущее изображение в выбранном размере и формате."""
         static = self.query_one("#ansi-content", Static)
         if not self.gallery_images:
             static.update(Text(self._gallery_error or "[Ничего не найдено]"))
@@ -3302,7 +3397,7 @@ class TerminalSummer(App):
         try:
             image_path = resolve_gallery_image(self.ts_path / "images", image)
             with Image.open(image_path) as img:
-                art = render_art(img, width=int(self.gallery_size), alpha=True, style="ANSI")
+                art = render_art(img, width=int(self.gallery_size), alpha=True, style=self.gallery_style)
             static.update(art)
         except FileNotFoundError:
             static.update(Text(f"[Ошибка изображения {image.id}: файл не найден]"))
