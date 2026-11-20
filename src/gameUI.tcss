@@ -46,6 +46,12 @@ ScriptStateHeader HeaderIcon {
     display: none;
 }
 
+# Палитра списков концовок и музыки, независимая от сюжетного времени.
+$console-text: #d8d5c8;
+$console-muted: #9d9687;
+$console-hover: #f3f0df;
+$console-accent: #e3b778;
+
 # Консольная прокрутка: одна ячейка, без отдельной фоновой дорожки.
 * {
     scrollbar-size: 1 1;
@@ -113,9 +119,10 @@ TerminalSizeWarning { display: none; }
     layout: vertical;
     align: center middle;
 
-    LoadingIndicator {
+    #script-loading-indicator {
         height: 3;
         width: 34;
+        color: $console-accent;
     }
 
     Label {
@@ -722,11 +729,25 @@ MusicRoom {
     padding: 0 1;
     overflow-y: auto;
 }
-#music-search { height: 3; }
-#music-help {
-    height: auto;
-    max-height: 2;
-    color: $text-muted;
+#music-search {
+    height: 3;
+    padding: 0 1;
+    border: solid #77736a;
+    background: transparent;
+    background-tint: transparent;
+    color: $console-text;
+}
+#music-search:hover { border: solid $console-hover; }
+#music-search:focus { border: solid $console-accent; }
+#music-search .input--placeholder, #music-search .input--suggestion { color: $console-muted; }
+#music-search .input--cursor {
+    background: $console-accent;
+    color: $background;
+    text-style: none;
+}
+#music-search .input--selection {
+    background: $console-accent 35%;
+    color: $console-hover;
 }
 #music-list { height: 1fr; min-height: 1; }
 #music-empty { height: auto; }
@@ -745,7 +766,23 @@ MusicRow {
     .music-title { width: 1fr; text-overflow: ellipsis; text-wrap: nowrap; }
     .music-duration { width: 6; text-align: right; }
 }
-MusicRow.music-playing { color: $success; text-style: bold; }
+MusicRow .music-duration { color: $console-muted; }
+
+# Списки выделяют подписи, а не заливают строки и ANSI-иконки.
+#music-list, #endings-list {
+    background: transparent;
+    background-tint: transparent;
+}
+MusicRow, MusicRow.-hovered, MusicRow.-highlight,
+EndingRow, EndingRow.-hovered, EndingRow.-highlight {
+    background: transparent;
+    color: $console-text;
+    text-style: none;
+}
+MusicRow.music-playing Label { color: $console-accent; text-style: bold; }
+MusicRow.-highlight Label { color: $console-accent; text-style: underline; }
+MusicRow.music-playing.-highlight Label { text-style: bold underline; }
+MusicRow.-hovered Label { color: $console-hover; }
 
 EndingResult {
     align: center middle;
@@ -801,9 +838,8 @@ EndingsMenu {
     height: 3;
     content-align: right middle;
 }
-#endings-help { height: auto; max-height: 2; color: $text-muted; }
 #endings-error { height: auto; }
-#endings-list { height: 1fr; min-height: 1; background: transparent; }
+#endings-list { height: 1fr; min-height: 1; }
 EndingRow {
     layout: horizontal;
     align: left middle;
@@ -813,16 +849,22 @@ EndingRow {
     padding: 1;
     .ending-icon { width: 24; height: 12; margin-right: 2; }
     .ending-details { width: 1fr; height: auto; align: left middle; }
-    .ending-route { width: 23; height: auto; margin-right: 2; color: $text-muted; }
+    .ending-route { width: 23; height: auto; margin-right: 2; color: $console-muted; }
     .ending-caption { width: 1fr; height: auto; }
-    .ending-title { width: 1fr; height: auto; color: $text-muted; }
-    .ending-status { width: 1fr; height: auto; margin-top: 1; color: $text-muted; }
-    .ending-date { width: 1fr; height: auto; margin-top: 1; color: $text-muted; }
+    .ending-title { width: 1fr; height: auto; color: $console-muted; }
+    .ending-status { width: 1fr; height: auto; margin-top: 1; color: $console-muted; }
+    .ending-date { width: 1fr; height: auto; margin-top: 1; color: $console-muted; }
 }
 EndingRow.ending-unlocked {
-    .ending-route { color: $text; text-style: bold; }
-    .ending-title { color: $text; text-style: bold; }
-    .ending-status { color: $text; }
+    .ending-route { color: $console-text; text-style: bold; }
+    .ending-title { color: $console-text; text-style: bold; }
+    .ending-status { color: $console-accent; }
+}
+EndingRow.-highlight {
+    .ending-route, .ending-title { color: $console-accent; text-style: bold underline; }
+}
+EndingRow.-hovered {
+    .ending-route, .ending-title { color: $console-hover; text-style: bold underline; }
 }
 EndingRow.ending-compact {
     .ending-icon { margin-right: 1; }
