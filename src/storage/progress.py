@@ -1,9 +1,12 @@
-"""Дата первого открытия - метаданные прогресса, не переменная сценарного DSL."""
+"""Общий прогресс прохождений и даты первых открытий концовок."""
 
 from datetime import datetime
+import json
+from pathlib import Path
 import re
 
 from story.parser import ENDING_STATE_KEYS, normalize_script_state
+from storage.json_files import write_user_json
 
 
 TIMESTAMP_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})")
@@ -42,6 +45,20 @@ def split_persistent_progress(data: dict) -> tuple[dict, dict[str, str]]:
     validated = normalize_script_state(flags)
     dates = normalize_ending_dates(data.get("ending_dates", {}), validated)
     return flags, dates
+
+
+def read_progress(path: Path) -> tuple[dict, dict[str, str]] | None:
+    if not path.exists():
+        return None
+    with path.open("r", encoding="utf-8") as source:
+        return split_persistent_progress(json.load(source))
+
+
+def write_progress(
+    path: Path, flags: dict, dates: dict[str, str], *, backup_invalid: bool = False,
+) -> None:
+    state = {**flags, "ending_dates": dates} if dates else flags
+    write_user_json(path, state, backup_invalid=backup_invalid)
 
 
 def merge_ending_dates(current: dict[str, str], incoming: dict[str, str]) -> dict[str, str]:

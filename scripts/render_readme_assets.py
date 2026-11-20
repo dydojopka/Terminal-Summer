@@ -34,6 +34,7 @@ sys.path.insert(0, str(ROOT / "src"))
 import main as game
 from story.parser import ScriptParser, get_script_state, set_script_state
 from rendering.sprites import parse_show_like
+from storage import saves
 
 
 OUTPUT = ROOT / ".github/readme"
@@ -267,7 +268,7 @@ async def capture_case(case: PreviewCase, style: str, rasterizer: CellRasterizer
         app.PERSISTENT_FILE = folder / "persistent.json"
         app._sprite_runtime_dir = folder / "generated_runtime"
         try:
-            with patch.object(game, "SAVES_PATH", folder / "saves"), \
+            with patch.object(saves, "SAVES_PATH", folder / "saves"), \
                     patch.object(app, "start_menu_music"), \
                     patch.object(app, "wait_script_delay", side_effect=hold_wait):
                 async with app.run_test(size=TERMINAL_SIZE) as pilot:

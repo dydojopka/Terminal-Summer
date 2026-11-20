@@ -9,10 +9,12 @@ import tempfile
 from collections import OrderedDict
 from dataclasses import dataclass, replace
 from pathlib import Path
-from audio.manager import AUDIO_DEFAULTS, AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
-from audio.catalog import finite_number, validate_audio_assets
-from file_io import atomic_output, write_json_atomic
-from save_data import validate_save_view, plain_save_text
+from audio.manager import AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
+from audio.catalog import validate_audio_assets
+from file_io import atomic_output
+from storage import saves, settings as settings_storage
+from storage.save_view import plain_save_text, validate_save_view
+from storage.saves import CORRUPT_SAVE
 from single_instance import single_instance, AlreadyRunningError
 from terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
@@ -21,110 +23,15 @@ from paths import get_frozen_bundle_dir, get_project_root, get_resource_path, ge
 
 CSS_PATH = get_resource_path("gameUI.tcss")
 MENU_LOGO_PATH = get_resource_path("menu_logo.ansi")
-SETTINGS_PATH = get_user_data_dir() / "settings.json"
-SAVES_PATH = get_user_data_dir() / "saves"
-PERSISTENT_PATH = get_user_data_dir() / "persistent.json"
 APP_VERSION = "1.0.0"
 # Original game/options.rpy: config.main_menu_music = "sound/music/blow_with_the_fires.ogg".
 MENU_MUSIC_KEY = "blow_with_the_fires"
-
-
-# ============ Сохранения ============
-CORRUPT_SAVE = "Повреждённое сохранение"
-
-
-def _save_path(page: int, slot: int) -> Path:
-    """Путь к файлу сохранения: saves/{page+1}/{slot+1}.json"""
-    return SAVES_PATH / str(page + 1) / f"{slot + 1}.json"
-
-
-def save_game_state(page: int, slot: int, game_state: dict, timestamp: str = "") -> None:
-    """Сохранение состояния игры в JSON файл"""
-    save_file = _save_path(page, slot)
-    save_file.parent.mkdir(parents=True, exist_ok=True)
-    save_data = {
-        "save_id": f"{page}/{slot}",
-        "page": page,
-        "slot": slot,
-        "timestamp": timestamp,
-        "game_state": game_state,
-    }
-    write_json_atomic(save_file, save_data)
-
-
-def load_game_state(page: int, slot: int) -> dict | None:
-    """Загрузка состояния игры из JSON файла"""
-    save_file = _save_path(page, slot)
-    if not save_file.exists():
-        return None
-    with save_file.open("r", encoding="utf-8") as f:
-        save_data = json.load(f)
-    if not isinstance(save_data, dict):
-        raise ValueError("Invalid save file")
-    if not isinstance(save_data.get("game_state"), dict):
-        raise ValueError("Invalid game state")
-    return save_data.get("game_state")
-
-
-def delete_save(page: int, slot: int) -> bool:
-    """Удаление сохранения"""
-    save_file = _save_path(page, slot)
-    if save_file.exists():
-        save_file.unlink()
-        # Удаляем пустую директорию страницы, если она пуста
-        try:
-            save_file.parent.rmdir()
-        except OSError:
-            pass
-        return True
-    return False
-
-
-def get_all_saves() -> dict[str, dict]:
-    """Получение всех сохранений (возвращает dict['page/slot' -> save_data])"""
-    saves = {}
-    if not SAVES_PATH.exists():
-        return saves
-    for page_dir in SAVES_PATH.iterdir():
-        if not page_dir.is_dir():
-            continue
-        try:
-            page_num = int(page_dir.name)
-        except ValueError:
-            continue
-        for save_file in page_dir.glob("*.json"):
-            try:
-                with save_file.open("r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if not isinstance(data, dict):
-                    raise ValueError("Invalid save file")
-                if not isinstance(data.get("game_state"), dict):
-                    raise ValueError("Invalid game state")
-                slot_num = int(save_file.stem)
-                save_id = f"{page_num - 1}/{slot_num - 1}"
-                saves[save_id] = data
-            except (OSError, ValueError, UnicodeError):
-                try:
-                    slot_num = int(save_file.stem)
-                except ValueError:
-                    continue
-                saves[f"{page_num - 1}/{slot_num - 1}"] = {"error": CORRUPT_SAVE}
-    return saves
-
-
-def _backup_invalid_json(path: Path) -> None:
-    if path.exists():
-        backup = path.with_name(f"{path.name}.invalid-{time.time_ns()}.bak")
-        with path.open("rb") as source, atomic_output(backup, overwrite=False) as target:
-            import shutil
-            shutil.copyfileobj(source, target)
 
 
 def _file_signature(path: Path) -> tuple:
     stat = path.stat()
     return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
 
-import json
 from PIL import Image
 from art_renderer import ART_STYLES, render_art
 
@@ -160,8 +67,8 @@ from story.card_commands import RESULTS
 from endings_menu import EndingsMenu, EndingsList, EndingResult
 from endings_catalog import current_ending
 from credits import CREDIT_PAGES, CreditsTimeline
-from ending_progress import (
-    ending_unlock_time, normalize_ending_dates, split_persistent_progress, merge_ending_dates,
+from storage.progress import (
+    ending_unlock_time, merge_ending_dates, normalize_ending_dates, read_progress, write_progress,
 )
 from rendering.sprites import (
     parse_show_like,
@@ -217,7 +124,7 @@ def main():
     if get_frozen_bundle_dir() is None:
         sys.path.insert(0, str(get_project_root()))
     try:
-        with single_instance(PERSISTENT_PATH.parent):
+        with single_instance(TerminalSummer.PERSISTENT_FILE.parent):
             from scripts.assets_manager import ensure_assets
             ensure_assets(quiet=True, require_endings=True)
             TerminalSummer().run()
@@ -1148,20 +1055,9 @@ class TerminalSummer(App):
     TITLE = f"Terminal Summer {APP_VERSION}"
     SUB_TITLE = format_script_state()
 
-    CONFIG_FILE = SETTINGS_PATH
-    PERSISTENT_FILE = PERSISTENT_PATH
-
-    DEFAULT_SETTINGS = {
-        "language": "ru",
-        "header": False,
-        "header_lp_points": True,
-        "header_flags": True,
-        "quality": "150",
-        "style": "ANSI",
-        "scene_filters_enabled": True,
-        "text_speed": "0.025",
-        **AUDIO_DEFAULTS,
-    }
+    CONFIG_FILE = get_user_data_dir() / "settings.json"
+    PERSISTENT_FILE = get_user_data_dir() / "persistent.json"
+    DEFAULT_SETTINGS = settings_storage.DEFAULT_SETTINGS
 
     def __init__(self):
         super().__init__()
@@ -2345,7 +2241,7 @@ class TerminalSummer(App):
         save_menu.update_titles()
         save_menu.current_page = 0
         save_menu.selected_slot = None
-        save_menu.all_saves = get_all_saves()
+        save_menu.all_saves = saves.get_all_saves()
 
         # Скрытие предыдущего меню
         if opened_from == "pause":
@@ -2520,11 +2416,11 @@ class TerminalSummer(App):
         page = save_menu.current_page
 
         try:
-            delete_save(page, slot_index)
+            saves.delete_save(page, slot_index)
         except OSError as exc:
             self._show_load_error(str(exc), key="delete.error")
             return
-        save_menu.all_saves = get_all_saves()
+        save_menu.all_saves = saves.get_all_saves()
         save_menu.selected_slot = None
         self.update_save_menu_display()
 
@@ -2537,9 +2433,8 @@ class TerminalSummer(App):
     def _offer_outdated_save(self, page: int, slot: int) -> None:
         if isinstance(self.screen, OutdatedSaveDialog):
             return
-        path = _save_path(page, slot)
         try:
-            signature = hashlib.sha256(path.read_bytes()).digest()
+            signature = saves.slot_digest(page, slot)
         except OSError:
             signature = None
 
@@ -2547,15 +2442,15 @@ class TerminalSummer(App):
             if not remove:
                 return
             try:
-                if signature is None or hashlib.sha256(path.read_bytes()).digest() != signature:
+                if signature is None or saves.slot_digest(page, slot) != signature:
                     self._show_load_error("Слот изменился; сохранение не удалено", key="outdated.changed")
                     return
-                delete_save(page, slot)
+                saves.delete_save(page, slot)
             except (OSError, ValueError) as exc:
                 self._show_load_error(str(exc), key="delete.error")
                 return
             menu = self.query_one("#save-menu")
-            menu.all_saves = get_all_saves()
+            menu.all_saves = saves.get_all_saves()
             if menu.current_page == page and menu.selected_slot == f"save-slot-{slot}":
                 menu.selected_slot = None
             self.update_save_menu_display()
@@ -2567,7 +2462,7 @@ class TerminalSummer(App):
         # Повторное нажатие, уже стоящее в очереди, не обрабатывается под модальным окном.
         if isinstance(self.screen, OutdatedSaveDialog):
             return
-        save_menu = self.query_one("#save-menu")
+        save_menu = self.query_one(SaveMenu)
         if not save_menu.selected_slot:
             return
 
@@ -2575,7 +2470,7 @@ class TerminalSummer(App):
         page = save_menu.current_page
 
         try:
-            game_state = load_game_state(page, slot_index)
+            game_state = saves.load_game_state(page, slot_index)
         except (OSError, ValueError, UnicodeError) as exc:
             self._show_load_error(str(exc), key="load.failed")
             return
@@ -2725,7 +2620,7 @@ class TerminalSummer(App):
 
     def save_to_selected_slot(self) -> None:
         """Сохранение в выбранный слот"""
-        save_menu = self.query_one("#save-menu")
+        save_menu = self.query_one(SaveMenu)
         if not save_menu.selected_slot:
             return
 
@@ -2740,7 +2635,7 @@ class TerminalSummer(App):
         if not self.is_savable_game_state():
             return
 
-        from story import parser as script_parser
+        from story.parser import get_script_state
 
         # Текущий текст и имя персонажа из текстового бара
         text_bar = self.query_one("#text-bar", Widget)
@@ -2770,7 +2665,7 @@ class TerminalSummer(App):
             "cards": self._card_save_data(),
             "script": script_runtime,
             "variables": {
-                "state": script_parser.get_script_state(),
+                "state": get_script_state(),
             },
             "scene": {
                 "current_scene": getattr(self, "current_scene", ""),
@@ -2795,7 +2690,7 @@ class TerminalSummer(App):
         from datetime import datetime
         timestamp = datetime.now().strftime("%d.%m.%Y %H:%M")
         try:
-            save_game_state(page, slot_index, game_state, timestamp)
+            saves.save_game_state(page, slot_index, game_state, timestamp)
         except (OSError, ValueError, TypeError) as exc:
             strings = save_menu.strings
             self.notify(strings.get("save.failed", str(exc)),
@@ -2803,7 +2698,7 @@ class TerminalSummer(App):
             return
 
         # Обновление отображения
-        save_menu.all_saves = get_all_saves()
+        save_menu.all_saves = saves.get_all_saves()
         self.update_save_menu_display()
 
     # ============ Функции - прочие ============
@@ -3574,15 +3469,14 @@ class TerminalSummer(App):
 
     def load_persistent_state(self) -> bool:
         """Загружает общие для всех прохождений сценарные флаги."""
-        if not self.PERSISTENT_FILE.exists():
-            self._persistent_read_error = False
-            return False
         try:
-            with self.PERSISTENT_FILE.open("r", encoding="utf-8") as file:
-                state = json.load(file)
+            progress = read_progress(self.PERSISTENT_FILE)
+            if progress is None:
+                self._persistent_read_error = False
+                return False
             from story.parser import update_persistent_state
 
-            flags, dates = split_persistent_progress(state)
+            flags, dates = progress
             update_persistent_state(flags)
             self.ending_dates = merge_ending_dates(self.ending_dates, dates)
             self._persistent_read_error = False
@@ -3606,13 +3500,9 @@ class TerminalSummer(App):
         """Атомарно сохраняет persistent-флаги рядом с настройками."""
         from story.parser import get_persistent_state
 
-        state = get_persistent_state()
-        if self.ending_dates:
-            state["ending_dates"] = self.ending_dates.copy()
         try:
-            if self._persistent_read_error:
-                _backup_invalid_json(self.PERSISTENT_FILE)
-            write_json_atomic(self.PERSISTENT_FILE, state)
+            write_progress(self.PERSISTENT_FILE, get_persistent_state(), self.ending_dates,
+                           backup_invalid=self._persistent_read_error)
             self._persistent_read_error = False
         except OSError as exc:
             self.sub_title = f"[Persistent state error] {exc}"
@@ -3640,48 +3530,9 @@ class TerminalSummer(App):
     def load_settings(self):
         """Дополняет старый config; ошибочный файл заменяет полными defaults."""
         self._settings_read_error = False
-
-        def reject_constant(value):
-            raise ValueError(f"Недопустимое число в настройках: {value}")
-
-        def parse_float(value):
-            return finite_number(float(value), minimum=-float("inf"))
-
         try:
-            if not self.CONFIG_FILE.exists():
-                self.settings = self.DEFAULT_SETTINGS.copy()
-                self.save_settings()
-                return
-            with self.CONFIG_FILE.open("r", encoding="utf-8") as source:
-                loaded = json.load(source, parse_constant=reject_constant, parse_float=parse_float)
-            if not isinstance(loaded, dict):
-                raise ValueError("Настройки должны быть JSON-объектом")
-            self.settings = {**self.DEFAULT_SETTINGS, **loaded}
-            if self.settings["language"] not in ("ru", "en"):
-                self.settings["language"] = "ru"
-            for key in ("header", "header_lp_points", "header_flags", "scene_filters_enabled"):
-                if type(self.settings[key]) is not bool:
-                    raise ValueError(f"Некорректная настройка: {key}")
-            for key, choices in (("quality", ("50", "150", "200")),
-                                 ("text_speed", ("0", "0.01", "0.025", "0.04"))):
-                raw = self.settings[key]
-                if type(raw) in (int, float):
-                    value = next((choice for choice in choices if raw == float(choice)), None)
-                else:
-                    value = raw
-                if not isinstance(value, str) or value not in choices:
-                    raise ValueError(f"Некорректная настройка: {key}")
-                self.settings[key] = value
-            style = self.settings["style"]
-            if not isinstance(style, str) or style not in ART_STYLES:
-                raise ValueError("Некорректная настройка: style")
-            for key in AUDIO_DEFAULTS:
-                if key == "audio_muted":
-                    if type(self.settings[key]) is not bool:
-                        raise ValueError(f"Некорректная настройка: {key}")
-                else:
-                    self.settings[key] = finite_number(self.settings[key], maximum=1)
-            if self.settings != loaded:
+            self.settings, needs_write = settings_storage.read_settings(self.CONFIG_FILE, self.DEFAULT_SETTINGS)
+            if needs_write:
                 self.save_settings()
         except (OSError, ValueError, UnicodeError) as exc:
             self.settings = self.DEFAULT_SETTINGS.copy()
@@ -3694,9 +3545,7 @@ class TerminalSummer(App):
     def save_settings(self):
         """Сохранение настроек"""
         try:
-            if self._settings_read_error:
-                _backup_invalid_json(self.CONFIG_FILE)
-            write_json_atomic(self.CONFIG_FILE, self.settings)
+            settings_storage.write_settings(self.CONFIG_FILE, self.settings, backup_invalid=self._settings_read_error)
             self._settings_read_error = False
         except (OSError, ValueError, TypeError) as exc:
             self.notify(self.runtime_ui.get("file.write-error", str(exc)),
