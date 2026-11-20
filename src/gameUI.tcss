@@ -303,6 +303,7 @@ NovelMenu.nvl-mode {
 NovelMenu.choice-mode {
     #btn-next { visibility: hidden; }
 }
+NovelMenu.card-mode { height: 6; max-height: 6; }
 
 # Пауза
 PauseMenu {
@@ -427,25 +428,25 @@ $novel-prologue: #98d8da;
 .time-day {
     TextBar, PauseMenuContainer { border: round $novel-day; }
     LogMenu { border: dashed $novel-day; }
-    NovelMenu ConsoleButton, PauseMenu ConsoleButton { border: solid $novel-day; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton, CardTable ConsoleButton { border: solid $novel-day; }
     ChoiceBar ListItem.-highlight Label { color: $novel-day; }
 }
 .time-sunset {
     TextBar, PauseMenuContainer { border: round $novel-sunset; }
     LogMenu { border: dashed $novel-sunset; }
-    NovelMenu ConsoleButton, PauseMenu ConsoleButton { border: solid $novel-sunset; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton, CardTable ConsoleButton { border: solid $novel-sunset; }
     ChoiceBar ListItem.-highlight Label { color: $novel-sunset; }
 }
 .time-night {
     TextBar, PauseMenuContainer { border: round $novel-night; }
     LogMenu { border: dashed $novel-night; }
-    NovelMenu ConsoleButton, PauseMenu ConsoleButton { border: solid $novel-night; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton, CardTable ConsoleButton { border: solid $novel-night; }
     ChoiceBar ListItem.-highlight Label { color: $novel-night; }
 }
 .time-prologue {
     TextBar, PauseMenuContainer { border: round $novel-prologue; }
     LogMenu { border: dashed $novel-prologue; }
-    NovelMenu ConsoleButton, PauseMenu ConsoleButton { border: solid $novel-prologue; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton, CardTable ConsoleButton { border: solid $novel-prologue; }
     ChoiceBar ListItem.-highlight Label { color: $novel-prologue; }
 }
 # Наведение заметно и в ночной палитре, а выбор остаётся без рамок и заливки.
@@ -894,4 +895,65 @@ OutdatedSaveDialog {
 }
 .invisible {
     visibility: hidden;
+}
+
+# Карточный стол и отдельный демонстрационный стенд.
+CardTable {
+    width: 1fr;
+    height: 1fr;
+    min-height: 12;
+}
+#card-scenery {
+    width: 100%;
+    height: 1fr;
+    content-align: center middle;
+}
+#card-layout {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+}
+#card-hands { width: 1fr; height: 100%; }
+.card-row { height: 7; width: 100%; align-horizontal: center; }
+CardSlot {
+    width: 9;
+    height: 7;
+    margin: 0 1 0 0;
+    padding: 0;
+    border: none;
+    background: #202622;
+}
+CardSlot.last-card { margin-right: 0; }
+#card-center { height: 1fr; min-height: 0; }
+#card-result-row {
+    width: 100%;
+    height: 1fr;
+    align: center middle;
+}
+#card-result {
+    width: 24;
+    max-width: 100%;
+    min-width: 0;
+    height: 3;
+    margin: 0;
+    align-horizontal: center;
+}
+#card-sidebar {
+    width: 24;
+    height: 100%;
+    margin-left: 1;
+    padding: 0 1;
+    background: #202622;
+}
+#card-portrait { width: 16; height: 8; content-align: center middle; }
+#card-rival-name { height: 1; text-style: bold; color: #dcd168; }
+#card-counters { height: 4; }
+#card-rival-name, #card-counters, #card-legend { text-wrap: nowrap; }
+#card-legend { height: 8; margin-top: 1; color: #bfb9a7; }
+#card-pass { width: 100%; min-width: 0; height: 3; padding: 0; }
+.compact-cards {
+    .card-row, CardSlot { height: 5; }
+    CardSlot { width: 7; }
+    #card-portrait { height: 3; }
+    #card-legend { height: 4; margin-top: 0; }
 }
