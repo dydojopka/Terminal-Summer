@@ -1,23 +1,73 @@
-import os
-import re
-import sys
+"""Связывает интерфейс, сценарий и подсистемы игры в приложении Textual."""
+
 import asyncio
 import hashlib
-import threading
-import time
+import re
+import sys
 import tempfile
-from collections import OrderedDict
-from dataclasses import dataclass, replace
+import time
+from dataclasses import replace
 from pathlib import Path
-from audio.manager import AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
-from audio.catalog import validate_audio_assets
-from file_io import atomic_output
-from storage import saves, settings as settings_storage
-from storage.save_view import validate_save_view
-from single_instance import single_instance, AlreadyRunningError
-from ui.widgets.terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
+from PIL import Image
+from rich.text import Text
+from textual import _time, events
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.reactive import reactive
+from textual.screen import Screen
+from textual.scrollbar import ScrollBar, ScrollBarCorner
+from textual.widget import Widget
+from textual.widgets import Footer, Label, ListView, Static
+
+from audio.catalog import validate_audio_assets
+from audio.manager import AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
+from cards.game import Phase
+from cards.session import CardSession
+from cards.table import CardTable
+from credits import CREDIT_PAGES, CreditsTimeline
+from endings_catalog import current_ending
+from file_io import atomic_output
+from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from paths import get_frozen_bundle_dir, get_project_root, get_resource_path, get_ts_path, get_user_data_dir
+from rendering.art import render_art
+from rendering.cache import file_signature
+from rendering.jobs import SceneRenderer
+from rendering.preload import ScriptPreloader
+from rendering.scene import RenderSprite, SceneRenderSnapshot
+from rendering.sprites import (
+    compose_layers,
+    load_yaml_dict as load_sprite_resources_yaml,
+    parse_show_like,
+    resolve_sprite,
+)
+from single_instance import AlreadyRunningError, single_instance
+from storage import saves, settings as settings_storage
+from storage.progress import (
+    ending_unlock_time, merge_ending_dates, normalize_ending_dates, read_progress, write_progress,
+)
+from storage.save_view import validate_save_view
+from story.card_commands import RESULTS
+from story.locale import load_interface_locale
+from story.parser import ScriptParser, format_script_state, TIMES_OF_DAY
+
+from ui.menus.endings import EndingResult, EndingsList, EndingsMenu
+from ui.menus.gallery import GalleryMenu
+from ui.menus.main_menu import MainMenu
+from ui.menus.music_room import MusicRoom
+from ui.menus.pause import PauseMenu, PauseMenuContainer
+from ui.menus.saves import OutdatedSaveDialog, SaveMenu
+from ui.menus.settings import LANGUAGE_NAMES, LanguageDialog, SettingsMenu
+from ui.novel.camp_map import CampMap, map_render_width
+from ui.novel.choices import ChoiceBar
+from ui.novel.dialogue import LogMenu, NovelMenu, TextBar
+from ui.novel.header import ScriptStateHeader
+from ui.novel.loading import ScriptLoadingOverlay
+from ui.novel.window import NovelWindow
+from ui.screen import PerformanceScreen
+from ui.widgets.console_button import ConsoleButton as Button
+from ui.widgets.console_scrollbar import ConsoleScrollBarRender
+from ui.widgets.terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
 
 CSS_PATH = get_resource_path("gameUI.tcss")
@@ -26,109 +76,17 @@ APP_VERSION = "1.0.0"
 # Original game/options.rpy: config.main_menu_music = "sound/music/blow_with_the_fires.ogg".
 MENU_MUSIC_KEY = "blow_with_the_fires"
 
-
-def _file_signature(path: Path) -> tuple:
-    stat = path.stat()
-    return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
-
-from PIL import Image
-from art_renderer import ART_STYLES, render_art
-
-from textual import events, _time
-from textual.app import App, ComposeResult
-from textual.screen import Screen
-from textual.widgets import Label, Footer, Static, ListView
-from textual.widget import Widget
-from textual.binding import Binding
-from textual.reactive import reactive
-from textual.scrollbar import ScrollBar, ScrollBarCorner
-from ui.widgets.console_button import ConsoleButton as Button
-from ui.widgets.console_scrollbar import ConsoleScrollBarRender
-
-from rich.text import Text
-
-from story.parser import ScriptParser, format_script_state, TIMES_OF_DAY
-from story.locale import load_interface_locale
-from gallery_catalog import load_gallery_catalog, resolve_gallery_image
-from ui.novel.camp_map import CampMap, map_render_width
-from cards.game import Phase
-from cards.session import CardSession
-from cards.table import CardTable
-from story.card_commands import RESULTS
-from ui.menus.endings import EndingResult, EndingsList, EndingsMenu
-from ui.menus.gallery import GalleryMenu
-from ui.menus.main_menu import MainMenu
-from ui.menus.music_room import MusicRoom
-from ui.menus.pause import PauseMenu, PauseMenuContainer
-from ui.menus.saves import OutdatedSaveDialog, SaveMenu
-from ui.menus.settings import LANGUAGE_NAMES, LanguageDialog, SettingsMenu
-from ui.novel.choices import ChoiceBar
-from ui.novel.dialogue import LogMenu, NovelMenu, TextBar
-from ui.novel.header import ScriptStateHeader
-from ui.novel.loading import ScriptLoadingOverlay
-from ui.novel.window import NovelWindow
-from ui.screen import PerformanceScreen
-from endings_catalog import current_ending
-from credits import CREDIT_PAGES, CreditsTimeline
-from storage.progress import (
-    ending_unlock_time, merge_ending_dates, normalize_ending_dates, read_progress, write_progress,
-)
-from rendering.sprites import (
-    parse_show_like,
-    load_yaml_dict as load_sprite_resources_yaml,
-    resolve_sprite,
-    compose_layers,
-    normalize_sprite_position, SPRITE_POSITIONS, SPRITE_SIZES,
-)
-
-
 # Только сценарные фильтры; полноэкранные записки и opening-слои ими не являются.
 SCENE_FILTER_IDS = frozenset({"prologue_filter"})
 
 
-@dataclass(frozen=True)
-class RenderSprite:
-    character: str
-    show_line: str
-    image_path: str
-    at: str
-    size: str
-    behind: str | None
-    order: int
-
-
-@dataclass(frozen=True)
-class SceneRenderSnapshot:
-    category: str
-    name: str
-    sprites: tuple[RenderSprite, ...]
-    width: int
-    style: str
-    cache_epoch: int
-    diagnostics: tuple[str, str, str | None] = ("Неизвестный цвет сцены", "Файл не найден", None)
-
-    @property
-    def key(self) -> tuple:
-        sprite_key = tuple(
-            (
-                sprite.character,
-                sprite.show_line,
-                sprite.image_path,
-                sprite.at,
-                sprite.size,
-                sprite.behind,
-                sprite.order,
-            )
-            for sprite in self.sprites
-        )
-        return self.category, self.name, sprite_key, str(self.width), self.style, self.cache_epoch, 3, self.diagnostics
-
-def main():
+def main() -> None:
     if get_frozen_bundle_dir() is None:
         sys.path.insert(0, str(get_project_root()))
     try:
         with single_instance(TerminalSummer.PERSISTENT_FILE.parent):
             from scripts.assets_manager import ensure_assets
+
             ensure_assets(quiet=True, require_endings=True)
             TerminalSummer().run()
     except AlreadyRunningError as exc:
@@ -207,24 +165,10 @@ class TerminalSummer(App):
         self._game_pause_changed_event = asyncio.Event()
         self.scene_dirty = False
         self._scene_generation = 0
-        self._cache_epoch = 0
-        self._cache_lock = threading.RLock()
-        self._scene_render_cache: OrderedDict[tuple, Text] = OrderedDict()
-        self._asset_fingerprints: OrderedDict[str, tuple] = OrderedDict()
-        self._generated_validation: OrderedDict[str, tuple] = OrderedDict()
-        self._decoded_image_cache: OrderedDict[str, tuple[Image.Image, int]] = OrderedDict()
-        self._decoded_image_cache_bytes = 0
-        self._decoded_image_cache_limit = 128 * 1024 * 1024
-        self._render_tasks: dict[tuple, asyncio.Task] = {}
-        self._prefetch_tasks: set[asyncio.Task] = set()
-        self._render_semaphore = asyncio.Semaphore(2)
-        self._script_preload_task = None
-        self._preload_generation = 0
-        self._preload_filename = None
+        self._renderer = SceneRenderer()
+        self._preloader = ScriptPreloader(self._renderer)
         self._loading_restore_novel = False
         self._preload_after_settings = False
-        self._render_cache_limit = 96
-        self._sprite_cache_limit = 256
         self.gallery_images = []
         self._gallery_catalog = None
         self._gallery_error = None
@@ -515,6 +459,7 @@ class TerminalSummer(App):
             self._card_auto_key = None
 
 
+
     # ============ Функции - on_ ============
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if self._terminal_too_small:
@@ -785,7 +730,7 @@ class TerminalSummer(App):
         art = await self._get_render_async(snapshot)
         if (self.is_running and not bar.has_class("hidden") and view.zones
                 and revision == view.revision and view.request_key == snapshot.key
-                and snapshot.cache_epoch == self._cache_epoch):
+                and snapshot.cache_epoch == self._renderer.cache.epoch):
             view.set_art(art, snapshot.key, snapshot.style)
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
@@ -1107,8 +1052,6 @@ class TerminalSummer(App):
 
             # Показываем главное меню
             self.action_open_menu()
-            #main_menu.remove_class("hidden")
-
 
     def action_open_endings(self) -> None:
         """Самостоятельное меню только из главного экрана, без изменения аудио."""
@@ -1513,10 +1456,7 @@ class TerminalSummer(App):
         self.toggle_skipping()
 
     def _is_script_loading(self) -> bool:
-        return (
-            self._script_preload_task is not None
-            and not self._script_preload_task.done()
-        ) or not self.query_one("#script-loading").has_class("hidden")
+        return self._preloader.running or not self.query_one("#script-loading").has_class("hidden")
 
     def is_gameplay_context(self, *, allow_preload: bool = False) -> bool:
         """Игровой контекст, независимо от печати/занятости parser-task."""
@@ -1632,14 +1572,6 @@ class TerminalSummer(App):
             return
         await self.action_next_scene()
 
-    def _get_scene_image_path(self, category: str, scene_name: str) -> str | None:
-        """Возвращает путь до файла фона/CG."""
-        for ext in ("jpg", "jpeg", "png", "webp"):
-            candidate = self.ts_path / "images" / category / f"{scene_name}.{ext}"
-            if candidate.exists():
-                return str(candidate)
-        return None
-
     def _load_sprite_resources(self):
         """Ленивая загрузка resources.yaml для сборщика спрайтов."""
         resource_candidates = (
@@ -1651,7 +1583,7 @@ class TerminalSummer(App):
                 continue
 
             try:
-                signature = (str(candidate.resolve()), _file_signature(candidate))
+                signature = (str(candidate.resolve()), file_signature(candidate))
                 if signature == self._sprite_resources_signature:
                     return self._sprite_resources
                 self._sprite_resources = load_sprite_resources_yaml(candidate)
@@ -1665,16 +1597,6 @@ class TerminalSummer(App):
         self._sprite_resources = None
         self.sub_title = "Sprite resources not found"
         return None
-
-    @staticmethod
-    def _sprite_position_factor(position: str | None) -> float:
-        """Позиция спрайта по горизонтали."""
-        return SPRITE_POSITIONS[normalize_sprite_position(position or "center")]
-
-    @staticmethod
-    def _sprite_size_scale(size_name: str | None) -> float:
-        """Доп. масштаб из show size <...>."""
-        return SPRITE_SIZES[size_name or "normal"]
 
     def _sorted_active_sprites(self, active_sprites: dict | None = None) -> list[dict]:
         """Возвращает активные спрайты в порядке от заднего к переднему."""
@@ -1742,7 +1664,7 @@ class TerminalSummer(App):
             sprites=sprites,
             width=int(self.settings.get("quality", 150)),
             style=str(self.settings.get("style", "ANSI")),
-            cache_epoch=self._cache_epoch,
+            cache_epoch=self._renderer.cache.epoch,
             diagnostics=(
                 self.runtime_ui.get("scene.unknown-color", "Неизвестный цвет сцены"),
                 self.runtime_ui.get("scene.missing", "Файл не найден"),
@@ -1757,161 +1679,8 @@ class TerminalSummer(App):
             {key: value.copy() for key, value in self._active_sprites.items()},
         )
 
-    def _get_cached_render(self, key: tuple) -> Text | None:
-        with self._cache_lock:
-            cached = self._scene_render_cache.get(key)
-            if cached is not None:
-                self._scene_render_cache.move_to_end(key)
-            return cached
-
-    def _remember_render(self, key: tuple, art: Text) -> Text:
-        with self._cache_lock:
-            self._scene_render_cache[key] = art
-            self._scene_render_cache.move_to_end(key)
-            while len(self._scene_render_cache) > self._render_cache_limit:
-                self._scene_render_cache.popitem(last=False)
-        return art
-
-    def _load_rgba_cached(self, path: str, cache_epoch: int) -> Image.Image:
-        """Возвращает изменяемую копию RGBA, сохраняя декодированный оригинал в LRU."""
-        with self._cache_lock:
-            cached = self._decoded_image_cache.get(path)
-            if cached is not None:
-                self._decoded_image_cache.move_to_end(path)
-                return cached[0].copy()
-
-        with Image.open(path) as source:
-            decoded = source.convert("RGBA")
-        size = decoded.width * decoded.height * 4
-
-        with self._cache_lock:
-            existing = self._decoded_image_cache.get(path)
-            if existing is not None:
-                decoded.close()
-                self._decoded_image_cache.move_to_end(path)
-                return existing[0].copy()
-            if (
-                cache_epoch == self._cache_epoch
-                and size <= self._decoded_image_cache_limit
-            ):
-                self._decoded_image_cache[path] = (decoded, size)
-                self._decoded_image_cache_bytes += size
-                while (
-                    self._decoded_image_cache
-                    and self._decoded_image_cache_bytes > self._decoded_image_cache_limit
-                ):
-                    _, (old_image, old_size) = self._decoded_image_cache.popitem(last=False)
-                    self._decoded_image_cache_bytes -= old_size
-                    old_image.close()
-                return decoded.copy()
-        return decoded
-
-    async def _run_scene_render(self, snapshot: SceneRenderSnapshot) -> Text:
-        async with self._render_semaphore:
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(
-                None, self._render_scene_snapshot, snapshot
-            )
-
-    def _render_scene_snapshot(self, snapshot: SceneRenderSnapshot) -> Text:
-        """CPU-часть полного рендера. Метод не обращается к Textual-виджетам."""
-        cached = self._get_cached_render(snapshot.key)
-        if cached is not None:
-            return cached
-        if not snapshot.name or not snapshot.category:
-            return Text("")
-
-        composed = None
-        try:
-            if snapshot.category == "color":
-                colors = {
-                    "black": (0, 0, 0, 255),
-                    "white": (255, 255, 255, 255),
-                }
-                rgba = colors.get(snapshot.name.lower())
-                if rgba is None:
-                    label = snapshot.diagnostics[0]
-                    return Text(f"[{label}: {snapshot.name}]")
-                composed = Image.new("RGBA", (1920, 1080), rgba)
-            else:
-                scene_path = self._get_scene_image_path(snapshot.category, snapshot.name)
-                if scene_path is None:
-                    label = snapshot.diagnostics[1]
-                    return Text(f"[{label}: TS/images/{snapshot.category}/{snapshot.name}.*]")
-                composed = self._load_rgba_cached(scene_path, snapshot.cache_epoch)
-            for sprite in snapshot.sprites:
-                if not sprite.image_path or not os.path.exists(sprite.image_path):
-                    continue
-                sprite_img = self._load_rgba_cached(
-                    sprite.image_path, snapshot.cache_epoch
-                )
-                scale = self._sprite_size_scale(sprite.size)
-                if abs(scale - 1.0) > 1e-3:
-                    resized = sprite_img.resize(
-                        (
-                            max(1, int(sprite_img.width * scale)),
-                            max(1, int(sprite_img.height * scale)),
-                        ),
-                        resample=Image.NEAREST,
-                    )
-                    sprite_img.close()
-                    sprite_img = resized
-                max_sprite_height = max(1, int(composed.height * 0.98))
-                is_full_canvas_overlay = sprite_img.size == composed.size
-                if sprite_img.height > max_sprite_height and not is_full_canvas_overlay:
-                    resized = sprite_img.resize(
-                        (
-                            max(
-                                1,
-                                int(
-                                    sprite_img.width
-                                    * (max_sprite_height / sprite_img.height)
-                                ),
-                            ),
-                            max_sprite_height,
-                        ),
-                        resample=Image.NEAREST,
-                    )
-                    sprite_img.close()
-                    sprite_img = resized
-                x = int(
-                    composed.width * self._sprite_position_factor(sprite.at)
-                    - sprite_img.width / 2
-                )
-                x = max(0, min(x, composed.width - sprite_img.width))
-                y = max(0, composed.height - sprite_img.height)
-                composed.alpha_composite(sprite_img, dest=(x, y))
-                sprite_img.close()
-
-            art = render_art(
-                composed,
-                width=snapshot.width,
-                style=snapshot.style,
-                alpha=not snapshot.sprites,
-            )
-        except Exception as exc:
-            return Text(snapshot.diagnostics[2] or f"[Ошибка сборки сцены со спрайтами: {exc}]")
-        finally:
-            if composed is not None:
-                composed.close()
-
-        if snapshot.cache_epoch == self._cache_epoch:
-            self._remember_render(snapshot.key, art)
-        return art
-
     async def _get_render_async(self, snapshot: SceneRenderSnapshot) -> Text:
-        cached = self._get_cached_render(snapshot.key)
-        if cached is not None:
-            return cached
-        task = self._render_tasks.get(snapshot.key)
-        if task is None:
-            task = asyncio.create_task(self._run_scene_render(snapshot))
-            self._render_tasks[snapshot.key] = task
-        try:
-            return await task
-        finally:
-            if self._render_tasks.get(snapshot.key) is task:
-                self._render_tasks.pop(snapshot.key, None)
+        return await self._renderer.get(snapshot, self.ts_path)
 
     def _snapshot_after_visual_commands(
         self, commands: tuple[str, ...]
@@ -1971,44 +1740,16 @@ class TerminalSummer(App):
             return None
         return self._make_scene_snapshot(category, name, active)
 
-    @staticmethod
-    def _consume_prefetch_result(task: asyncio.Task) -> None:
-        if task.cancelled():
-            return
-        try:
-            task.result()
-        except Exception:
-            # Prefetch - оптимизация; ошибка не должна останавливать сценарий.
-            pass
-
-    def _schedule_snapshot_prefetch(
-        self, snapshot: SceneRenderSnapshot | None
-    ) -> None:
-        if snapshot is None or self._get_cached_render(snapshot.key) is not None:
-            return
-        task = asyncio.create_task(self._get_render_async(snapshot))
-        self._prefetch_tasks.add(task)
-
-        def done(completed: asyncio.Task) -> None:
-            self._prefetch_tasks.discard(completed)
-            self._consume_prefetch_result(completed)
-
-        task.add_done_callback(done)
-
     def prefetch_next_scene(self, script: ScriptParser) -> None:
         """Готовит следующий детерминированный кадр, пока читается диалог."""
         commands = script.predict_visual_commands()
-        self._schedule_snapshot_prefetch(
-            self._snapshot_after_visual_commands(commands)
-        )
+        self._renderer.prefetch(self._snapshot_after_visual_commands(commands), self.ts_path)
 
     def prefetch_choice_scenes(self, script: ScriptParser, choices) -> None:
         """Готовит первый кадр каждой доступной ветки во время выбора."""
         for choice in choices:
             commands = script.predict_choice_visual_commands(choice)
-            self._schedule_snapshot_prefetch(
-                self._snapshot_after_visual_commands(commands)
-            )
+            self._renderer.prefetch(self._snapshot_after_visual_commands(commands), self.ts_path)
 
     async def flush_scene_render(self) -> None:
         """Рендерит сцену только в момент, когда её действительно увидит игрок."""
@@ -2033,50 +1774,15 @@ class TerminalSummer(App):
         self.query_one("#bg-cg", Widget).update(art)
         self.scene_dirty = False
 
-    def start_script_preload(self, script: ScriptParser) -> asyncio.Task:
+    def start_script_preload(self, script: ScriptParser) -> asyncio.Task[None]:
         """Неблокирующе прогревает чистые фоны активного сценарного файла."""
-        filename = str(Path(script.filename).resolve())
-        # Сначала инвалидируем старый worker: поток, закончившийся после
-        # отмены задачи, не должен вернуть старые данные в очищенный кэш.
-        self._preload_generation += 1
-        generation = self._preload_generation
-        if self._script_preload_task and not self._script_preload_task.done():
-            self._script_preload_task.cancel()
-        if filename != self._preload_filename:
-            # Кэш ограничен текущим файлом сценария, а не всей игрой.
-            self._clear_render_caches()
-            self._preload_filename = filename
-        self._script_preload_task = asyncio.create_task(
-            self._preload_script_scenes(script, generation)
+        return self._preloader.start(
+            script.filename, lambda generation: self._preload_script_scenes(script, generation),
         )
-        return self._script_preload_task
-
-    def _clear_render_caches(self) -> None:
-        """Очищает RAM-кэши и запрещает старым worker возвращать результаты."""
-        self._cache_epoch += 1
-        for task in tuple(self._render_tasks.values()):
-            task.cancel()
-        self._render_tasks.clear()
-        for task in tuple(self._prefetch_tasks):
-            task.cancel()
-        self._prefetch_tasks.clear()
-        with self._cache_lock:
-            self._scene_render_cache.clear()
-            self._asset_fingerprints.clear()
-            self._generated_validation.clear()
-            for image, _ in self._decoded_image_cache.values():
-                image.close()
-            self._decoded_image_cache.clear()
-            self._decoded_image_cache_bytes = 0
 
     def clear_script_cache(self) -> None:
         """Останавливает прогрев и освобождает кэш при выходе из игры."""
-        self._preload_generation += 1
-        if self._script_preload_task and not self._script_preload_task.done():
-            self._script_preload_task.cancel()
-        self._script_preload_task = None
-        self._preload_filename = None
-        self._clear_render_caches()
+        self._preloader.clear()
         self._loading_restore_novel = False
         try:
             self.query_one("#script-loading", Widget).add_class("hidden")
@@ -2097,33 +1803,26 @@ class TerminalSummer(App):
             self.set_novel_menu_visible(False)
             novel_window.add_class("hidden")
         overlay.remove_class("hidden")
+
+        def report(phase: str, number: int, total: int) -> None:
+            if phase == "scenes":
+                title = self.runtime_ui.get("preload.story", "Подготовка сценария")
+            else:
+                title = self.runtime_ui.get("preload.sprites", "Подготовка спрайтов")
+            label.update(f"{title}: {number}/{total}")
+
         try:
-            total = len(scenes) + len(show_lines)
-            for number, (category, name) in enumerate(scenes, start=1):
-                if generation != self._preload_generation:
-                    return
-                label.update(f"{self.runtime_ui.get('preload.story', 'Подготовка сценария')}: {number}/{total}")
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(
-                    None, self._cache_plain_scene, category, name, generation
-                )
-                # Даём Textual отрисовать индикатор и обработать ввод.
-                await asyncio.sleep(0)
-            for offset, show_line in enumerate(show_lines, start=len(scenes) + 1):
-                if generation != self._preload_generation:
-                    return
-                label.update(f"{self.runtime_ui.get('preload.sprites', 'Подготовка спрайтов')}: {offset}/{total}")
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(
-                    None, self._build_sprite_png, show_line, generation
-                )
-                await asyncio.sleep(0)
-            if generation == self._preload_generation:
+            await self._preloader.warm_resources(
+                generation, scenes, show_lines, ts_path=self.ts_path,
+                make_snapshot=lambda category, name: self._make_scene_snapshot(category, name, {}),
+                build_sprite=self._build_sprite_png, report=report,
+            )
+            if self._preloader.is_current(generation):
                 current_snapshot = self._capture_scene_snapshot()
                 if current_snapshot.name and current_snapshot.category:
                     label.update(self.runtime_ui.get("preload.current", "Подготовка текущего кадра…"))
                     current_art = await self._get_render_async(current_snapshot)
-                    if generation == self._preload_generation:
+                    if self._preloader.is_current(generation):
                         self.query_one("#bg-cg", Widget).update(current_art)
                         self.scene_dirty = False
                 label.update(self.runtime_ui.get("preload.next", "Подготовка следующего кадра…"))
@@ -2132,10 +1831,8 @@ class TerminalSummer(App):
                 )
                 if snapshot is not None:
                     await self._get_render_async(snapshot)
-        except asyncio.CancelledError:
-            raise
         finally:
-            if self.is_running and generation == self._preload_generation:
+            if self.is_running and self._preloader.is_current(generation):
                 if not self.skipping:
                     # Запоздавшая S, введённая под оверлеем, не запускает skip
                     # после прогрева. Активному режиму оставляем возможность stop.
@@ -2147,13 +1844,6 @@ class TerminalSummer(App):
                     self.sync_text_mode_display()
                     self.query_one("#btn-next", Button).focus()
                 self._loading_restore_novel = False
-
-    def _cache_plain_scene(
-        self, category: str, name: str, generation: int | None = None
-    ) -> None:
-        snapshot = self._make_scene_snapshot(category, name, {})
-        if self._get_cached_render(snapshot.key) is None:
-            self._render_scene_snapshot(snapshot)
 
     def show_sprite_from_script_line(self, show_line: str):
         """Собирает PNG спрайта из show-строки и обновляет активный набор спрайтов."""
@@ -2181,44 +1871,11 @@ class TerminalSummer(App):
 
         return None
 
-    def _asset_fingerprint(self, path: Path) -> str:
-        name = str(path.resolve())
-        signature = _file_signature(path)
-        with self._cache_lock:
-            cached = self._asset_fingerprints.get(name)
-            if cached is not None and cached[0] == signature:
-                self._asset_fingerprints.move_to_end(name)
-                return cached[1]
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if signature != _file_signature(path):
-            raise ValueError(f"Ассет изменился во время чтения: {path}")
-        with self._cache_lock:
-            self._asset_fingerprints[name] = (signature, digest)
-            self._asset_fingerprints.move_to_end(name)
-            while len(self._asset_fingerprints) > 2048:
-                self._asset_fingerprints.popitem(last=False)
-        return digest
-
-    def _valid_generated_sprite(self, path: Path) -> bool:
-        try:
-            signature = _file_signature(path)
-            with self._cache_lock:
-                if self._generated_validation.get(str(path)) == signature:
-                    return True
-            with Image.open(path) as image:
-                image.verify()
-            with self._cache_lock:
-                self._generated_validation[str(path)] = signature
-                self._generated_validation.move_to_end(str(path))
-                while len(self._generated_validation) > self._sprite_cache_limit:
-                    self._generated_validation.popitem(last=False)
-            return True
-        except (OSError, ValueError):
-            return False
-
     def _build_sprite_png(self, show_line: str, generation: int | None = None):
         """Собирает или получает из кэша PNG, не изменяя состояние сцены."""
-        if generation is not None and generation != self._preload_generation:
+        cache = self._renderer.cache
+        epoch = cache.epoch
+        if generation is not None and not self._preloader.is_current(generation):
             return None
         resources = self._load_sprite_resources()
         if not resources:
@@ -2231,7 +1888,7 @@ class TerminalSummer(App):
             if any(not pick.absolute_path.resolve().is_relative_to(root) for pick in resolved.picks):
                 raise ValueError("Слой спрайта выходит за пределы TS/images")
             layers = [(pick.layer_name, pick.part_name, str(pick.absolute_path.resolve()),
-                       self._asset_fingerprint(pick.absolute_path)) for pick in resolved.picks]
+                        cache.asset_fingerprint(pick.absolute_path, epoch)) for pick in resolved.picks]
             digest = hashlib.sha256(repr(("sprite-v3", show_line, layers)).encode("utf-8")).hexdigest()
             runtime_dir = self._sprite_runtime_dir
             try:
@@ -2241,7 +1898,7 @@ class TerminalSummer(App):
                 runtime_dir = temporary_root / "terminal-summer-sprites/generated_runtime"
                 runtime_dir.mkdir(parents=True, exist_ok=True)
             out_path = runtime_dir / f"{request.character}_{digest}.png"
-            if not self._valid_generated_sprite(out_path):
+            if not cache.valid_generated_sprite(out_path, epoch):
                 sprite_img = compose_layers(resolved.picks, request.extras.get("spritecolor"))
                 try:
                     with atomic_output(out_path) as target:
@@ -2314,7 +1971,6 @@ class TerminalSummer(App):
             include_flags=bool(self.settings.get("header_flags", True)),
         )
 
-
     def load_settings(self):
         """Дополняет старый config; ошибочный файл заменяет полными defaults."""
         self._settings_read_error = False
@@ -2338,7 +1994,6 @@ class TerminalSummer(App):
         except (OSError, ValueError, TypeError) as exc:
             self.notify(self.runtime_ui.get("file.write-error", str(exc)),
                         title=self.runtime_ui.get("settings.error", "Не удалось сохранить настройки"), severity="error")
-
 
     def apply_settings(self):
         """Применение настроек при старте"""

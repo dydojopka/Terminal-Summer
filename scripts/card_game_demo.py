@@ -17,13 +17,14 @@ from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Static
 
-from art_renderer import ART_STYLES
-from cards.game import CardGame, Phase, RIVAL_NAMES
 from cards.demo_story import CardStory
-from cards.table import CardTable, render_card_scene
-from ui.widgets.console_button import ConsoleButton as Button
-from ui.novel.dialogue import NovelMenu, TextBar
+from cards.game import CardGame, Phase, RIVAL_NAMES
+from cards.scene import render_card_scene
+from cards.table import CardTable
+from rendering.art import ART_STYLES
 from story.parser import DISPLAY_NAMES
+from ui.novel.dialogue import NovelMenu, TextBar
+from ui.widgets.console_button import ConsoleButton as Button
 from ui.widgets.terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
 

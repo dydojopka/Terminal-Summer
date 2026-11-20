@@ -5,7 +5,7 @@ from pathlib import Path
 
 from audio.catalog import finite_number
 from audio.manager import AUDIO_DEFAULTS
-from art_renderer import ART_STYLES
+from rendering.art import ART_STYLES
 from storage.json_files import write_user_json
 
 

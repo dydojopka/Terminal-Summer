@@ -31,7 +31,7 @@ from rich.text import Text
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-import main as game
+from main import TerminalSummer
 from story.parser import ScriptParser, get_script_state, set_script_state
 from rendering.sprites import parse_show_like
 from storage import saves
@@ -217,7 +217,7 @@ def render_logo(rasterizer: CellRasterizer) -> Image.Image:
     return result
 
 
-def assert_frame(app: game.TerminalSummer, case: PreviewCase) -> None:
+def assert_frame(app: TerminalSummer, case: PreviewCase) -> None:
     snapshot = app._capture_scene_snapshot()
     category, name = case.commands[0].split()[1:3]
     if (snapshot.category, snapshot.name) != (category, name):
@@ -229,7 +229,7 @@ def assert_frame(app: game.TerminalSummer, case: PreviewCase) -> None:
     actual = {sprite.character: sprite.show_line for sprite in snapshot.sprites}
     if actual != expected or any(not Path(s.image_path).is_file() for s in snapshot.sprites):
         raise ValueError(f"Кадр {case.number}: не собраны нужные спрайты: {app.sub_title}")
-    art = app._render_scene_snapshot(snapshot)
+    art = app._renderer.render(snapshot, app.ts_path)
     if art.plain.startswith("["):
         raise ValueError(art.plain)
     if max(map(len, art.plain.splitlines())) != 150:
@@ -263,7 +263,7 @@ async def capture_case(case: PreviewCase, style: str, rasterizer: CellRasterizer
             at_wait.set()
             await asyncio.Future()
 
-        app = game.TerminalSummer()
+        app = TerminalSummer()
         app.CONFIG_FILE = config
         app.PERSISTENT_FILE = folder / "persistent.json"
         app._sprite_runtime_dir = folder / "generated_runtime"
@@ -305,7 +305,7 @@ async def capture_case(case: PreviewCase, style: str, rasterizer: CellRasterizer
                         with suppress(asyncio.CancelledError):
                             await task
         finally:
-            app._clear_render_caches()
+            app._renderer.clear()
             app.audio.close()
 
 

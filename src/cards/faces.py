@@ -9,8 +9,8 @@ from functools import lru_cache
 from PIL import Image, ImageDraw
 from rich.text import Text
 
-from art_renderer import ART_STYLES, render_art
 from cards.game import Card, SUIT_NAMES
+from rendering.art import ART_STYLES, render_art
 
 
 SUIT_COLORS = {"S": "#71b9ed", "H": "#f07e78", "D": "#e4ba62", "C": "#8dc99a"}
