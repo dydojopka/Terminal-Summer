@@ -71,7 +71,7 @@ from ui.widgets.terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
 CSS_PATH = get_resource_path("gameUI.tcss")
 MENU_LOGO_PATH = get_resource_path("menu_logo.ansi")
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 # Original game/options.rpy: config.main_menu_music = "sound/music/blow_with_the_fires.ogg".
 MENU_MUSIC_KEY = "blow_with_the_fires"
 
