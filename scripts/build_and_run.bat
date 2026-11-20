@@ -33,6 +33,7 @@ REM Проверка выпущенных сценариев и ресурсов
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_release.py" --all || exit /b 1
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_gallery.py" || exit /b 1
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_audio.py" --decode || exit /b 1
+"%PYTHON_BIN%" "%ROOT_DIR%\scripts\import_english.py" --check || exit /b 1
 
 "%PYTHON_BIN%" -m PyInstaller --onefile ^
                       --name "%APP_NAME%" ^
@@ -48,7 +49,8 @@ REM Проверка выпущенных сценариев и ресурсов
                       --add-data "%ROOT_DIR%\TS\text\prologue.txt;TS/text" ^
                       --add-data "%ROOT_DIR%\TS\text\day*.txt;TS/text" ^
                       --add-data "%ROOT_DIR%\TS\text\epilogue*.txt;TS/text" ^
-                      --add-data "%ROOT_DIR%\TS\text\endings.txt;TS/text" ^
+                       --add-data "%ROOT_DIR%\TS\text\endings.txt;TS/text" ^
+                       --add-data "%ROOT_DIR%\TS\text\en;TS/text/en" ^
                       --paths "%ROOT_DIR%\src" ^
                       --paths "%ROOT_DIR%\scripts" ^
                       --distpath "." ^

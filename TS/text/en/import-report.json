@@ -1,0 +1,50 @@
+{
+  "prologue.txt": {
+    "matched": 135,
+    "unresolved": []
+  },
+  "day1.txt": {
+    "matched": 824,
+    "unresolved": []
+  },
+  "day2.txt": {
+    "matched": 1405,
+    "unresolved": []
+  },
+  "day3.txt": {
+    "matched": 2448,
+    "unresolved": []
+  },
+  "day4.txt": {
+    "matched": 3662,
+    "unresolved": []
+  },
+  "day5.txt": {
+    "matched": 2532,
+    "unresolved": []
+  },
+  "day6.txt": {
+    "matched": 2956,
+    "unresolved": []
+  },
+  "day7.txt": {
+    "matched": 2679,
+    "unresolved": []
+  },
+  "epilogue.txt": {
+    "matched": 1235,
+    "unresolved": []
+  },
+  "epilogue_mi.txt": {
+    "matched": 2295,
+    "unresolved": []
+  },
+  "epilogue_uv.txt": {
+    "matched": 2349,
+    "unresolved": []
+  },
+  "endings.txt": {
+    "matched": 0,
+    "unresolved": []
+  }
+}

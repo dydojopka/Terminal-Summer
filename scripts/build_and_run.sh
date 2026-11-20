@@ -35,6 +35,7 @@ fi
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_release.py" --all
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_gallery.py"
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_audio.py" --decode
+"${PYTHON_BIN}" "${ROOT_DIR}/scripts/import_english.py" --check
 
 # Сборка
 "${PYTHON_BIN}" -m PyInstaller --onefile \
@@ -51,7 +52,8 @@ fi
                        --add-data "${ROOT_DIR}/TS/text/prologue.txt:TS/text" \
                        --add-data "${ROOT_DIR}/TS/text/day*.txt:TS/text" \
                        --add-data "${ROOT_DIR}/TS/text/epilogue*.txt:TS/text" \
-                       --add-data "${ROOT_DIR}/TS/text/endings.txt:TS/text" \
+                        --add-data "${ROOT_DIR}/TS/text/endings.txt:TS/text" \
+                        --add-data "${ROOT_DIR}/TS/text/en:TS/text/en" \
                        --paths "${ROOT_DIR}/src" \
                        --paths "${ROOT_DIR}/scripts" \
                        --distpath "${ROOT_DIR}" \
