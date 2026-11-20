@@ -31,7 +31,7 @@ from rich.text import Text
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from main import TerminalSummer
+from app import TerminalSummer
 from story.parser import ScriptParser, get_script_state, set_script_state
 from rendering.sprites import parse_show_like
 from storage import saves
