@@ -17,7 +17,7 @@ from textual.reactive import reactive
 from textual.screen import Screen
 from textual.scrollbar import ScrollBar, ScrollBarCorner
 from textual.widget import Widget
-from textual.widgets import Footer, Label, ListView, Static
+from textual.widgets import Label, ListView, Static
 
 from audio.catalog import validate_audio_assets
 from audio.manager import AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
@@ -65,6 +65,7 @@ from ui.novel.window import NovelWindow
 from ui.screen import PerformanceScreen
 from ui.widgets.console_button import ConsoleButton as Button
 from ui.widgets.console_scrollbar import ConsoleScrollBarRender
+from ui.widgets.game_footer import GameFooter
 from ui.widgets.terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
 
@@ -225,7 +226,7 @@ class TerminalSummer(App):
 
     def compose(self) -> ComposeResult:
         yield ScriptStateHeader(show_clock=True, classes="hidden")
-        yield Footer(classes="hidden")
+        yield GameFooter(classes="hidden")
 
         yield MainMenu(MENU_LOGO_PATH, id="main-menu")
         yield NovelWindow(self.ts_path, id="novel-window", classes="hidden")
@@ -242,7 +243,7 @@ class TerminalSummer(App):
     def set_novel_menu_visible(self, visible: bool) -> None:
         """Показывает или скрывает панель диалога вместе с подсказками клавиш."""
         self.query_one("#novel-menu").set_class(not visible, "hidden")
-        self.query_one(Footer).set_class(not visible, "hidden")
+        self.query_one(GameFooter).set_class(not visible, "hidden")
 
     def set_text_mode(self, mode: str) -> None:
         """Сохраняет режим текста и обновляет его отображение."""
