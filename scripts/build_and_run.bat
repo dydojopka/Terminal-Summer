@@ -60,6 +60,9 @@ REM Проверка выпущенных сценариев и ресурсов
                       --clean ^
                       "%ROOT_DIR%\src\main.py" || exit /b 1
 
+"%PYTHON_BIN%" "%ROOT_DIR%\scripts\prepare_binary_release.py" ^
+    "%ROOT_DIR%\%APP_NAME%.exe" "%PYI_BUILD_DIR%\%APP_NAME%\Analysis-00.toc" || exit /b 1
+
 echo Сборка завершена: %cd%\%APP_NAME%.exe
 echo Запуск из корня проекта: %APP_NAME%.exe
 pause

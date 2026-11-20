@@ -63,5 +63,8 @@ fi
                        --clean \
                        "${ROOT_DIR}/src/main.py"
 
+"${PYTHON_BIN}" "${ROOT_DIR}/scripts/prepare_binary_release.py" \
+    "${ROOT_DIR}/${APP_NAME}" "${PYI_BUILD_DIR}/${APP_NAME}/Analysis-00.toc"
+
 echo "Сборка завершена: ${ROOT_DIR}/${APP_NAME}"
 echo "Запуск из корня проекта: ./${APP_NAME}"
