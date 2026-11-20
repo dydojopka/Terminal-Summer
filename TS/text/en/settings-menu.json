@@ -23,7 +23,7 @@
   "btn-scene-filters-on": "On",
   "btn-scene-filters-off": "Off",
   "setting-text-speed": "Text Speed",
-  "setting-text-speed-description": "Controls how quickly text appears.\n\nSlow — 0.04\nMedium — 0.025\nFast — 0.01\nInstant — 0",
+  "setting-text-speed-description": "Controls how quickly text appears.\n\nSlow    - 0.04\nMedium  - 0.025\nFast    - 0.01\nInstant - 0",
   "btn-speed-slow": "Slow",
   "btn-speed-medium": "Medium",
   "btn-speed-fast": "Fast",
