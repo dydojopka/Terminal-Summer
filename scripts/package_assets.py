@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT_DIR / "src"))
 from gallery_catalog import load_gallery_catalog, validate_gallery_assets
 from audio.catalog import validate_audio_assets
 from audio.music_catalog import validate_music_assets
-from endings_catalog import ENDING_ICON_WIDTHS, load_endings_catalog, resolve_ending_ansi, validate_endings_assets
+from endings.catalog import ENDING_ICON_WIDTHS, load_endings_catalog, resolve_ending_ansi, validate_endings_assets
 from scripts.assets_manager import migrate_legacy_gallery
 from story.resources import visual_asset_problems
 

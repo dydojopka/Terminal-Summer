@@ -23,7 +23,7 @@ from story.parser import DISPLAY_NAMES
 from story.resources import RELEASE_SCRIPTS
 from story.structure import read_block_range
 from story.map_choices import map_choice_zones
-from endings_catalog import load_endings_catalog
+from endings.catalog import load_endings_catalog
 
 
 REN_TAG = re.compile(r"(?<!\{)\{(/?\s*i|/?b|w)\}")

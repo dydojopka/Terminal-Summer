@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR / "src"))
 
-from endings_catalog import ENDING_ICON_WIDTHS, load_endings_catalog, validate_endings_assets
+from endings.catalog import ENDING_ICON_WIDTHS, load_endings_catalog, validate_endings_assets
 
 
 def main() -> int:

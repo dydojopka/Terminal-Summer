@@ -315,6 +315,7 @@ def build_audit(root: Path = ROOT_DIR) -> dict:
                 "src/rendering/art.py", "src/rendering/scene.py", "src/rendering/cache.py",
                 "src/rendering/jobs.py", "src/rendering/preload.py", "src/rendering/sprites.py",
                 "src/ui/novel/camp_map.py",
+                "src/endings/catalog.py", "src/endings/ansi.py", "src/endings/credits.py",
                 "src/gameUI.tcss", "scripts/assets_manager.py", "scripts/validate_release.py",
                 "scripts/audit_release.py", "scripts/build_and_run.sh", "scripts/build_and_run.bat",
                 "requirements.txt", "tests/test_release.py", "tests/test_release_audit.py",

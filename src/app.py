@@ -24,8 +24,8 @@ from audio.manager import AudioManager, NullAudioBackend, PygameAudioBackend, no
 from cards.game import Phase
 from cards.session import CardSession
 from cards.table import CardTable
-from credits import CREDIT_PAGES, CreditsTimeline
-from endings_catalog import current_ending
+from endings.catalog import current_ending
+from endings.credits import CREDIT_PAGES, CreditsTimeline
 from file_io import atomic_output
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from paths import get_frozen_bundle_dir, get_resource_path, get_ts_path, get_user_data_dir

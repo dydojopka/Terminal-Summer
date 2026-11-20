@@ -49,8 +49,8 @@ def _asset_problems(*, require_audio=False, require_endings=False) -> tuple[list
         for error in validate_audio_assets(ts_dir):
             (missing if any(name in error for name in absent) else invalid).append(error)
     if require_endings:
-        from endings_catalog import load_endings_catalog, runtime_ending_ansi, ENDING_ICON_WIDTHS
-        from endings_ansi import read_ending_ansi
+        from endings.ansi import read_ending_ansi
+        from endings.catalog import load_endings_catalog, runtime_ending_ansi, ENDING_ICON_WIDTHS
         for ending in load_endings_catalog():
             for width in ENDING_ICON_WIDTHS:
                 for unlocked in (True, False):

@@ -107,7 +107,7 @@ def runtime_ending_ansi(ts_dir: Path, ending: Ending, width: int, unlocked: bool
 
 
 def validate_endings_assets(ts_dir: Path, endings: tuple[Ending, ...] | None = None) -> list[str]:
-    from endings_ansi import read_ending_ansi
+    from endings.ansi import read_ending_ansi
 
     errors = []
     for ending in load_endings_catalog() if endings is None else endings:

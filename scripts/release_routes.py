@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 from story import parser as sp
 from audio.catalog import load_audio_catalog
-from endings_catalog import current_ending, load_endings_catalog
+from endings.catalog import current_ending, load_endings_catalog
 from story.audio_commands import parse_audio_command
 from cards.game import CardGame, Phase
 from cards.session import CardSession
