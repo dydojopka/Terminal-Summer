@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Собирает локальный комплект бинарного релиза и отчёт о сторонних компонентах."""
+"""Упаковывает готовую сборку в ZIP со сценариями и лицензиями."""
 
 from __future__ import annotations
 
 import argparse
 import ast
 import hashlib
-import json
 from importlib import metadata
 from pathlib import Path, PurePosixPath
 import re
@@ -17,12 +16,19 @@ import sysconfig
 import tarfile
 import tempfile
 from urllib.request import urlopen
+import zipfile
 
 from packaging.utils import canonicalize_name
 from PyInstaller.archive.readers import CArchiveReader
 
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+
+from file_io import atomic_output
+from story.resources import RELEASE_SCRIPTS
+
+
 SOURCES = {
     ("certifi", "2026.2.25"): (
         "https://files.pythonhosted.org/packages/af/2d/7bf41579a8986e348fa033a31cdd0e4121114f6bce2457e8876010b092dd/certifi-2026.2.25.tar.gz",
@@ -76,28 +82,22 @@ def package_notices(dist: metadata.Distribution, output: Path) -> list[str]:
     return sorted(notices)
 
 
-def arch_notices(source: Path, output: Path) -> tuple[str, list[str]] | None:
+def arch_notices(source: Path, output: Path) -> bool:
     if not shutil.which("pacman"):
-        return None
+        return False
     query = subprocess.run(["pacman", "-Qoq", str(source)], capture_output=True, text=True)
     if query.returncode or len(query.stdout.splitlines()) != 1:
-        return None
+        return False
     package = query.stdout.strip()
-    package_version = subprocess.check_output(["pacman", "-Q", package], text=True).strip()
-    notices = []
     license_dir = Path("/usr/share/licenses") / package
-    for path in sorted(license_dir.rglob("*")):
-        if path.is_file():
-            target = f"LICENSES/native/{package}/{path.relative_to(license_dir).as_posix()}"
-            copy_file(path, output / target)
-            notices.append(target)
+    files = {path.relative_to(license_dir): path for path in license_dir.rglob("*") if path.is_file()}
     if package in {"libgcc", "libstdc++"}:
         gpl = Path("/usr/share/licenses/spdx/GPL-3.0-only.txt")
         if gpl.is_file():
-            target = f"LICENSES/native/{package}/{gpl.name}"
-            copy_file(gpl, output / target)
-            notices.append(target)
-    return package_version, notices
+            files[Path(gpl.name)] = gpl
+    for relative, path in sorted(files.items()):
+        copy_file(path, output / "LICENSES" / "native" / package / relative)
+    return bool(files)
 
 
 def download_source(output: Path, url: str, expected_sha256: str) -> Path:
@@ -110,45 +110,60 @@ def download_source(output: Path, url: str, expected_sha256: str) -> Path:
     return path
 
 
-def collect(binary: Path, analysis: Path, output: Path, *, download: bool) -> None:
+def collect_scenarios(archive: CArchiveReader, output: Path) -> None:
+    # Берём тексты собранной версии, а не потенциально изменившееся рабочее дерево.
+    data = {name.replace("\\", "/"): name for name, entry in archive.toc.items() if entry[-1] == "x"}
+    originals = {f"TS/text/{name}" for name in RELEASE_SCRIPTS}
+    chapters = {f"TS/text/en/{Path(name).stem}.json" for name in RELEASE_SCRIPTS}
+    missing = (originals | chapters) - data.keys()
+    if missing:
+        raise ValueError("В бинарнике нет обязательных сценариев или перевода: " + ", ".join(sorted(missing)))
+    translations = {name for name in data if re.fullmatch(r"TS/text/en/[a-z0-9_-]+\.json", name)}
+    translations.discard("TS/text/en/import-report.json")
+    for name in sorted(originals | translations):
+        target = output / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(archive.extract(data[name]))
+
+
+def collect(binary: Path, analysis: Path, output: Path, *, download: bool) -> list[str]:
     archive = CArchiveReader(str(binary))
     analyzed = analyzed_files(analysis)
     pure = archive.open_embedded_archive("PYZ.pyz").toc
     shipped = set(pure) | {name.replace("\\", "/") for name in archive.toc}
     used_paths = {analyzed[name] for name in shipped if name in analyzed}
     distributions = {}
-    owners = {}
+    owned_paths = set()
     for dist in metadata.distributions():
         name = canonicalize_name(dist.metadata["Name"])
         files = {dist.locate_file(path).resolve() for path in dist.files or ()}
         matched = files & used_paths
         if matched or name == "pyinstaller":  # bootloader вне архива onefile
             distributions[name] = dist
-            owners.update(dict.fromkeys(matched, name))
+            owned_paths.update(matched)
 
     if not {"certifi", "pygame-ce"} <= distributions.keys():
         raise ValueError("Analysis-00.toc не соответствует аудио/сетевым компонентам сборки")
 
-    copy_file(binary, output / binary.name)
-    for file in ("LICENSE", "LICENSING.md"):
+    collect_scenarios(archive, output)
+    for file in ("README.md", "LICENSE", "LICENSING.md"):
         copy_file(ROOT / file, output / file)
     issues = []
-    packages = []
+    source_links = []
     for name, dist in sorted(distributions.items()):
         notices = package_notices(dist, output)
         if not notices:
             issues.append(f"Не найден текст лицензии пакета {name} {dist.version}")
-        record = {"name": name, "version": dist.version, "notices": notices}
         if name in ("certifi", "pygame-ce"):
             pair = SOURCES.get((name, dist.version))
             if pair is None:
                 issues.append(f"Не зафиксирован архив исходников {name} {dist.version}")
             else:
                 url, digest = pair
-                record.update(source_url=url, source_sha256=digest)
+                link = url
                 if download:
                     source = download_source(output, url, digest)
-                    record["source_archive"] = source.relative_to(output).as_posix()
+                    link = source.relative_to(output).as_posix()
                     if name == "pygame-ce":
                         # В wheel есть LGPL.txt, но не все уведомления кодеков из sdist.
                         with tarfile.open(source, "r:gz") as tar:
@@ -158,10 +173,9 @@ def collect(binary: Path, analysis: Path, output: Path, *, download: bool) -> No
                                     target.parent.mkdir(parents=True, exist_ok=True)
                                     with tar.extractfile(item) as stream:
                                         target.write_bytes(stream.read())
-                                    notices.append(target.relative_to(output).as_posix())
                 else:
                     issues.append(f"В комплект не скачаны исходники {name} {dist.version}")
-        packages.append(record)
+                source_links.append(f"- [{name} {dist.version}]({link})\n")
 
     stdlib = Path(sysconfig.get_path("stdlib"))
     python_license = next((file for file in (Path(sys.base_prefix) / "LICENSE.txt", stdlib / "LICENSE.txt")
@@ -171,67 +185,71 @@ def collect(binary: Path, analysis: Path, output: Path, *, download: bool) -> No
     else:
         copy_file(python_license, output / "LICENSES" / "Python" / "LICENSE.txt")
 
-    native = []
+    extension_dirs = {(stdlib / "lib-dynload").resolve(), (Path(sys.base_prefix) / "DLLs").resolve()}
     arch_packages = {}
     for raw_name, entry in sorted(archive.toc.items()):
         if entry[-1] != "b":
             continue
         name = raw_name.replace("\\", "/")
         source = analyzed.get(name)
-        record = {"file": name}
-        if source is not None and source in owners:
-            record["package"] = owners[source]
-        elif re.fullmatch(r"(?:libpython[0-9.]+\.so(?:\.[0-9.]+)?|python[0-9]+t?\.dll)", name, flags=re.I):
-            record["package"] = "Python"
-        else:
-            if source is not None and source not in arch_packages:
-                arch_packages[source] = arch_notices(source, output)
-            found = arch_packages.get(source)
-            if found:
-                record["package"], record["notices"] = found
-            if not found or not record["notices"]:
-                issues.append(f"Сверить правовой статус и уведомления нативного файла {name}")
-        native.append(record)
+        if source in owned_paths or re.fullmatch(
+            r"(?:libpython[0-9.]+\.so(?:\.[0-9.]+)?|python[0-9]+t?\.dll)", name, flags=re.I
+        ):
+            continue
+        if source and source.parent in extension_dirs and source.suffix in {".so", ".pyd"}:
+            continue  # Расширение CPython; отдельно упакованные DLL/.so проверяются ниже.
+        if source is not None and source not in arch_packages:
+            arch_packages[source] = arch_notices(source, output)
+        if not arch_packages.get(source):
+            issues.append(f"Сверить правовой статус и уведомления нативного файла {name}")
 
     issues.append("Сверить версии, уведомления и исходники нативных LGPL-компонентов; "
                   "проверить пересборку с заменой библиотеки.")
-    source_links = []
-    for record in packages:
-        if "source_url" in record:
-            link = record.get("source_archive", record["source_url"])
-            source_links.append(f"- [{record['name']} {record['version']}]({link})\n")
     (output / "THIRD_PARTY_NOTICES.md").write_text(
         "# Сторонние компоненты Terminal Summer\n\n"
-        f"Python {sys.version.split()[0]}, {sys.platform}. SHA-256 бинарника: `{sha256(binary)}`.\n\n"
         "Собственная CC BY-NC-SA не распространяется на эти библиотеки. "
         "В сборке используется pygame-ce под LGPL-2.1-or-later и certifi под MPL-2.0. "
-        "См. тексты в `LICENSES/` и список компонентов в `components.json`.\n\n"
-        "## Исходники Python-пакетов\n\n" + "".join(source_links) + "\n"
-        "## Проверки до публикации\n\n" + "".join(f"- {issue}\n" for issue in issues),
+        "Тексты лицензий и уведомления находятся в `LICENSES/`.\n\n"
+        "## Исходники Python-пакетов\n\n" + "".join(source_links),
         encoding="utf-8",
     )
-    (output / "components.json").write_text(
-        json.dumps({"python": sys.version.split()[0], "packages": packages, "native": native},
-                   ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
-    )
+    return issues
+
+
+def package_release(binary: Path, analysis: Path, output: Path, *, download: bool) -> list[str]:
+    if output.exists() or output.is_symlink():
+        raise FileExistsError(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".release-", dir=output.parent) as temporary:
+        support = Path(temporary)
+        issues = collect(binary, analysis, support, download=download)
+        with atomic_output(output, overwrite=False) as target:
+            with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.write(binary, binary.name)
+                for path in sorted(support.rglob("*")):
+                    if path.is_file():
+                        archive.write(path, path.relative_to(support).as_posix())
+    return issues
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=Path)
     parser.add_argument("analysis", type=Path, help="Analysis-00.toc от этой сборки")
+    parser.add_argument("--output", type=Path, help="Новый ZIP (по умолчанию build/release/<имя бинарника>.zip)")
     parser.add_argument("--download-sources", action="store_true", help="Скачать проверяемые архивы certifi и pygame-ce")
     args = parser.parse_args()
-    staging = ROOT / "build" / "release"
-    staging.mkdir(parents=True, exist_ok=True)
-    output = Path(tempfile.mkdtemp(prefix=f"{args.binary.stem}-", dir=staging))
+    output = args.output or ROOT / "build" / "release" / f"{args.binary.stem}.zip"
     try:
-        collect(args.binary, args.analysis, output, download=args.download_sources)
+        issues = package_release(args.binary, args.analysis, output, download=args.download_sources)
+    except FileExistsError:
+        parser.exit(1, f"Архив уже существует: {output}. Укажите новый путь через --output.\n")
     except Exception as exc:
-        shutil.rmtree(output)
-        parser.exit(1, f"Не удалось подготовить комплект: {exc}\n")
-    print(f"Комплект для проверки: {output}")
-    print("Перед публикацией см. THIRD_PARTY_NOTICES.md и LICENSING.md в комплекте.")
+        parser.exit(1, f"Не удалось подготовить архив: {exc}\n")
+    print(f"Архив: {output}")
+    print("Проверки до публикации:", file=sys.stderr)
+    for issue in issues:
+        print(f"- {issue}", file=sys.stderr)
 
 
 if __name__ == "__main__":
