@@ -6,9 +6,9 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
-import sys
 
 from audio_catalog import _unique_object, load_audio_catalog, validate_audio_assets
+from paths import get_resource_path
 from script_audio import validate_audio_key
 
 
@@ -21,9 +21,7 @@ class MusicTrack:
 
 
 def music_manifest_path() -> Path:
-    if hasattr(sys, "_MEIPASS"):
-        return Path(sys._MEIPASS) / "music_manifest.json"
-    return Path(__file__).with_name("music_manifest.json")
+    return get_resource_path("music_manifest.json")
 
 
 def load_music_catalog(path: Path | None = None, *, audio_catalog=None) -> tuple[MusicTrack, ...]:

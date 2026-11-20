@@ -6,8 +6,9 @@ import json
 import math
 from pathlib import Path, PurePosixPath
 import re
-import sys
 from dataclasses import dataclass
+
+from paths import get_resource_path
 
 
 @dataclass(frozen=True)
@@ -17,9 +18,7 @@ class AudioTrack:
 
 
 def audio_manifest_path() -> Path:
-    if hasattr(sys, "_MEIPASS"):
-        return Path(sys._MEIPASS) / "audio_manifest.json"
-    return Path(__file__).with_name("audio_manifest.json")
+    return get_resource_path("audio_manifest.json")
 
 
 def finite_number(value, *, minimum=0, maximum=None) -> float:

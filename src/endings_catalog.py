@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+from paths import get_frozen_bundle_dir, get_resource_path
 
 
 ENDING_ICON_WIDTHS = (16, 24, 32)
@@ -31,8 +32,7 @@ class Ending:
 
 
 def endings_manifest_path() -> Path:
-    root = Path(sys._MEIPASS) if hasattr(sys, "_MEIPASS") else Path(__file__).parent
-    return root / "endings_manifest.json"
+    return get_resource_path("endings_manifest.json")
 
 
 def load_endings_catalog(path: Path | None = None) -> tuple[Ending, ...]:
@@ -100,8 +100,9 @@ def runtime_ending_ansi(ts_dir: Path, ending: Ending, width: int, unlocked: bool
     """Внешний ANSI имеет приоритет; missing-файл берётся из onefile."""
     path = resolve_ending_ansi(ts_dir, ending, width, unlocked)
     original = ts_dir / ending.ansi_path(width, unlocked)
-    if not path.exists() and not original.is_symlink() and hasattr(sys, "_MEIPASS"):
-        return resolve_ending_ansi(Path(sys._MEIPASS), ending, width, unlocked)
+    bundle_dir = get_frozen_bundle_dir()
+    if bundle_dir is not None and not path.exists() and not original.is_symlink():
+        return resolve_ending_ansi(bundle_dir, ending, width, unlocked)
     return path
 
 

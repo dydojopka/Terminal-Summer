@@ -16,53 +16,14 @@ from save_data import validate_save_view, plain_save_text
 from single_instance import single_instance, AlreadyRunningError
 from terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
-# --- ЛОГИКА ПУТЕЙ ---
-IS_FROZEN = hasattr(sys, "_MEIPASS")
-SRC_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = Path(sys.executable).resolve().parent if IS_FROZEN else SRC_DIR.parent
-BUNDLE_DIR = Path(sys._MEIPASS) if IS_FROZEN else SRC_DIR
-
-
-def get_resource_path(relative_path: str) -> Path:
-    """Путь к встроенному ресурсу (из src в dev, из _MEIPASS в сборке)"""
-    return BUNDLE_DIR / relative_path
-
-
-def get_ts_path() -> Path:
-    """Путь к папке TS в runtime-среде"""
-    return PROJECT_ROOT / "TS"
-
-
-def get_settings_path() -> Path:
-    """Путь к файлу настроек
-
-    В dev сохраняем в src/settings.json
-    В onefile-сборке сохраняем рядом с .exe
-    """
-    if IS_FROZEN:
-        return PROJECT_ROOT / "settings.json"
-    return SRC_DIR / "settings.json"
-
-
-def get_saves_path() -> Path:
-    """Путь к директории сохранений"""
-    if IS_FROZEN:
-        return PROJECT_ROOT / "saves"
-    return SRC_DIR / "saves"
-
-
-def get_persistent_path() -> Path:
-    """Путь к persistent-флагам, общим для всех прохождений."""
-    if IS_FROZEN:
-        return PROJECT_ROOT / "persistent.json"
-    return SRC_DIR / "persistent.json"
+from paths import get_frozen_bundle_dir, get_project_root, get_resource_path, get_ts_path, get_user_data_dir
 
 
 CSS_PATH = get_resource_path("gameUI.tcss")
 MENU_LOGO_PATH = get_resource_path("menu_logo.ansi")
-SETTINGS_PATH = get_settings_path()
-SAVES_PATH = get_saves_path()
-PERSISTENT_PATH = get_persistent_path()
+SETTINGS_PATH = get_user_data_dir() / "settings.json"
+SAVES_PATH = get_user_data_dir() / "saves"
+PERSISTENT_PATH = get_user_data_dir() / "persistent.json"
 APP_VERSION = "1.0.0"
 # Original game/options.rpy: config.main_menu_music = "sound/music/blow_with_the_fires.ogg".
 MENU_MUSIC_KEY = "blow_with_the_fires"
@@ -252,8 +213,8 @@ class SceneRenderSnapshot:
         return self.category, self.name, sprite_key, str(self.width), self.style, self.cache_epoch, 3, self.diagnostics
 
 def main():
-    if not IS_FROZEN:
-        sys.path.insert(0, str(PROJECT_ROOT))
+    if get_frozen_bundle_dir() is None:
+        sys.path.insert(0, str(get_project_root()))
     try:
         with single_instance(PERSISTENT_PATH.parent):
             from scripts.assets_manager import ensure_assets
@@ -1208,7 +1169,8 @@ class TerminalSummer(App):
         self._persistent_read_error = False
 
         self.ts_path = get_ts_path()
-        self.bundled_text_path = get_resource_path("TS/text") if IS_FROZEN else None
+        bundle_dir = get_frozen_bundle_dir()
+        self.bundled_text_path = bundle_dir / "TS" / "text" if bundle_dir is not None else None
         self.interface_locale: dict[str, str] = {}
         self.endings_locale: dict[str, str] = {}
         self.runtime_ui: dict[str, str] = {}
