@@ -13,7 +13,7 @@ from textual.widgets import Static
 from cards.faces import render_card, render_card_legend
 from cards.game import CardGame, Phase, RIVAL_NAMES, SUIT_NAMES, score_hand
 from cards.scene import CardScene, render_card_scene, render_portrait
-from console_button import ConsoleButton as Button
+from ui.widgets.console_button import ConsoleButton as Button
 
 
 class CardSlot(Widget):

@@ -4,9 +4,8 @@ from rich.text import Text
 from textual.containers import Grid, Vertical
 from textual.widgets import Input, Label, ListItem, ListView, Static
 
-from console_button import ConsoleButton as Button
-
 from audio.music_catalog import filter_music, format_duration, load_music_catalog
+from ui.widgets.console_button import ConsoleButton as Button
 
 
 class MusicRow(ListItem):

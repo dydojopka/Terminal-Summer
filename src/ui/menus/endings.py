@@ -9,11 +9,11 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Label, ListItem, ListView, Static
 
-from console_button import ConsoleButton as Button
 from endings_catalog import load_endings_catalog, runtime_ending_ansi
 from endings_ansi import read_ending_ansi
-from storage.progress import format_ending_date
 from story.parser import get_persistent_state
+from storage.progress import format_ending_date
+from ui.widgets.console_button import ConsoleButton as Button
 
 
 def ending_labels(ending, strings: dict[str, str]) -> tuple[Text, Text]:

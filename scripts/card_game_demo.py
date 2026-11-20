@@ -21,10 +21,10 @@ from art_renderer import ART_STYLES
 from cards.game import CardGame, Phase, RIVAL_NAMES
 from cards.demo_story import CardStory
 from cards.table import CardTable, render_card_scene
-from console_button import ConsoleButton as Button
-from main import NovelMenu, TextBar
+from ui.widgets.console_button import ConsoleButton as Button
+from ui.novel.dialogue import NovelMenu, TextBar
 from story.parser import DISPLAY_NAMES
-from terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
+from ui.widgets.terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
 
 class DemoDialog(ModalScreen):

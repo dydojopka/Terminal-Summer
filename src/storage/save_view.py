@@ -8,14 +8,6 @@ from rendering.sprites import parse_show_like, normalize_sprite_position, SPRITE
 from story.parser import TIMES_OF_DAY
 
 
-def plain_save_text(value: str) -> str:
-    """Читаемое превью без активной разметки; повреждённые теги — литералы."""
-    try:
-        return Text.from_markup(value).plain
-    except MarkupError:
-        return value
-
-
 def validate_save_view(data: dict) -> tuple[dict, dict, dict]:
     scene, sprites, dialogue = (data.get(key, {}) for key in ("scene", "sprites", "dialogue"))
     if not all(isinstance(section, dict) for section in (scene, sprites, dialogue)):

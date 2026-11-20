@@ -13,10 +13,9 @@ from audio.manager import AudioManager, NullAudioBackend, PygameAudioBackend, no
 from audio.catalog import validate_audio_assets
 from file_io import atomic_output
 from storage import saves, settings as settings_storage
-from storage.save_view import plain_save_text, validate_save_view
-from storage.saves import CORRUPT_SAVE
+from storage.save_view import validate_save_view
 from single_instance import single_instance, AlreadyRunningError
-from terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
+from ui.widgets.terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
 from paths import get_frozen_bundle_dir, get_project_root, get_resource_path, get_ts_path, get_user_data_dir
 
@@ -35,36 +34,40 @@ def _file_signature(path: Path) -> tuple:
 from PIL import Image
 from art_renderer import ART_STYLES, render_art
 
-from textual import events, errors, _time
+from textual import events, _time
 from textual.app import App, ComposeResult
-from textual.containers import Center, HorizontalGroup, VerticalScroll, Vertical, ScrollableContainer
-from textual.geometry import Size
-from textual.screen import Screen, ModalScreen
-from textual.widgets import Label, Footer, Header, Static, ListItem, ListView, Log, LoadingIndicator, Input
+from textual.screen import Screen
+from textual.widgets import Label, Footer, Static, ListView
 from textual.widget import Widget
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.scrollbar import ScrollBar, ScrollBarCorner
-from console_button import ConsoleButton as Button
-from console_button import directional_focus_target
-from console_scrollbar import ConsoleScrollBarRender
+from ui.widgets.console_button import ConsoleButton as Button
+from ui.widgets.console_scrollbar import ConsoleScrollBarRender
 
-from rich.style import Style
-from rich.segment import Segment
 from rich.text import Text
-from rich.cells import cell_len
 
 from story.parser import ScriptParser, format_script_state, TIMES_OF_DAY
 from story.locale import load_interface_locale
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
-from music_room import MusicRoom
-from story.map_choices import map_choice_zones
 from ui.novel.camp_map import CampMap, map_render_width
-from cards.game import CardGame, Phase
+from cards.game import Phase
 from cards.session import CardSession
 from cards.table import CardTable
 from story.card_commands import RESULTS
-from endings_menu import EndingsMenu, EndingsList, EndingResult
+from ui.menus.endings import EndingResult, EndingsList, EndingsMenu
+from ui.menus.gallery import GalleryMenu
+from ui.menus.main_menu import MainMenu
+from ui.menus.music_room import MusicRoom
+from ui.menus.pause import PauseMenu, PauseMenuContainer
+from ui.menus.saves import OutdatedSaveDialog, SaveMenu
+from ui.menus.settings import LANGUAGE_NAMES, LanguageDialog, SettingsMenu
+from ui.novel.choices import ChoiceBar
+from ui.novel.dialogue import LogMenu, NovelMenu, TextBar
+from ui.novel.header import ScriptStateHeader
+from ui.novel.loading import ScriptLoadingOverlay
+from ui.novel.window import NovelWindow
+from ui.screen import PerformanceScreen
 from endings_catalog import current_ending
 from credits import CREDIT_PAGES, CreditsTimeline
 from storage.progress import (
@@ -136,917 +139,6 @@ def main():
         raise SystemExit(1)
 
 
-
-# Цвета имён персонажей в истории и NVL-тексте
-SPEAKER_NAME_COLORS = {
-    "dreamgirl":   "rgb(192,192,192)",
-    "sl":          "rgb(255,210,0)",
-    "slp":         "rgb(255,210,0)",
-    "slg":         "rgb(255,210,0)",
-    "sa":          "rgb(255,210,0)",
-    "un":          "rgb(185,86,255)",
-    "unp":         "rgb(185,86,255)",
-    "dv":          "rgb(255,170,0)",
-    "dvp":         "rgb(255,170,0)",
-    "dvg":         "rgb(255,170,0)",
-    "el":          "rgb(255,255,0)",
-    "elp":         "rgb(255,255,0)",
-    "ro":          "rgb(255,255,0)",
-    "us":          "rgb(255,50,0)",
-    "usp":         "rgb(255,50,0)",
-    "usg":         "rgb(255,50,0)",
-    "mt":          "rgb(0,234,50)",
-    "mtp":         "rgb(0,234,50)",
-    "mt_voice":    "rgb(0,234,50)",
-    "cs":          "rgb(165,165,255)",
-    "csp":         "rgb(165,165,255)",
-    "mz":          "rgb(114,160,255)",
-    "mi":          "rgb(0,252,255)",
-    "mip":         "rgb(0,252,255)",
-    "ma":          "rgb(0,252,255)",
-    "uv":          "rgb(78,255,0)",
-    "uvp":         "rgb(78,255,0)",
-    "sh":          "rgb(255,242,38)",
-    "pi":          "rgb(230,0,0)",
-    "me":          "rgb(225,221,125)",
-    "my":          "rgb(225,221,125)",
-    "FIXME_voice": "rgb(192,192,192)",
-    "bush":        "rgb(192,192,192)",
-    "message":     "rgb(192,192,192)",
-    "odn":         "rgb(192,192,192)",
-    "all":         "rgb(227,58,58)",
-}
-
-class AnsiView(Static):
-    can_focus = False
-    can_focus_children = False
-    ALLOW_SELECT = False
-
-    def on_mount(self) -> None:
-        # ANSI-арт не интерактивен: отключаем лишнюю обработку мыши и ссылок
-        self.auto_links = False
-        self.disable_messages(events.MouseMove, events.Enter, events.Leave)
-
-
-class ScriptStateHeader(Header):
-    """Header, переносящий длинное состояние сценария на несколько строк."""
-
-    DEFAULT_CSS = """
-    ScriptStateHeader {
-        height: auto;
-        max-height: 8;
-    }
-
-    ScriptStateHeader HeaderTitle {
-        height: auto;
-        text-wrap: wrap;
-        text-overflow: fold;
-        padding: 0 1;
-    }
-    """
-
-    def format_title(self):
-        title = super().format_title()
-        self._sync_title_alignment(title)
-        return title
-
-    def on_resize(self) -> None:
-        self._sync_title_alignment(super().format_title())
-
-    def _sync_title_alignment(self, title) -> None:
-        clock_width = self.query_one("HeaderClockSpace").region.width
-        title_gutter = self.query_one("HeaderTitle").styles.gutter.width
-        # Считаем по внешней ширине, чтобы смена padding не вызывала колебаний.
-        centered_width = self.region.width - 2 * clock_width - title_gutter
-        fits_centered = title.get_optimal_width({}, self.region.width) <= centered_width
-        self.styles.padding = (0, 0, 0, clock_width if fits_centered else 0)
-
-    def on_click(self, event: events.Click) -> None:
-        # Не вызывать унаследованный Header._on_click(), меняющий класс -tall.
-        event.prevent_default()
-
-class PerformanceScreen(Screen):
-    """Экран с облегчённой обработкой мыши для больших ANSI-артов."""
-
-    MOUSE_STYLE_BYPASS_CLASS = "mouse-passive-art"
-
-    def get_style_at(self, x: int, y: int) -> Style:
-        try:
-            widget, _ = self.get_widget_at(x, y)
-        except errors.NoWidget:
-            return Style.null()
-
-        for node in widget.ancestors_with_self:
-            if isinstance(node, Widget) and node.has_class(self.MOUSE_STYLE_BYPASS_CLASS):
-                return Style.null()
-
-        return super().get_style_at(x, y)
-
-
-LANGUAGE_NAMES = {"ru": "Русский", "en": "English"}
-
-
-class MainMenu(Static):
-    """Виджет главного меню"""
-    BORDER_TITLE="Главное меню"
-    def compose(self):
-        with HorizontalGroup(id="main-language-bar"):
-            yield Button("RU", id="btn-language-menu", tooltip="Язык / Language")
-        yield MainMenuBrand(classes="mouse-passive-art")
-        yield MainMenuMiddleBtns()
-        yield MainMenuBottomBtns()
-
-
-class ConsoleLoadingIndicator(LoadingIndicator):
-    """Символьный спиннер без градиента."""
-
-    FRAMES = "|/—\\"
-
-    def render(self) -> Text:
-        if self.app.animation_level == "none":
-            return Text("[ * ]")
-        frame = int(time.monotonic() * 6) % len(self.FRAMES)
-        return Text(f"[ {self.FRAMES[frame]} ]")
-
-
-class ScriptLoadingOverlay(Static):
-    """Оверлей подготовки ресурсов сценария."""
-
-    def compose(self):
-        yield ConsoleLoadingIndicator(id="script-loading-indicator")
-        yield Label("Подготовка сценария…", id="script-loading-text")
-
-
-class MainMenuBrand(AnsiView):
-    """Готовый ANSI-логотип главного меню."""
-
-    def on_mount(self) -> None:
-        super().on_mount()
-        try:
-            ansi_logo = MENU_LOGO_PATH.read_text(encoding="utf-8")
-            self.update(Text.from_ansi(ansi_logo))
-        except (OSError, UnicodeError):
-            # Логотип не должен мешать запуску игры при повреждённом ассете.
-            self.update(
-                Text("Terminal Summer", style="bold #E3B778", justify="center")
-            )
-    
-class MainMenuMiddleBtns(HorizontalGroup):
-    """Виджет-контейнер для центарльных кнопок"""
-    BORDER_TITLE="Информация"
-    def compose(self):
-            yield MainMenuStartBtn(id="container-start-game")
-            yield MainMenuLoadBtn(id="container-save-load")
-            yield MainMenuGalleryBtn(id="container-gallery")
-
-class MainMenuBottomBtns(HorizontalGroup):
-    """Виджет-контейнер для нижних кнопок"""
-    def compose(self):
-        yield Button("Достижения", id="btn-achievements")
-        yield Button("Настройки", id="btn-settings-menu")
-        yield Button("Выход", id="btn-exit-menu")
-
-class MainMenuStartBtn(Vertical):
-    """Виджет для кнопки "Начать игру" с описанием"""
-    def compose(self):
-        yield Button("Начать игру", id="btn-start-game")
-        yield Label('   Дорогой пионер!\n' \
-        'Ты — на пороге удивительных открытий.\n' \
-        '   Перед тобой распахнулись двери самого прекрасного места в мире — ' \
-        'нашего любимого лагеря "Совёнок". Эта смена запомнится тебе на всю жизнь.\n' \
-        'Добро пожаловать!', id="main-start-description")
-
-class MainMenuLoadBtn(Vertical):
-    """Виджет для кнопки "Соханение" с описанием"""
-    def compose(self):
-        yield Button("Сохранение", id="btn-save-load")
-        yield Label('   Бережно относись к истории своего лагеря. Тщательно записывай ' \
-        'свои наблюдения и мысли о прошедших днях.\nПри помощи сохранений ты всегда ' \
-        'сможешь вернуться назад к пройденному эпизоду и осмыслить его заново. ' \
-        'Удачи тебе в твоих начинаниях!\n' \
-        '   Если что-то пойдёт не так, ты знаешь, что делать', id="main-load-description")
-
-class MainMenuGalleryBtn(Vertical):
-    """Виджет для кнопки "Галерея" с описанием"""
-    def compose(self):
-        yield Button("Галерея", id="btn-gallery")
-        yield Label('   Здесь представлены работы участников нашего фотокружка. ' \
-        'Твои товарищи всегда готовы запечатлеть важные моменты из жизни лагеря, ' \
-        'а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим ' \
-        'поведением подавай пример окружающим.', id="main-gallery-description")
-
-
-class GalleryMenu(HorizontalGroup):
-    """Виджет галереи"""
-    BORDER_TITLE = "Галерея"
-    SIZE_BUTTONS = {
-        "btn-small-gallery": ("50", "error"),
-        "btn-medium-gallery": ("150", "warning"),
-        "btn-large-gallery": ("200", "success"),
-    }
-    STYLE_BUTTONS = {
-        "btn-gallery-ansi": "ANSI",
-        "btn-gallery-ascii": "ASCII",
-        "btn-gallery-color-ascii": "COLOR_ASCII",
-    }
-    BUTTON_LABELS = {
-        "btn-close-gallery": "Назад", "btn-gallery-music": "Музыка",
-        "btn-gallery-cg": "Иллюстрации", "btn-gallery-bg": "Фоны",
-        "btn-small-gallery": "маленький", "btn-medium-gallery": "Средний",
-        "btn-large-gallery": "ОГРОМНЫЙ",
-        "btn-gallery-ansi": "ANSI", "btn-gallery-ascii": "ЧБ ASCII",
-        "btn-gallery-color-ascii": "Цветной ASCII",
-    }
-    BINDINGS = [
-        Binding(key, f"gallery_direction('{key}')", show=False, priority=True)
-        for key in ("up", "down", "left", "right")
-    ]
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.strings: dict[str, str] = {}
-
-    def compose(self):
-        yield GalleryMenuLeftBtns()
-        yield GalleryMenuMidBtns()
-        yield GalleryMenuBottomBtns()
-
-    def apply_language(self, strings: dict[str, str]) -> None:
-        self.strings = strings
-        self.border_title = strings.get("gallery.title", self.BORDER_TITLE)
-        for key, label in self.BUTTON_LABELS.items():
-            self.query_one(f"#{key}", Button).label = strings.get(key, label)
-        self.query_one(MusicRoom).apply_language(strings)
-
-    def update_size_selection(self, width: str) -> None:
-        for key, (size, variant) in self.SIZE_BUTTONS.items():
-            self.query_one(f"#{key}", Button).variant = variant if size == width else "default"
-
-    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        if action != "gallery_direction":
-            return super().check_action(action, parameters)
-        focused = self.app.focused
-        direction = parameters[0]
-        if isinstance(focused, Input):
-            # Редактирование текста, включая ←/→ и их модификаторы, — дело Input.
-            return direction in {"up", "down"}
-        if isinstance(focused, ListView):
-            if direction == "up":
-                return focused.index in (None, 0)
-            if direction == "down":
-                return not focused.children or focused.index == len(focused.children) - 1
-            return True
-        return isinstance(focused, Button)
-
-    def action_gallery_direction(self, direction: str) -> None:
-        """Переходы между зонами; выбор трека и редактирование остаются нативными."""
-        focused = self.app.focused
-        available = set(self.screen.focus_chain)
-        sidebar = [button for button in self.query_one(GalleryMenuLeftBtns).query(Button)
-                   if button in available]
-        active_tab = self.query_one(f"#btn-gallery-{self.app.gallery_mode}", Button)
-        search = self.query_one("#music-search", Input)
-        listing = self.query_one("#music-list", ListView)
-        music = self.app.gallery_mode == "music"
-        controls = self.query_one("#music-controls" if music else "GalleryMenuBottomBtns")
-        buttons = [button for button in controls.query(Button) if button in available]
-        target = None
-        if focused in sidebar:
-            if direction in {"up", "down"}:
-                index = sidebar.index(focused) + (-1 if direction == "up" else 1)
-                if 0 <= index < len(sidebar):
-                    target = sidebar[index]
-            elif direction == "right":
-                target = (
-                    search if focused.id == "btn-close-gallery" else listing
-                ) if music else next(iter(buttons), None)
-        elif focused is search:
-            target = self.query_one("#btn-close-gallery") if direction == "up" else listing
-        elif focused is listing:
-            if direction == "up":
-                target = search
-            elif direction == "left":
-                target = active_tab
-            else:
-                target = next(iter(buttons), None)
-        elif focused in buttons:
-            if direction in {"left", "right"}:
-                # Переходим между блоками управления, включая перенос сетки музыки.
-                index = buttons.index(focused) + (-1 if direction == "left" else 1)
-                if 0 <= index < len(buttons):
-                    target = buttons[index]
-            else:
-                target = directional_focus_target(focused, buttons, direction)
-            if target is None:
-                if direction == "left":
-                    target = active_tab
-                elif direction == "up":
-                    target = listing if music else active_tab
-        if target is not None and target in available:
-            target.focus()
-
-class GalleryMenuLeftBtns(Vertical):
-    """Виджет-контейнер для кнопок галереи сверху"""
-    def on_resize(self) -> None:
-        self.set_class(self.size.height < 28, "short-gallery")
-
-    def compose(self):
-        labels = GalleryMenu.BUTTON_LABELS
-        yield Button(labels["btn-close-gallery"], id="btn-close-gallery")
-        with Static(id="container-left-btns"):
-            yield Button(labels["btn-gallery-music"], variant="default", id="btn-gallery-music")
-            yield Button(labels["btn-gallery-cg"], variant="primary", id="btn-gallery-cg")
-            yield Button(labels["btn-gallery-bg"], variant="default", id="btn-gallery-bg")
-
-class GalleryMenuMidBtns(Vertical):
-    """Виджет-контейнер для кнопок и арт-пространства галереи в центре"""
-    BORDER_TITLE=""
-    def compose(self):
-        with HorizontalGroup(id="gallery-art-panel"):
-
-            with ScrollableContainer(id="bg-cg-gallery", can_focus=False, can_focus_children=False):
-                yield AnsiView("", id="ansi-content", classes="mouse-passive-art")
-            yield MusicRoom(id="music-room", classes="hidden")
-
-
-class GalleryOptionButton(Button):
-    def watch_label(self) -> None:
-        # Смена языка должна заново измерить кнопку с width: auto.
-        self.refresh(layout=True)
-
-    def get_content_width(self, container: Size, viewport: Size) -> int:
-        # Подпись однострочная (nowrap), поэтому запас Textual для переноса не нужен.
-        return self.label.cell_length
-
-
-class GalleryMenuBottomBtns(HorizontalGroup):
-    """Перелистывание, размер и формат артов галереи."""
-    def compose(self):
-        labels = GalleryMenu.BUTTON_LABELS
-        yield Button("<-", id="btn-back-gallery")
-        with HorizontalGroup(id="gallery-size-controls"):
-            for key, (width, variant) in GalleryMenu.SIZE_BUTTONS.items():
-                variant = variant if width == self.app.gallery_size else "default"
-                yield GalleryOptionButton(labels[key], variant=variant, id=key, classes="gallery-quality")
-        with HorizontalGroup(id="gallery-style-controls"):
-            for key, style in GalleryMenu.STYLE_BUTTONS.items():
-                variant = "primary" if style == self.app.gallery_style else "default"
-                yield GalleryOptionButton(labels[key], variant=variant, id=key)
-        yield Button("->", id="btn-next-gallery")
-
-
-class SaveMenuLeftBtns(VerticalScroll):
-    """Виджет-контейнер для кнопок сохранений слева (Назад + номера страниц)"""
-    def compose(self):
-        yield Button("Назад", id="btn-close-save-menu")
-        with Static(id="container-save-page-btns"):
-            for i in range(1, 10):
-                yield Button(str(i), id=f"btn-save-page-{i}", classes="save-page-btn")
-
-
-class SaveMenuMidBtns(Vertical):
-    """Виджет-контейнер для слотов и кнопок действий в центре"""
-    BORDER_TITLE = "Сохранения"
-    def compose(self):
-        with VerticalScroll(id="save-slots-scroll"):
-            yield SaveMenuSlots(id="save-menu-slots")
-        yield SaveMenuActionBtns(id="save-action-btns")
-
-
-class SaveMenuSlots(Static):
-    """Сетка из 12 слотов сохранения"""
-    def compose(self):
-        for row in range(3):
-            with HorizontalGroup(id=f"save-row-{row}"):
-                for col in range(4):
-                    slot_index = row * 4 + col
-                    yield Button(
-                        f"Пусто\nСлот {slot_index + 1}",
-                        id=f"save-slot-{slot_index}",
-                        classes="save-slot save-slot-empty",
-                    )
-
-
-class SaveMenuActionBtns(HorizontalGroup):
-    """Кнопки действий: Удалить, Загрузить, Сохранить"""
-    def compose(self):
-        yield Button("Удалить", id="btn-save-delete", classes="save-action-btn")
-        yield Button("Загрузить", id="btn-save-load-game", classes="save-action-btn")
-        yield Button("Сохранить", id="btn-save-save", classes="save-action-btn")
-
-
-class SaveMenu(HorizontalGroup):
-    """Меню сохранений с пагинацией и слотами"""
-    BORDER_TITLE = "Сохранения"
-    BUTTONS = {"btn-close-save-menu": "Назад", "btn-save-delete": "Удалить",
-               "btn-save-load-game": "Загрузить", "btn-save-save": "Сохранить"}
-
-    def __init__(self, *args, opened_from: str = "menu", **kwargs):
-        super().__init__(*args, **kwargs)
-        self.opened_from = opened_from  # "menu" или "pause"
-        self.current_page = 0  # 0-8 (страницы 1-9)
-        self.selected_slot: str | None = None  # id выбранного слота
-        self.all_saves: dict[str, dict] = {}
-        self.strings: dict[str, str] = {}
-
-    def compose(self):
-        yield SaveMenuLeftBtns()
-        yield SaveMenuMidBtns()
-
-    def apply_language(self, strings: dict[str, str]) -> None:
-        self.strings = strings
-        for key, label in self.BUTTONS.items():
-            self.query_one(f"#{key}", Button).label = strings.get(key, label)
-        self.update_titles()
-
-    def update_titles(self) -> None:
-        title = self.strings.get("title", self.BORDER_TITLE)
-        if self.opened_from == "menu":
-            title = self.strings.get("load.title", title)
-        self.border_title = title
-        self.query_one(SaveMenuMidBtns).border_title = title
-
-
-class LanguageDialog(ModalScreen[str | None]):
-    BINDINGS = [Binding("escape", "cancel", show=False)]
-
-    def __init__(self, active: str):
-        super().__init__()
-        self.active = active
-
-    def compose(self):
-        with Vertical(id="language-panel"):
-            yield Label("Язык / Language", id="language-dialog-title")
-            with HorizontalGroup():
-                for code, name in LANGUAGE_NAMES.items():
-                    yield Button(name, id=f"quick-language-{code}",
-                                 variant="success" if code == self.active else "default")
-                yield Button("×", id="quick-language-cancel", tooltip="Отмена / Cancel")
-
-    def on_mount(self) -> None:
-        self.query_one(f"#quick-language-{self.active}", Button).focus()
-
-    def action_cancel(self) -> None:
-        self.dismiss(None)
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        event.stop()
-        code = (event.button.id or "").removeprefix("quick-language-")
-        self.dismiss(code if code in LANGUAGE_NAMES else None)
-
-
-class OutdatedSaveDialog(ModalScreen):
-    BINDINGS = [Binding("escape", "keep", show=False)]
-
-    def __init__(self, *, strings: dict[str, str] | None = None, **kwargs):
-        super().__init__(**kwargs)
-        self.strings = strings or {}
-        self.keep_button = Button(self.strings.get("outdated.keep", "Оставить"),
-                                  id="outdated-save-keep", variant="primary")
-
-    def compose(self):
-        with Vertical(id="outdated-save-panel"):
-            yield Label(self.strings.get("outdated.title", "Сохранение устарело"), id="outdated-save-title")
-            yield Static(self.strings.get("outdated.message",
-                                         "Оно несовместимо с текущей версией сценария.\nУдалить выбранное сохранение?"))
-            with HorizontalGroup():
-                yield self.keep_button
-                yield Button(self.strings.get("btn-save-delete", "Удалить"),
-                             id="outdated-save-delete", variant="error", classes="danger")
-
-    def on_mount(self):
-        if self.keep_button.is_mounted:
-            self.keep_button.focus()
-
-    def action_keep(self):
-        self.dismiss(False)
-
-    def on_button_pressed(self, event: Button.Pressed):
-        event.stop()
-        self.dismiss(event.button.id == "outdated-save-delete")
-
-
-class PauseMenu(Static):
-    """Виджет меню паузы"""
-    def compose(self):
-        yield PauseMenuContainer()
-
-class PauseMenuContainer(VerticalScroll):
-    """Доп контейнер для меню паузы(Для отображения title)"""
-    BORDER_TITLE = "Пауза"
-    def compose(self):
-        yield Button("Продолжить", id="btn-continue")
-        yield Button("Сохранения", id="btn-save")
-        yield Button("Настройки", id="btn-settings-pause")
-        yield Button("В главное меню", id="btn-menu")
-        yield Button("Выход", id="btn-exit-pause")
-
-
-class SettingsMenu(VerticalScroll):
-    """Виджет меню настроек"""
-    BORDER_TITLE = "Настройки"
-    PANEL_IDS = ("settings-menu", "setting-language", "setting-header", "setting-quality",
-                 "setting-art-style", "setting-scene-filters", "setting-text-speed", "setting-audio")
-    BUTTON_IDS = ("btn-header-on", "btn-header-off", "btn-header-lp-points", "btn-header-flags",
-                  "btn-small", "btn-medium", "btn-large", "btn-ASCII", "btn-COLOR-ASCII",
-                  "btn-scene-filters-on", "btn-scene-filters-off", "btn-speed-slow",
-                  "btn-speed-medium", "btn-speed-fast", "btn-speed-instantly", "btn-audio-mute",
-                  "btn-close-settings")
-    COPY_IDS = ("setting-language-description", "header-content-label", "setting-header-description",
-                "setting-quality-description", "setting-art-style-description",
-                "setting-scene-filters-description", "setting-text-speed-description",
-                "audio-master-title", "audio-music-title", "audio-environment-title", "audio-effects-title")
-
-    def compose(self):
-        yield SettingLanguage(id="setting-language", classes="setting-with-description hidden")
-        yield SettingHeader(id="setting-header", classes="setting-with-description")
-        yield SettingQuality(id="setting-quality", classes="setting-with-description")
-        yield SettingASCIIorANSI(id="setting-art-style", classes="setting-with-description")
-        yield SettingSceneFilters(id="setting-scene-filters", classes="setting-with-description")
-        yield SettingTextSpeed(id="setting-text-speed", classes="setting-with-description")
-        yield SettingAudio(id="setting-audio")
-        yield Button("Назад", id="btn-close-settings")
-
-    def apply_language(self, strings: dict[str, str]) -> None:
-        panels = {key: self if key == self.id else self.query_one(f"#{key}") for key in self.PANEL_IDS}
-        buttons = {key: self.query_one(f"#{key}", Button) for key in self.BUTTON_IDS}
-        copy = {key: self.query_one(f"#{key}", Static) for key in self.COPY_IDS}
-        if not hasattr(self, "_russian_copy"):
-            self._russian_copy = {
-                **{key: panel.border_title for key, panel in panels.items()},
-                **{key: button.label for key, button in buttons.items()},
-                **{key: widget.content for key, widget in copy.items()},
-            }
-        for key, panel in panels.items():
-            panel.border_title = strings.get(key, self._russian_copy[key])
-        for key, button in buttons.items():
-            button.label = strings.get(key, self._russian_copy[key])
-        for key, widget in copy.items():
-            widget.update(strings.get(key, self._russian_copy[key]))
-
-    def on_key(self, event: events.Key) -> None:
-        focused = self.screen.focused
-        if event.key not in {"up", "down"} or not isinstance(focused, Button):
-            return
-        event.stop()
-        event.prevent_default()
-        sign = -1 if event.key == "up" else 1
-        x, y = focused.region.center
-        candidates = []
-        for button in self.screen.focus_chain:
-            if not isinstance(button, Button) or self not in button.ancestors or not button.region:
-                continue
-            bx, by = button.region.center
-            distance = sign * (by - y)
-            if distance > 0:
-                candidates.append((distance, abs(bx - x), button))
-        if candidates:
-            # Настройки идут рядами сверху вниз: ближайший ряд важнее колонки,
-            # иначе правая кнопка перескакивает блоки с одной левой колонкой.
-            min(candidates, key=lambda item: item[:2])[2].focus()
-
-
-class SettingLanguage(HorizontalGroup):
-    BORDER_TITLE = "Язык"
-
-    def compose(self):
-        with HorizontalGroup(id="language-controls", classes="setting-controls setting-controls-wide"):
-            for code, name in LANGUAGE_NAMES.items():
-                yield Button(name, id=f"btn-language-{code}")
-        yield Label("Язык сюжета и меню.", id="setting-language-description", classes="setting-description")
-
-
-class SettingAudio(Vertical):
-    """Независимые пользовательские уровни, не сценарные volume-команды."""
-    BORDER_TITLE = "Звук"
-    GROUPS = {"master": "Общая громкость", "music": "Музыка",
-              "environment": "Окружение", "effects": "Разовые эффекты"}
-
-    def compose(self):
-        for group, title in self.GROUPS.items():
-            with HorizontalGroup(classes="audio-setting-row"):
-                yield Label(title, id=f"audio-{group}-title", classes="audio-setting-title")
-                yield Button("−10%", id=f"btn-audio-{group}-minus")
-                yield Label("", id=f"audio-{group}-level", classes="audio-setting-level")
-                yield Button("+10%", id=f"btn-audio-{group}-plus")
-        yield Button("Без звука", id="btn-audio-mute")
-
-class SettingHeader(HorizontalGroup):
-    """Виджет с настройкой Header"""
-    BORDER_TITLE = "Верхняя панель(Header)"
-    def compose(self):
-        with Vertical(id="header-controls", classes="setting-controls setting-controls-wide"):
-            with HorizontalGroup(classes="header-setting-row"):
-                yield Button("Включить", variant="default", id="btn-header-on")
-                yield Button("Выключить", variant="error", id="btn-header-off")
-            yield Label("Показывать в Header:", id="header-content-label")
-            with HorizontalGroup(classes="header-setting-row"):
-                yield Button("LP-поинты", id="btn-header-lp-points")
-                yield Button("Флаги", id="btn-header-flags")
-        yield DescriptionSettingHeader(id="setting-header-description", classes="setting-description")
-
-
-class SettingDescription(Static):
-    TEXT = ""
-
-    def __init__(self, **kwargs):
-        super().__init__(self.TEXT, markup=False, **kwargs)
-
-
-class DescriptionSettingHeader(SettingDescription):
-    """Описание настройки 'Верхняя панель(Header)'"""
-    TEXT = """Верхняя панель будет отображать:
-название программы, выбранные группы переменных и системное время.\n
-LP-поинты и флаги можно включать независимо.
-(может слегка уменьшить обзор)"""
-
-class SettingQuality(HorizontalGroup):
-    """Виджет с настройкой размера ASCII-артов"""
-    BORDER_TITLE = "Размер ANSI/ASCII артов"
-    def compose(self):
-        with Vertical(classes="setting-controls"):
-            yield Button("маленький\n(50)", variant="default", id="btn-small")
-            yield Button("Средний\n(150)", variant="default", id="btn-medium")
-            yield Button("ОГРОМНЫЙ\n(200)", variant="default", id="btn-large")
-        yield DescriptionSettingQuality(id="setting-quality-description", classes="setting-description")
-
-class DescriptionSettingQuality(SettingDescription):
-    """Описание настройки 'Размер ANSI/ASCII артов'"""
-    TEXT = """Размер артов лучше подбирать по размеру окна консоли,
-с сильно большим размером изображение может не поместиться.\n 
-Можно так же попробовать уменьшить размер шрифта самой консоли 
-(Обычно это Ctrl+"+" и Ctrl+"-")"""
-
-class SettingASCIIorANSI(HorizontalGroup):
-    """Виджет с настройкой стиля артов"""
-    BORDER_TITLE = "Стиль артов"
-    STYLE_BUTTONS = {
-        "btn-ANSI": "ANSI",
-        "btn-ASCII": "ASCII",
-        "btn-COLOR-ASCII": "COLOR_ASCII",
-    }
-
-    def compose(self):
-        with Vertical(classes="setting-controls"):
-            yield Button("ANSI", variant="default", id="btn-ANSI")
-            yield Button("ЧБ ASCII", variant="default", id="btn-ASCII")
-            yield Button("Цветной ASCII", variant="default", id="btn-COLOR-ASCII")
-        yield DescriptionSettingASCIIorANSI(id="setting-art-style-description", classes="setting-description")
-
-class DescriptionSettingASCIIorANSI(SettingDescription):
-    """Описание настройки 'Стиль артов'"""
-    TEXT = """ANSI — цветные блоки
-ЧБ ASCII — одноцветные символы .,:+*?%@
-Цветной ASCII — те же символы в цветах изображения"""
-
-class SettingSceneFilters(HorizontalGroup):
-    """Пользовательская видимость фильтров, независимо от стиля артов."""
-    BORDER_TITLE = "Фильтры изображения"
-    BUTTON_VALUES = {
-        "btn-scene-filters-on": True,
-        "btn-scene-filters-off": False,
-    }
-
-    def compose(self):
-        with HorizontalGroup(id="scene-filter-controls", classes="setting-controls setting-controls-wide"):
-            yield Button("Включить", id="btn-scene-filters-on")
-            yield Button("Выключить", id="btn-scene-filters-off")
-        yield Static(
-            "В ASCII фильтры можно отключить для лучшей различимости изображения. "
-            "Персонажи и их тонировка сохраняются.",
-            id="setting-scene-filters-description",
-            classes="setting-description scene-filter-description",
-        )
-
-
-class SettingTextSpeed(HorizontalGroup):
-    """Виджет с настройкой скорости текста"""
-    BORDER_TITLE = "Скорость текста"
-    def compose(self):
-        with Vertical(classes="setting-controls"):
-            yield Button("Медленно", variant="default", id="btn-speed-slow")
-            yield Button("Средне", variant="default", id="btn-speed-medium")
-            yield Button("Быстро", variant="default", id="btn-speed-fast")
-            yield Button("Моментально", variant="default", id="btn-speed-instantly")
-        yield DescriptionSettingTextSpeed(id="setting-text-speed-description", classes="setting-description")
-
-class DescriptionSettingTextSpeed(SettingDescription):
-    """Описание настройки 'Скорость текста'"""
-    TEXT = """Скорость появления текста в текстовом окне.\n
-Медленно    - 0.04
-Средне      - 0.025
-Быстро      - 0.01
-Моментально - 0"""
-
-
-class NovelMenu(Static):
-    """Виджет-контейнер для текст бара и кнопок"""
-    def compose(self):
-        with Vertical(id="novel-log-control", classes="novel-control"):
-            yield Button("История", id="btn-log")
-        yield TextBar(id="text-bar")
-        with Vertical(id="novel-next-control", classes="novel-control"):
-            yield Button("Продолжить", id="btn-next")
-
-class TextBar(VerticalScroll):
-    """Виджет текст бара"""
-    BORDER_TITLE = ""   # Имя персонажа
-    
-    def __init__(self, id=None):
-        super().__init__(id=id)
-        self._text = ""
-        self._content = Static("", classes="dialogue-content")
-
-    def compose(self):
-        yield self._content
-
-    @property
-    def text(self):
-        return self._text
-
-    @text.setter
-    def text(self, value):
-        self._text = value
-        self._content.update(Text.from_markup(value))
-
-    def append_nvl_paragraph(self, speaker: str, speaker_id: str | None) -> None:
-        prefix = "\n" if self.text else ""
-        if speaker:
-            name = Text(
-                f"{speaker}:",
-                style=Style(bold=True, color=SPEAKER_NAME_COLORS.get(speaker_id or "")),
-            )
-            prefix += name.markup + " "
-        self.text += prefix
-
-    async def animate_text(self, new_text, append=False):
-        """Анимация текста, символ за символом
-
-        Если append=True  - добавляет текст к текущему,\n
-        Если append=False - начинает с нуля"""
-
-        speed = float(self.app.text_speed)
-        
-        if not append:
-            self.text = ""
-            self.scroll_home(animate=False)
-
-        for index, char in enumerate(new_text):
-            await self.app.wait_until_game_resumed()
-            if self.app.skipping:
-                self.text += new_text[index:]
-                # Быстрые части <w> тоже должны отдавать управление вводу.
-                await asyncio.sleep(0)
-                break
-            self.text += char
-            await asyncio.sleep(speed)
-
-        self.scroll_end(animate=False)
-
-
-class NovelWindow(Widget):
-    """Окно новеллы(bg-cg + ChoiceBar)"""
-    def compose(self):
-        yield ChoiceBar(id="choice-bar", classes="hidden")
-        yield AnsiView("", id="bg-cg", classes="mouse-passive-art")
-        yield CardTable(CardGame(), ts_path=get_ts_path(), external_scenery=True,
-                        id="card-table", classes="hidden")
-        
-class ChoiceItem(ListItem):
-    def on_enter(self) -> None:
-        listing = self.parent
-        if isinstance(listing, ChoiceList) and listing.parent.has_class("map-mode"):
-            listing.index = listing.children.index(self)
-
-
-class ChoiceList(ListView):
-    """Сюжетные ответы с быстрым выбором по номеру."""
-    BINDINGS = [
-        Binding("tab", "cycle_choice(1)", show=False),
-        Binding("shift+tab", "cycle_choice(-1)", show=False),
-    ]
-
-    async def set_choices(self, options, *, on_map: bool = False, captions=None) -> None:
-        """Общие колонки номеров и центрированных подписей для всего меню."""
-        rows_data = [(key, key if captions is None else captions[key]) for key in options]
-        number_width = len(str(len(rows_data))) + 2
-        caption_width = max(
-            (cell_len(line) for _, caption in rows_data for line in caption.splitlines()),
-            default=0,
-        )
-        self.styles.width = "1fr" if on_map else caption_width + 2 * number_width
-        rows = []
-        for number, (key, caption) in enumerate(rows_data, start=1):
-            number_label = Label(f"{number}.", classes="choice-number")
-            number_label.styles.width = number_width
-            row = ChoiceItem(
-                number_label,
-                Center(Label(caption, markup=False, classes="choice-caption")),
-                name=key,
-            )
-            # Правое поле уравновешивает номер, чтобы центр текста не смещался.
-            row.styles.padding = (0, 0 if on_map else number_width, 1, 0)
-            rows.append(row)
-        await self.clear()
-        await self.extend(rows)
-
-    def on_resize(self) -> None:
-        if self.parent.has_class("map-mode"):
-            self.call_after_refresh(self._keep_map_choice_visible)
-
-    def _keep_map_choice_visible(self) -> None:
-        item = self.highlighted_child
-        if item is not None:
-            item.scroll_visible(animate=False)
-
-    def action_cycle_choice(self, direction: int) -> None:
-        if self.children:
-            self.index = ((self.index or 0) + direction) % len(self.children)
-
-    def on_key(self, event: events.Key) -> None:
-        if len(event.key) != 1 or event.key not in "123456789":
-            return
-        if not self.is_on_screen:
-            return
-        index = int(event.key) - 1
-        if index >= len(self.children):
-            return
-        event.stop()
-        event.prevent_default()
-        self.index = index
-        self.action_select_cursor()
-
-
-class ChoiceBar(Widget):
-    """Окно выбора"""
-    def compose(self):
-        yield CampMap(id="camp-map", classes="hidden mouse-passive-art")
-        with Vertical(id="choice-options"):
-            yield ChoiceList()
-
-    async def set_choices(self, options, script: ScriptParser) -> None:
-        zones = map_choice_zones(script.filename, tuple(
-            script.lines[target.start:target.end] for target in options.values()
-        ))
-        on_map = bool(zones)
-        self.set_class(on_map, "map-mode")
-        self.query_one("#choice-options").set_class(on_map, "map-mode")
-        self.query_one(CampMap).set_class(not on_map, "hidden")
-        self.query_one(CampMap).set_zones(zones)
-        await self.query_one(ChoiceList).set_choices(
-            options, on_map=on_map,
-            captions={key: script.choice_caption(key, target) for key, target in options.items()},
-        )
-
-    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
-        if self.has_class("map-mode") and event.list_view is self.query_one(ChoiceList):
-            self.query_one(CampMap).preview(event.list_view.index)
-
-    def close(self) -> None:
-        self.add_class("hidden")
-        self.query_one(CampMap).set_zones(())
-
-
-class LogMenu(Log):
-    """Виджет окна истории"""
-    # BORDER_TITLE = "История"
-    auto_scroll = True
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._speaker_line_styles: dict[int, Style] = {}
-
-    def add_dialogue_entry(
-        self,
-        text: str,
-        speaker: str = "",
-        speaker_id: str | None = None,
-    ) -> None:
-        if speaker:
-            self.write_line(speaker)
-            line_index = self.line_count - 1
-            color = SPEAKER_NAME_COLORS.get(speaker_id or "")
-            if color:
-                self._speaker_line_styles[line_index] = Style.parse(color)
-
-        self.write_line(f" {text}")
-
-    def clear(self):
-        self._speaker_line_styles.clear()
-        return super().clear()
-
-    def _render_line(self, y: int, scroll_x: int, width: int):
-        strip = super()._render_line(y, scroll_x, width)
-        style = self._speaker_line_styles.get(y)
-        if style is not None:
-            return strip.__class__(
-                Segment.apply_style(strip._segments, post_style=style),
-                strip.cell_length,
-            )
-        return strip
-
-
-
 class TerminalSummer(App):
     """Основное приложение новеллы"""
     ENABLE_COMMAND_PALETTE = False
@@ -1071,7 +163,6 @@ class TerminalSummer(App):
         self.interface_locale: dict[str, str] = {}
         self.endings_locale: dict[str, str] = {}
         self.runtime_ui: dict[str, str] = {}
-        self._russian_main_labels = None
         self.audio = AudioManager(self.ts_path)
         self._menu_music_active = False
         self.ending_dates = {}
@@ -1211,8 +302,8 @@ class TerminalSummer(App):
         yield ScriptStateHeader(show_clock=True, classes="hidden")
         yield Footer(classes="hidden")
 
-        yield MainMenu(    id="main-menu")
-        yield NovelWindow( id="novel-window",  classes="hidden")
+        yield MainMenu(MENU_LOGO_PATH, id="main-menu")
+        yield NovelWindow(self.ts_path, id="novel-window", classes="hidden")
         yield NovelMenu(   id="novel-menu",    classes="hidden")
         yield LogMenu(     id="log-menu",      classes="hidden")
         yield PauseMenu(   id="pause-menu",    classes="hidden")
@@ -1424,298 +515,127 @@ class TerminalSummer(App):
             self._card_auto_key = None
 
 
-
     # ============ Функции - on_ ============
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Обработка событий при нажатии кнопок"""
         if self._terminal_too_small:
             event.stop()
             return
-        button_id = event.button.id
-        if button_id == "btn-audio-mute":
-            self.settings["audio_muted"] = not self.settings["audio_muted"]
-            self.apply_audio_settings()
-            self.save_settings()
-            return
-        if match := re.fullmatch(r"btn-audio-(master|music|environment|effects)-(minus|plus)", button_id or ""):
-            group, direction = match.groups()
-            key = "audio_" + group
-            self.settings[key] = max(0.0, min(1.0, round(self.settings[key] + (0.1 if direction == "plus" else -0.1), 2)))
-            self.apply_audio_settings()
-            self.save_settings()
-            return
-
-        # Кнопки в NovelMenu:
-        if   button_id == "btn-next":             # Кнопка "Продолжить"
-            await self._advance_from_button()
-        elif button_id == "btn-log":              # Кнопка "История"
-            self.action_log()
-
-        # Кнопки в PauseMenu:
-        elif button_id == "btn-continue":         # Кнопка "Продолжить"
-            self.action_pause_game()
-        elif button_id == "btn-save":             # Кнопка "Сохранения"
-            self.open_save_menu("pause")
-        elif button_id == "btn-settings-pause":   # Кнопка "Настройки"
-            self.query_one("#settings-menu").remove_class("open-from-menu")
-            self.query_one("#settings-menu").add_class("open-from-pause") # Класс-флаг что настройки открыты из PauseMenu
-            self.action_open_settings()
-        elif button_id == "btn-menu":             # Кнопка "В главное меню"
-            # Полный сброс игрового интерфейса
-            self.reset_game_view()
-
-            # Переход в главное меню
-            self.action_open_menu()
-        elif button_id == "btn-exit-pause":       # Кнопка "Выход"
-            self.app.exit()
-
-        # Кнопки в SettingsMenu:
-        elif button_id in ("btn-language-ru", "btn-language-en"):
-            if self.query_one("#settings-menu").has_class("open-from-menu"):
-                self.set_language(button_id.rsplit("-", 1)[1])
-
-        # Header
-        elif button_id == "btn-header-on":        # Кнопка "Включить"
-            # Включаем заголовок
-            self.query_one("Header").remove_class("hidden")
-
-            # Меняем стили кнопок
-            self.query_one("#btn-header-on", Button).variant = "success"
-            self.query_one("#btn-header-off", Button).variant = "default"
-
-            # Сохранение в файл настроек
-            self.settings["header"] = True
-            self.save_settings()
-        elif button_id == "btn-header-off":       # Кнопка "Выключить"
-            # Включаем заголовок
-            self.query_one("Header").add_class("hidden")
-
-            # Меняем стили кнопок
-            self.query_one("#btn-header-on", Button).variant = "default"
-            self.query_one("#btn-header-off", Button).variant = "error"
-
-            # Сохранение в файл настроек
-            self.settings["header"] = False
-            self.save_settings()
-
-        elif button_id == "btn-header-lp-points":
-            self.settings["header_lp_points"] = not self.settings.get(
-                "header_lp_points", True
-            )
-            self.sync_header_filter_buttons()
-            self.update_script_header()
-            self.save_settings()
-        elif button_id == "btn-header-flags":
-            self.settings["header_flags"] = not self.settings.get(
-                "header_flags", True
-            )
-            self.sync_header_filter_buttons()
-            self.update_script_header()
-            self.save_settings()
-
-        # Quality
-        elif button_id == "btn-small":            # Кнопка "маленький"
-            # Меняем стили кнопок
-            self.query_one("#btn-small", Button).variant = "error"
-            self.query_one("#btn-medium", Button).variant = "default"
-            self.query_one("#btn-large", Button).variant = "default"
-
-            # Сохранение в файл настроек и обновление
-            self.settings["quality"] = "50"
-            self.save_settings()
-            await self.update_current_scene_art()
-        elif button_id == "btn-medium":           # Кнопка "Средний"
-            # Меняем стили кнопок
-            self.query_one("#btn-small", Button).variant = "default"
-            self.query_one("#btn-medium", Button).variant = "warning"
-            self.query_one("#btn-large", Button).variant = "default"
-
-            # Сохранение в файл настроек и обновление
-            self.settings["quality"] = "150"
-            self.save_settings()
-            await self.update_current_scene_art()
-        elif button_id == "btn-large":            # Кнопка "ОГРОМНЫЙ"
-            # Меняем стили кнопок
-            self.query_one("#btn-small", Button).variant = "default"
-            self.query_one("#btn-medium", Button).variant = "default"
-            self.query_one("#btn-large", Button).variant = "success"
-
-            # Сохранение в файл настроек и обновление
-            self.settings["quality"] = "200"
-            self.save_settings()
-            await self.update_current_scene_art()
-
-        # Стиль артов
-        elif button_id in SettingASCIIorANSI.STYLE_BUTTONS:
-            self.settings["style"] = SettingASCIIorANSI.STYLE_BUTTONS[button_id]
-            self.sync_art_style_buttons()
-            self.save_settings()
-            await self.update_current_scene_art()
-
-        elif button_id in SettingSceneFilters.BUTTON_VALUES:
-            enabled = SettingSceneFilters.BUTTON_VALUES[button_id]
-            if self.settings["scene_filters_enabled"] != enabled:
-                self.settings["scene_filters_enabled"] = enabled
-                self.sync_scene_filter_buttons()
-                self.save_settings()
-                await self.update_current_scene_art()
-
-        # TextSpeed
-        elif button_id == "btn-speed-slow":       # Кнопка "Медленно"
-             # Меняем стили кнопок
-            self.query_one("#btn-speed-slow", Button).variant = "error"
-            self.query_one("#btn-speed-medium", Button).variant = "default"
-            self.query_one("#btn-speed-fast", Button).variant = "default"
-            self.query_one("#btn-speed-instantly", Button).variant = "default"
-
-            # Сохранение в файл настроек и применение
-            self.settings["text_speed"] = "0.04"
-            self.save_settings()
-            self.apply_settings()
-        elif button_id == "btn-speed-medium":     # Кнопка "Средне"
-            # Меняем стили кнопок
-            self.query_one("#btn-speed-slow", Button).variant = "default"
-            self.query_one("#btn-speed-medium", Button).variant = "warning"
-            self.query_one("#btn-speed-fast", Button).variant = "default"
-            self.query_one("#btn-speed-instantly", Button).variant = "default"
-
-            # Сохранение в файл настроек и применение
-            self.settings["text_speed"] = "0.025"
-            self.save_settings()
-            self.apply_settings()
-        elif button_id == "btn-speed-fast":       # Кнопка "Быстро"
-            # Меняем стили кнопок
-            self.query_one("#btn-speed-slow", Button).variant = "default"
-            self.query_one("#btn-speed-medium", Button).variant = "default"
-            self.query_one("#btn-speed-fast", Button).variant = "success"
-            self.query_one("#btn-speed-instantly", Button).variant = "default"
-
-            # Сохранение в файл настроек и применение
-            self.settings["text_speed"] = "0.01"
-            self.save_settings()
-            self.apply_settings()
-        elif button_id == "btn-speed-instantly":  # Кнопка "Моментально"
-            # Меняем стили кнопок
-            self.query_one("#btn-speed-slow", Button).variant = "default"
-            self.query_one("#btn-speed-medium", Button).variant = "default"
-            self.query_one("#btn-speed-fast", Button).variant = "default"
-            self.query_one("#btn-speed-instantly", Button).variant = "primary"
-
-            # Сохранение в файл настроек и применение
-            self.settings["text_speed"] = "0"
-            self.save_settings()
-            self.apply_settings()
-
-        elif button_id == "btn-close-settings":   # Кнопка "Назад"
-            # Если открыто из меню паузы
-            if self.query_one("#settings-menu").has_class("open-from-pause"):
-                self.action_open_settings()
-                #self.query_one("#settings-menu").remove_class("open-from-pause")
-            # Если открыто из главного меню
-            elif self.query_one("#settings-menu").has_class("open-from-menu"):
+        button_id = event.button.id or ""
+        match button_id:
+            case "btn-next":
+                await self._advance_from_button()
+            case "btn-log":
+                self.action_log()
+            case "btn-continue":
+                self.action_pause_game()
+            case "btn-save":
+                self.open_save_menu("pause")
+            case "btn-menu":
+                self.reset_game_view()
                 self.action_open_menu()
-                self.query_one("#settings-menu").remove_class("open-from-menu")
+            case "btn-exit-pause" | "btn-exit-menu":
+                self.exit()
+            case "btn-settings-pause" | "btn-settings-menu":
+                source = "pause" if button_id == "btn-settings-pause" else "menu"
+                self.query_one(SettingsMenu).set_opened_from(source)
+                self.action_open_settings()
+            case "btn-close-settings":
+                self._close_settings_from_button()
+            case "btn-start-game":
+                self.start_new_game()
+            case "btn-save-load":
+                self.open_save_menu("menu")
+            case "btn-gallery" | "btn-close-gallery":
+                self.action_open_gallery()
+            case "btn-achievements" | "btn-close-endings":
+                self.action_open_endings()
+            case "btn-language-menu":
+                self.push_screen(LanguageDialog(self.settings["language"]), self.set_language)
+            case "btn-close-save-menu":
+                self.close_save_menu()
+            case "btn-save-delete":
+                self.delete_selected_save()
+            case "btn-save-load-game":
+                self.load_selected_save()
+            case "btn-save-save":
+                self.save_to_selected_slot()
+            case _:
+                if self._handle_gallery_button(button_id):
+                    return
+                if self.query_one(SaveMenu).handle_selection(button_id):
+                    return
+                menu = self.query_one(SettingsMenu)
+                if change := menu.setting_change(button_id, self.settings):
+                    await self._apply_setting_change(menu, *change)
 
-        # Кнопки в MainMenu:
-        elif button_id == "btn-start-game":       # Кнопка "Начать игру"
-            self.cancel_script_advance()
-            self.stop_credits()
-            self._new_ending_flags.clear()
-            self._menu_music_active = False
-            self.audio.reset()
+    async def _apply_setting_change(self, menu: SettingsMenu, key: str, value: str | float | bool) -> None:
+        if key == "language":
+            self.set_language(str(value))
+            return
 
-            # Скрытие главного меню
-            self.action_open_menu()
-            self.clear_log()
-            self._interface_hidden = False
-            self.current_time = "prologue"
-            self.set_text_mode("adv")
+        if key == "header":
+            self.query_one("Header").set_class(not value, "hidden")
+            menu.sync_header_buttons(bool(value))
+        elif key == "quality":
+            menu.sync_quality_buttons(str(value))
+        elif key == "text_speed":
+            menu.sync_speed_buttons(str(value))
 
-            # Сброс всех глобальных переменных
-            from story.parser import reset_globals
-            reset_globals()
+        self.settings[key] = value
+        if key in {"header_lp_points", "header_flags"}:
+            menu.sync_header_filter_buttons(self.settings)
             self.update_script_header()
+        elif key == "style":
+            menu.sync_art_style_buttons(str(value))
+        elif key == "scene_filters_enabled":
+            menu.sync_scene_filter_buttons(bool(value))
+        elif key.startswith("audio_"):
+            self.apply_audio_settings()
 
-            # Запуск новой игры (всегда пролог)
-            prologue_path = self.ts_path / "text" / "prologue.txt"
-            self.script = ScriptParser(prologue_path, self)
+        self.save_settings()
+        if key in {"quality", "style", "scene_filters_enabled"}:
+            await self.update_current_scene_art()
+        elif key == "text_speed":
+            self.apply_settings()
 
-            # Отображение NovelMenu
-            self.set_novel_menu_visible(True)
-            self.query_one("#novel-window").remove_class("hidden")
-            self.start_script_preload(self.script)
-
-            # Фокус на кнопке "Вперёд" в игровом меню
-            self.query_one("#btn-next", Button).focus()
-        elif button_id == "btn-save-load":        # Кнопка "Сохранение"
-            self.open_save_menu("menu")
-        elif button_id == "btn-gallery":          # Кнопка "Галерея"
-            self.action_open_gallery()
-        elif button_id in {"btn-achievements", "btn-close-endings"}:
-            self.action_open_endings()
-        elif button_id == "btn-language-menu":
-            self.push_screen(LanguageDialog(self.settings["language"]), self.set_language)
-        elif button_id == "btn-settings-menu":    # Кнопка "Настройки"
-            self.query_one("#settings-menu").remove_class("open-from-pause")
-            self.query_one("#settings-menu").add_class("open-from-menu") # Класс-флаг что настройки открыты из MainMenu
+    def _close_settings_from_button(self) -> None:
+        menu = self.query_one(SettingsMenu)
+        if menu.has_class("open-from-pause"):
             self.action_open_settings()
-        elif button_id == "btn-exit-menu":        # Кнопка "Выход"
-            self.app.exit()
+        elif menu.has_class("open-from-menu"):
+            self.action_open_menu()
+            menu.remove_class("open-from-menu")
 
-        # Кнопки в GalleryMenu:
-        # LeftBtns
-        elif button_id == "btn-gallery-music":    # Кнопка "Музыка"
-            self.switch_gallery_tab("music")
-        elif button_id == "btn-gallery-cg":       # Кнопка "Иллюстрации"
-            self.switch_gallery_tab("cg")
-        elif button_id == "btn-gallery-bg":       # Кнопка "Фоны"
-            self.switch_gallery_tab("bg")
+    def start_new_game(self) -> None:
+        self.cancel_script_advance()
+        self.stop_credits()
+        self._new_ending_flags.clear()
+        self._menu_music_active = False
+        self.audio.reset()
 
-        # Перелистывание bg и cg
-        elif button_id == "btn-back-gallery":     # Кнопка "<<<"
-            if self.gallery_index > 0:
-                self.gallery_index -= 1
-                self.update_gallery_display()
-        elif button_id == "btn-next-gallery":     # Кнопка ">>>"
-            if self.gallery_index < len(self.gallery_images) - 1:
-                self.gallery_index += 1
-                self.update_gallery_display()
+        # Скрытие главного меню
+        self.action_open_menu()
+        self.clear_log()
+        self._interface_hidden = False
+        self.current_time = "prologue"
+        self.set_text_mode("adv")
 
-        elif button_id in GalleryMenu.SIZE_BUTTONS:
-            self.gallery_size, _ = GalleryMenu.SIZE_BUTTONS[button_id]
-            self.query_one(GalleryMenu).update_size_selection(self.gallery_size)
-            self.load_gallery_images()
-            self.update_gallery_display()
+        # Сброс всех глобальных переменных
+        from story.parser import reset_globals
+        reset_globals()
+        self.update_script_header()
 
-        elif button_id in GalleryMenu.STYLE_BUTTONS:
-            style = GalleryMenu.STYLE_BUTTONS[button_id]
-            if style != self.gallery_style:
-                self.gallery_style = style
-                for key in GalleryMenu.STYLE_BUTTONS:
-                    self.query_one(f"#{key}", Button).variant = "primary" if key == button_id else "default"
-                self.update_gallery_display()
+        # Запуск новой игры (всегда пролог)
+        prologue_path = self.ts_path / "text" / "prologue.txt"
+        self.script = ScriptParser(prologue_path, self)
 
-        elif button_id == "btn-close-gallery":    # Кнопка "Назад"
-            self.action_open_gallery()
+        # Отображение NovelMenu
+        self.set_novel_menu_visible(True)
+        self.query_one("#novel-window").remove_class("hidden")
+        self.start_script_preload(self.script)
 
-        # Кнопки в SaveMenu:
-        # Кнопка "Назад"
-        elif button_id == "btn-close-save-menu":
-            self.close_save_menu()
-        # Page buttons (1-9)
-        elif button_id.startswith("btn-save-page-"):
-            page_num = int(button_id.split("-")[-1]) - 1
-            self.switch_save_page(page_num)
-        # Slot buttons (save-slot-0 through save-slot-11)
-        elif button_id.startswith("save-slot-"):
-            self.select_save_slot(button_id)
-        # Action buttons
-        elif button_id == "btn-save-delete":
-            self.delete_selected_save()
-        elif button_id == "btn-save-load-game":
-            self.load_selected_save()
-        elif button_id == "btn-save-save":
-            self.save_to_selected_slot()
+        # Фокус на кнопке "Вперёд" в игровом меню
+        self.query_one("#btn-next", Button).focus()
 
     def on_mount(self) -> None:
         """Загрузка настроек при запуске"""
@@ -1992,10 +912,10 @@ class TerminalSummer(App):
 
         pause_menu = self.query_one("#pause-menu")
         novel_window = self.query_one("#novel-window")
-        settings_menu = self.query_one("#settings-menu")
+        settings_menu = self.query_one(SettingsMenu)
         main_menu = self.query_one("#main-menu")
         gallery_menu = self.query_one("#gallery-menu")
-        save_menu = self.query_one("#save-menu")
+        save_menu = self.query_one(SaveMenu)
         choice_bar = self.query_one("#choice-bar")
         log_menu = self.query_one("#log-menu")
 
@@ -2058,27 +978,40 @@ class TerminalSummer(App):
         if mode != "music":
             self.leave_music_preview()
         self.gallery_mode = mode
-        self.query_one("#bg-cg-gallery").set_class(mode == "music", "hidden")
-        self.query_one(GalleryMenuBottomBtns).set_class(mode == "music", "hidden")
-        room = self.query_one(MusicRoom)
-        room.set_class(mode != "music", "hidden")
-        for tab in ("music", "cg", "bg"):
-            self.query_one(f"#btn-gallery-{tab}", Button).variant = "primary" if tab == mode else "default"
-        if mode == "music":
-            self.query_one(GalleryMenuMidBtns).border_title = (
-                self.query_one("#btn-gallery-music", Button).label.plain
-            )
-            room.query_one("#music-list", ListView).focus()
-            room.update_player()
-        else:
+        self.query_one(GalleryMenu).select_tab(mode)
+        if mode != "music":
             self.load_gallery_images()
             self.update_gallery_display()
+
+    def _handle_gallery_button(self, button_id: str) -> bool:
+        if button_id in GalleryMenu.TAB_BUTTONS:
+            self.switch_gallery_tab(GalleryMenu.TAB_BUTTONS[button_id])
+        elif button_id in {"btn-back-gallery", "btn-next-gallery"}:
+            step = -1 if button_id == "btn-back-gallery" else 1
+            index = self.gallery_index + step
+            if 0 <= index < len(self.gallery_images):
+                self.gallery_index = index
+                self.update_gallery_display()
+        elif button_id in GalleryMenu.SIZE_BUTTONS:
+            self.gallery_size, _ = GalleryMenu.SIZE_BUTTONS[button_id]
+            self.query_one(GalleryMenu).update_size_selection(self.gallery_size)
+            self.load_gallery_images()
+            self.update_gallery_display()
+        elif button_id in GalleryMenu.STYLE_BUTTONS:
+            style = GalleryMenu.STYLE_BUTTONS[button_id]
+            if style != self.gallery_style:
+                self.gallery_style = style
+                self.query_one(GalleryMenu).update_style_selection(style)
+                self.update_gallery_display()
+        else:
+            return False
+        return True
 
     def action_open_menu(self) -> None:
         """Открытие главного меню"""
         self.stop_skipping()
         pause_menu = self.query_one("#pause-menu")
-        settings_menu = self.query_one("#settings-menu")
+        settings_menu = self.query_one(SettingsMenu)
         main_menu = self.query_one("#main-menu")
 
         if main_menu.has_class("hidden"):
@@ -2101,7 +1034,7 @@ class TerminalSummer(App):
     def action_open_settings(self) -> None:
         """Открытие меню настроек"""
         self.stop_skipping()
-        settings_menu = self.query_one("#settings-menu")
+        settings_menu = self.query_one(SettingsMenu)
         pause_menu = self.query_one("#pause-menu")
         main_menu = self.query_one("#main-menu")
         novel_window = self.query_one("#novel-window")
@@ -2115,15 +1048,7 @@ class TerminalSummer(App):
                 # Скрытие главного меню
                 main_menu.add_class("hidden")
 
-            # Показ меню настроек
-            self.query_one("#setting-language").set_class(
-                not settings_menu.has_class("open-from-menu"), "hidden",
-            )
-            settings_menu.remove_class("hidden")
-
-            first_button = (f"#btn-language-{self.settings['language']}"
-                            if settings_menu.has_class("open-from-menu") else "#btn-header-on")
-            self.query_one(first_button, Button).focus()
+            settings_menu.show(self.settings["language"])
         else:
             # Cкрытие меню настроек
             settings_menu.add_class("hidden")
@@ -2157,19 +1082,17 @@ class TerminalSummer(App):
     def action_open_gallery(self) -> None:
         """Открытие меню галереи"""
         self.stop_skipping()
-        main_menu = self.query_one("#main-menu")
         gallery_menu = self.query_one(GalleryMenu)
 
         if gallery_menu.has_class("hidden"):
             # Скрываем главное меню
             self.action_open_menu()
-            #main_menu.add_class("hidden")
 
             # Показываем меню галереи
             gallery_menu.remove_class("hidden")
 
             # Устанавливаем фокус на первую кнопку в меню галереи
-            self.query_one("#btn-close-gallery", Button).focus()
+            gallery_menu.focus_back_button()
 
             # Загружаем иллюстрации
             self.gallery_size = "150"
@@ -2232,15 +1155,12 @@ class TerminalSummer(App):
     def open_save_menu(self, opened_from: str) -> None:
         """Открытие меню сохранений"""
         self.stop_skipping()
-        save_menu = self.query_one("#save-menu")
+        save_menu = self.query_one(SaveMenu)
         pause_menu = self.query_one("#pause-menu")
         main_menu = self.query_one("#main-menu")
         novel_window = self.query_one("#novel-window")
 
-        save_menu.opened_from = opened_from
-        save_menu.update_titles()
-        save_menu.current_page = 0
-        save_menu.selected_slot = None
+        save_menu.prepare(opened_from)
         save_menu.all_saves = saves.get_all_saves()
 
         # Скрытие предыдущего меню
@@ -2253,31 +1173,12 @@ class TerminalSummer(App):
         self.set_novel_menu_visible(False)
         novel_window.add_class("hidden")
 
-        # Показ меню сохранений
-        save_menu.remove_class("hidden")
-
-        # Настройка видимости кнопки "Сохранить"
-        save_btn = self.query_one("#btn-save-save", Button)
-        if opened_from == "pause":
-            save_btn.disabled = False
-        else:
-            save_btn.disabled = True
-
-        # Обновление отображения
-        self.update_save_menu_display()
-
-        # Подсветка первой страницы как активной
-        self.query_one("#btn-save-page-1", Button).variant = "primary"
-        for i in range(2, 10):
-            self.query_one(f"#btn-save-page-{i}", Button).variant = "default"
-
-        # Фокус на кнопку "Назад"
-        self.query_one("#btn-close-save-menu", Button).focus()
+        save_menu.show()
 
     def close_save_menu(self) -> None:
         """Закрытие меню сохранений"""
         self.stop_skipping()
-        save_menu = self.query_one("#save-menu")
+        save_menu = self.query_one(SaveMenu)
         save_menu.add_class("hidden")
 
         opened_from = save_menu.opened_from
@@ -2293,122 +1194,17 @@ class TerminalSummer(App):
             self.query_one("#btn-start-game", Button).focus()
 
     def update_save_menu_display(self) -> None:
-        """Обновление отображения слотов на текущей странице"""
-        save_menu = self.query_one("#save-menu")
-        page = save_menu.current_page
-        all_saves = save_menu.all_saves
-        strings = save_menu.strings
-        empty = strings.get("slot.empty", "Пусто")
-        corrupt = strings.get("slot.corrupt", CORRUPT_SAVE)
-
-        for slot_index in range(12):
-            save_id = f"{page}/{slot_index}"
-            btn_id = f"save-slot-{slot_index}"
-
-            try:
-                btn = self.query_one(f"#{btn_id}", Button)
-            except Exception:
-                continue
-
-            save_data = all_saves.get(save_id)
-            if save_data:
-                save_data = save_data if isinstance(save_data, dict) else {"error": CORRUPT_SAVE}
-                game_state = save_data.get("game_state", {})
-                game_state = game_state if isinstance(game_state, dict) else {}
-                dialogue = game_state.get("dialogue", {})
-                dialogue = dialogue if isinstance(dialogue, dict) else {}
-                speaker = dialogue.get("speaker", "")
-                speaker = speaker if isinstance(speaker, str) else ""
-                text = dialogue.get("text", "")
-                text = text if isinstance(text, str) else corrupt
-                error = save_data.get("error")
-                if error is not None:
-                    text = error if isinstance(error, str) and error != CORRUPT_SAVE else corrupt
-                speaker, text = plain_save_text(speaker), plain_save_text(text)
-                timestamp = save_data.get("timestamp", "")
-                timestamp = timestamp if isinstance(timestamp, str) else ""
-
-                # Превью не исполняет разметку из внешнего JSON.
-                words = text.split()
-                if len(words) > 6:
-                    short_text = " ".join(words[:6]) + "..."
-                else:
-                    short_text = text
-
-                # Формируем метку слота
-                if speaker and short_text:
-                    label = f"{speaker}: {short_text}"
-                elif short_text:
-                    label = short_text
-                else:
-                    label = empty
-
-                btn.label = Text(f"{label}\n{timestamp}")
-                btn.remove_class("save-slot-empty")
-                btn.add_class("save-slot-filled")
-            else:
-                number = strings.get("slot.number", "Слот {number}").replace("{number}", str(slot_index + 1))
-                btn.label = f"{empty}\n{number}"
-                btn.remove_class("save-slot-filled")
-                btn.add_class("save-slot-empty")
-
-            # Сброс выделения
-            btn.selected = False
-            btn.remove_class("save-slot-selected")
-
-        # Выделение выбранного слота
-        if save_menu.selected_slot:
-            try:
-                selected_btn = self.query_one(f"#{save_menu.selected_slot}", Button)
-                selected_btn.selected = True
-                selected_btn.add_class("save-slot-selected")
-            except Exception:
-                pass
+        self.query_one(SaveMenu).update_slots()
 
     def switch_save_page(self, page: int) -> None:
-        """Переключение страницы сохранений"""
-        save_menu = self.query_one("#save-menu")
-        save_menu.current_page = page
-        save_menu.selected_slot = None
-        self.update_save_menu_display()
-
-        # Обновление стиля активной кнопки страницы
-        for i in range(1, 10):
-            try:
-                page_btn = self.query_one(f"#btn-save-page-{i}", Button)
-                if i - 1 == page:
-                    page_btn.variant = "primary"
-                else:
-                    page_btn.variant = "default"
-            except Exception:
-                continue
+        self.query_one(SaveMenu).select_page(page)
 
     def select_save_slot(self, slot_id: str) -> None:
-        """Выбор слота сохранения"""
-        save_menu = self.query_one("#save-menu")
-
-        # Сброс предыдущего выделения
-        if save_menu.selected_slot:
-            try:
-                old_btn = self.query_one(f"#{save_menu.selected_slot}", Button)
-                old_btn.selected = False
-                old_btn.remove_class("save-slot-selected")
-            except Exception:
-                pass
-
-        save_menu.selected_slot = slot_id
-
-        # Новое выделение
-        try:
-            new_btn = self.query_one(f"#{slot_id}", Button)
-            new_btn.selected = True
-            new_btn.add_class("save-slot-selected")
-        except Exception:
-            pass
+        self.query_one(SaveMenu).select_slot(slot_id)
 
     def delete_selected_save(self) -> None:
         """Удаление выбранного сохранения"""
-        save_menu = self.query_one("#save-menu")
+        save_menu = self.query_one(SaveMenu)
         if not save_menu.selected_slot:
             return
 
@@ -3518,14 +2314,6 @@ class TerminalSummer(App):
             include_flags=bool(self.settings.get("header_flags", True)),
         )
 
-    def sync_header_filter_buttons(self) -> None:
-        """Синхронизирует вид кнопок фильтра с сохранёнными настройками."""
-        self.query_one("#btn-header-lp-points", Button).variant = (
-            "success" if self.settings.get("header_lp_points", True) else "default"
-        )
-        self.query_one("#btn-header-flags", Button).variant = (
-            "success" if self.settings.get("header_flags", True) else "default"
-        )
 
     def load_settings(self):
         """Дополняет старый config; ошибочный файл заменяет полными defaults."""
@@ -3551,57 +2339,25 @@ class TerminalSummer(App):
             self.notify(self.runtime_ui.get("file.write-error", str(exc)),
                         title=self.runtime_ui.get("settings.error", "Не удалось сохранить настройки"), severity="error")
 
-    def sync_art_style_buttons(self) -> None:
-        """Ровно одна кнопка соответствует выбранному стилю кадра."""
-        for button_id, style in SettingASCIIorANSI.STYLE_BUTTONS.items():
-            self.query_one(f"#{button_id}", Button).variant = (
-                "primary" if self.settings["style"] == style else "default"
-            )
-
-    def sync_scene_filter_buttons(self) -> None:
-        enabled = self.settings["scene_filters_enabled"]
-        self.query_one("#btn-scene-filters-on", Button).variant = "success" if enabled else "default"
-        self.query_one("#btn-scene-filters-off", Button).variant = "default" if enabled else "error"
 
     def apply_settings(self):
         """Применение настроек при старте"""
         self.apply_language()
         self.apply_audio_settings()
-        # Header
-        if self.settings["header"]:
-            self.query_one("Header").remove_class("hidden")
-            self.query_one("#btn-header-on", Button).variant = "success"
-            self.query_one("#btn-header-off", Button).variant = "default"
-        else:
-            self.query_one("Header").add_class("hidden")
-            self.query_one("#btn-header-on", Button).variant = "default"
-            self.query_one("#btn-header-off", Button).variant = "error"
-        self.sync_header_filter_buttons()
+        menu = self.query_one(SettingsMenu)
+        header = self.settings["header"]
+        self.query_one("Header").set_class(not header, "hidden")
+        menu.sync_header_buttons(header)
+        menu.sync_header_filter_buttons(self.settings)
         self.update_script_header()
 
-        # Quality
-        quality = self.settings["quality"]
-        if quality == "50":
-            self.query_one("#btn-small", Button).variant = "error"
-        elif quality == "150":
-            self.query_one("#btn-medium", Button).variant = "warning"
-        elif quality == "200":
-            self.query_one("#btn-large", Button).variant = "success"
+        menu.sync_quality_buttons(self.settings["quality"], clear_others=False)
+        menu.sync_art_style_buttons(self.settings["style"])
+        menu.sync_scene_filter_buttons(self.settings["scene_filters_enabled"])
 
-        self.sync_art_style_buttons()
-        self.sync_scene_filter_buttons()
-
-        # TextSpeed
         text_speed = self.settings["text_speed"]
         self.text_speed = float(text_speed)
-        if text_speed == "0.04":
-            self.query_one("#btn-speed-slow", Button).variant = "error"
-        elif text_speed == "0.025":
-            self.query_one("#btn-speed-medium", Button).variant = "warning"
-        elif text_speed == "0.01":
-            self.query_one("#btn-speed-fast", Button).variant = "success"
-        elif text_speed == "0":
-            self.query_one("#btn-speed-instantly", Button).variant = "primary"
+        menu.sync_speed_buttons(text_speed, clear_others=False)
 
     def set_language(self, language: str | None) -> None:
         if language is None or language not in LANGUAGE_NAMES or language == self.settings["language"]:
@@ -3617,7 +2373,8 @@ class TerminalSummer(App):
             roots.append(self.bundled_text_path)
         self.interface_locale = load_interface_locale(language, *roots)
         self.runtime_ui = load_interface_locale(language, *roots, filename="runtime-ui.json")
-        self.query_one(PauseMenuContainer).border_title = self.runtime_ui.get("pause.title", PauseMenuContainer.BORDER_TITLE)
+        pause = self.query_one(PauseMenuContainer)
+        pause.border_title = self.runtime_ui.get("pause.title", PauseMenuContainer.BORDER_TITLE)
         self.query_one("#script-loading-text", Label).update(
             self.runtime_ui.get("preload.initial", "Подготовка сценария…")
         )
@@ -3626,40 +2383,19 @@ class TerminalSummer(App):
         announcements = load_interface_locale(language, *roots, filename="main-menu.json")
         settings_copy = load_interface_locale(language, *roots, filename="settings-menu.json")
         self.endings_locale = load_interface_locale(language, *roots, filename="endings-menu.json")
-        self.query_one(SettingsMenu).apply_language(settings_copy)
+        settings_menu = self.query_one(SettingsMenu)
+        settings_menu.apply_language(settings_copy)
         self.query_one(EndingsMenu).apply_language(self.endings_locale)
         self.query_one(SaveMenu).apply_language(load_interface_locale(language, *roots, filename="save-menu.json"))
         self.update_save_menu_display()
         self.query_one(GalleryMenu).apply_language(load_interface_locale(language, *roots, filename="gallery-menu.json"))
         self.apply_footer_language(load_interface_locale(language, *roots, filename="footer.json"))
-        self.query_one("#btn-language-menu", Button).label = language.upper()
-        for code in LANGUAGE_NAMES:
-            self.query_one(f"#btn-language-{code}", Button).variant = (
-                "success" if code == language else "default"
-            )
-
-        # Menus already exist by on_mount. Keep the Russian labels for a round trip.
-        buttons = {
-            "btn-start-game": "Start game", "btn-save-load": "Load game", "btn-gallery": "Gallery",
-            "btn-achievements": "Achievements", "btn-settings-menu": "Settings", "btn-exit-menu": "Quit",
-            "btn-next": "Continue", "btn-log": "History",
-            "btn-continue": "Continue", "btn-save": "Saves", "btn-settings-pause": "Settings",
-            "btn-menu": "Main menu", "btn-exit-pause": "Quit",
-        }
-        descriptions = ("main-start-description", "main-load-description", "main-gallery-description")
-        widgets = {key: self.query_one(f"#{key}", Button) for key in buttons}
-        labels = {key: self.query_one(f"#{key}", Label) for key in descriptions}
-        if self._russian_main_labels is None:
-            self._russian_main_labels = {
-                **{key: widget.label for key, widget in widgets.items()},
-                **{key: widget.content for key, widget in labels.items()},
-            }
-        for key, widget in widgets.items():
-            widget.label = buttons[key] if language == "en" else self._russian_main_labels[key]
-        for key, widget in labels.items():
-            widget.update(announcements.get(key, self._russian_main_labels[key]))
-        self.query_one(MainMenuMiddleBtns).border_title = announcements.get("information", "Информация")
-        self.query_one("#main-menu").border_title = "Main menu" if language == "en" else "Главное меню"
+        main_menu = self.query_one(MainMenu)
+        main_menu.sync_language_button(language)
+        settings_menu.sync_language_buttons(language)
+        main_menu.apply_language(language, announcements)
+        self.query_one(NovelMenu).apply_language(language)
+        pause.apply_language(language)
 
     def apply_footer_language(self, strings: dict[str, str]) -> None:
         # Keep Textual's active bindings, keyboard aliases and keymap behavior intact.
@@ -3681,9 +2417,7 @@ class TerminalSummer(App):
     def apply_audio_settings(self) -> None:
         self.settings.update(normalize_audio_settings(self.settings))
         self.audio.set_settings(self.settings)
-        for group in SettingAudio.GROUPS:
-            self.query_one(f"#audio-{group}-level", Label).update(f"{round(self.settings['audio_' + group] * 100)}%")
-        self.query_one("#btn-audio-mute", Button).variant = "error" if self.settings["audio_muted"] else "default"
+        self.query_one(SettingsMenu).sync_audio_controls(self.settings)
         self.query_one(MusicRoom).update_player()
 
     def load_gallery_images(self):
@@ -3710,29 +2444,29 @@ class TerminalSummer(App):
 
     def update_gallery_display(self):
         """Показывает текущее изображение в выбранном размере и формате."""
-        static = self.query_one("#ansi-content", Static)
-        strings = self.query_one(GalleryMenu).strings
+        gallery = self.query_one(GalleryMenu)
+        strings = gallery.strings
         if not self.gallery_images:
             if self._gallery_error:
-                static.update(Text(strings.get("gallery.catalog-error", self._gallery_error)))
+                gallery.show_art(Text(strings.get("gallery.catalog-error", self._gallery_error)))
                 title = strings.get("gallery.error-title", "Ошибка")
             else:
-                static.update(Text(strings.get("gallery.empty", "[Ничего не найдено]")))
+                gallery.show_art(Text(strings.get("gallery.empty", "[Ничего не найдено]")))
                 title = strings.get("gallery.empty-title", "Пусто")
-            self.query_one(GalleryMenuMidBtns).border_title = title
+            gallery.set_art_title(title)
             return
 
         image = self.gallery_images[self.gallery_index]
 
         def image_error(key: str, reason: str) -> None:
             fallback = f"[Ошибка изображения {image.id}: {reason}]"
-            static.update(Text(strings.get(key, fallback).replace("{image}", image.id)))
+            gallery.show_art(Text(strings.get(key, fallback).replace("{image}", image.id)))
 
         try:
             image_path = resolve_gallery_image(self.ts_path / "images", image)
             with Image.open(image_path) as img:
                 art = render_art(img, width=int(self.gallery_size), alpha=True, style=self.gallery_style)
-            static.update(art)
+            gallery.show_art(art)
         except FileNotFoundError:
             image_error("gallery.image-missing", "файл не найден")
         except PermissionError:
@@ -3741,7 +2475,7 @@ class TerminalSummer(App):
             image_error("gallery.image-read", "не удалось прочитать файл изображения")
         except Exception:
             image_error("gallery.image-render", "не удалось загрузить или преобразовать изображение")
-        self.query_one(GalleryMenuMidBtns).border_title = image.id
+        gallery.set_art_title(image.id)
 
     async def update_current_scene_art(self):
         """Перерисовывает текущий арт при смене размера или стиля."""
