@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,8 +10,13 @@ from script_conditions import evaluate_script_condition
 from audio_catalog import load_audio_catalog
 from script_audio import parse_audio_command
 from script_resources import resource_manifest
-from script_structure import read_block_range
+from script_structure import OPTION_RE, read_block_range
 from script_cards import parse_card_command, validate_card_labels
+from script_locale import (
+    DIALOGUE_RE, SPEAKER_KEYS, decode_dsl_dialogue, load_chapter_locale, read_script_source,
+    script_content_hash,
+)
+from rich.markup import escape
 
 TIMES_OF_DAY = ("day", "sunset", "night", "prologue")
 
@@ -302,14 +306,15 @@ class ScriptParser:
         """Загрузка файла сценария"""
         if filename:
             self.filename = str(filename)
-        with open(self.filename, 'r', encoding='utf-8') as f:
-            source_lines = tuple(
-                (number, line.strip()) for number, line in enumerate(f, 1)
-                if line.strip() and not line.strip().startswith("#")
-            )
+        source_lines = read_script_source(Path(self.filename))
         self.source_line_numbers = tuple(number for number, _ in source_lines)
         self.lines = tuple(line for _, line in source_lines)
-        self.content_hash = hashlib.sha256("\n".join(self.lines).encode("utf-8")).hexdigest()
+        self.content_hash = script_content_hash(self.lines)
+        language = getattr(self.app, "settings", {}).get("language", "ru")
+        self.translations = load_chapter_locale(
+            Path(self.filename), language, self.content_hash, len(self.lines),
+            getattr(self.app, "bundled_text_path", None),
+        )
         self._index_labels()
         self.index = 0
         self.frames.clear()
@@ -885,7 +890,7 @@ class ScriptParser:
         start, end = self._read_block_range(self.index if pc is None else pc)
         cursor, options = start, {}
         while cursor < end:
-            match = re.fullmatch(r'"(.+?)"(?:\s+if\s+(.+))?', self.lines[cursor])
+            match = OPTION_RE.fullmatch(self.lines[cursor])
             if match is None:
                 raise ValueError("Invalid menu option")
             text, condition = match.groups()
@@ -898,6 +903,10 @@ class ScriptParser:
         if not options:
             raise ValueError("Menu has no available choices")
         return options, end + 1
+
+    def choice_caption(self, source: str, target: ChoiceTarget) -> str:
+        # Target starts inside the option body: caption, opening brace, body.
+        return self.translations.get(target.start - 2, source)
 
     async def _handle_choice(self, line):
         """Обработка строки menu и логика выбора"""
@@ -964,11 +973,12 @@ class ScriptParser:
         self.app._space_require_idle = True
 
         try:
-            match = re.match(r'([a-zA-Z0-9_-]+)\s+"(.+)"', line)
-            if match:
+            translated = self.translations.get(self.index - 1)
+            match = DIALOGUE_RE.match(line)
+            if match and match[1]:
                 raw_speaker, text = match.groups()
                 raw_speaker = raw_speaker.strip()
-                text = text.strip()
+                text = translated if translated is not None else decode_dsl_dialogue(text.strip())
 
                 if raw_speaker == "th":
                     speaker = ""
@@ -976,17 +986,14 @@ class ScriptParser:
                     id_to_set = None
                 else:
                     speaker = DISPLAY_NAMES.get(raw_speaker, raw_speaker)
+                    speaker = getattr(self.app, "interface_locale", {}).get(
+                        SPEAKER_KEYS.get(raw_speaker, raw_speaker), speaker,
+                    )
                     id_to_set = raw_speaker
             else:
                 speaker = ""
-                text = line.strip().strip('"')
+                text = translated if translated is not None else decode_dsl_dialogue(line.strip().strip('"'))
                 id_to_set = None
-
-            # В исходных Ren'Py-сценариях литерал процента экранирован как %%.
-            text = text.replace("%%", "%")
-            # Только объявленные текстовые escape-последовательности, без eval
-            # или unicode_escape (который портит кириллицу и неизвестные слеши).
-            text = re.sub(r'\\([n"\\])', lambda m: {"n": "\n", '"': '"', "\\": "\\"}[m[1]], text)
 
             self.app.add_log_entry(
                 text=self._normalize_log_text(text),
@@ -1002,6 +1009,8 @@ class ScriptParser:
             widget.border_title = "" if is_nvl else speaker
 
             # Конвертируем <i>, <b> в rich-разметку
+            if translated is not None:
+                text = escape(text)
             text = re.sub(r'<i>(.*?)</i>', r'[italic]\1[/italic]', text, flags=re.S)
             text = re.sub(r'<b>(.*?)</b>', r'[bold]\1[/bold]', text, flags=re.S)
 

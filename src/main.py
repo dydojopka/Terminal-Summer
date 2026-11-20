@@ -943,23 +943,23 @@ class ChoiceList(ListView):
         Binding("shift+tab", "cycle_choice(-1)", show=False),
     ]
 
-    async def set_choices(self, options, *, on_map: bool = False) -> None:
+    async def set_choices(self, options, *, on_map: bool = False, captions=None) -> None:
         """Общие колонки номеров и центрированных подписей для всего меню."""
-        captions = tuple(options)
-        number_width = len(str(len(captions))) + 2
+        rows_data = [(key, key if captions is None else captions[key]) for key in options]
+        number_width = len(str(len(rows_data))) + 2
         caption_width = max(
-            (cell_len(line) for caption in captions for line in caption.splitlines()),
+            (cell_len(line) for _, caption in rows_data for line in caption.splitlines()),
             default=0,
         )
         self.styles.width = "1fr" if on_map else caption_width + 2 * number_width
         rows = []
-        for number, caption in enumerate(captions, start=1):
+        for number, (key, caption) in enumerate(rows_data, start=1):
             number_label = Label(f"{number}.", classes="choice-number")
             number_label.styles.width = number_width
             row = ChoiceItem(
                 number_label,
                 Center(Label(caption, markup=False, classes="choice-caption")),
-                name=caption,
+                name=key,
             )
             # Правое поле уравновешивает номер, чтобы центр текста не смещался.
             row.styles.padding = (0, 0 if on_map else number_width, 1, 0)
@@ -1010,7 +1010,10 @@ class ChoiceBar(Widget):
         self.query_one("#choice-options").set_class(on_map, "map-mode")
         self.query_one(CampMap).set_class(not on_map, "hidden")
         self.query_one(CampMap).set_zones(zones)
-        await self.query_one(ChoiceList).set_choices(options, on_map=on_map)
+        await self.query_one(ChoiceList).set_choices(
+            options, on_map=on_map,
+            captions={key: script.choice_caption(key, target) for key, target in options.items()},
+        )
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if self.has_class("map-mode") and event.list_view is self.query_one(ChoiceList):
@@ -1090,6 +1093,7 @@ class TerminalSummer(App):
         self._persistent_read_error = False
 
         self.ts_path = get_ts_path()
+        self.bundled_text_path = get_resource_path("TS/text") if IS_FROZEN else None
         self.audio = AudioManager(self.ts_path)
         self._menu_music_active = False
         self.ending_dates = {}
