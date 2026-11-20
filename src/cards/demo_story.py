@@ -7,8 +7,8 @@
 from collections import deque
 from dataclasses import dataclass
 
-from card_game import CardGame, Phase
-from card_scene import CardScene
+from cards.game import CardGame, Phase
+from cards.scene import CardScene
 
 
 @dataclass(frozen=True)

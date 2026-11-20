@@ -311,7 +311,7 @@ def build_audit(root: Path = ROOT_DIR) -> dict:
         "scripts": scripts, "missing_scripts": missing, "state_schema_inventory": schema,
         "tooling": tree_fingerprint(root, [
             path for name in (
-                "src/main.py", "src/script_parser.py", "src/script_conditions.py", "src/sprites_builder.py",
+                "src/main.py", "src/story/parser.py", "src/story/conditions.py", "src/sprites_builder.py",
                 "src/gameUI.tcss", "scripts/assets_manager.py", "scripts/validate_release.py",
                 "scripts/audit_release.py", "scripts/build_and_run.sh", "scripts/build_and_run.bat",
                 "requirements.txt", "tests/test_release.py", "tests/test_release_audit.py",

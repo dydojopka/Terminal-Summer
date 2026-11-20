@@ -9,10 +9,10 @@ if not hasattr(sys, "_MEIPASS"):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image, validate_gallery_assets
-from audio_catalog import load_audio_catalog, validate_audio_assets
+from audio.catalog import load_audio_catalog, validate_audio_assets
 from file_io import install_missing
 from paths import get_frozen_bundle_dir, get_project_root
-from script_resources import visual_asset_problems
+from story.resources import visual_asset_problems
 
 # Полный архив; после публикации обновления URL можно сменить без пересборки.
 ASSETS_URL = os.environ.get(

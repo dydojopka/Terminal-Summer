@@ -9,8 +9,8 @@ import tempfile
 from collections import OrderedDict
 from dataclasses import dataclass, replace
 from pathlib import Path
-from audio_manager import AUDIO_DEFAULTS, AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
-from audio_catalog import finite_number, validate_audio_assets
+from audio.manager import AUDIO_DEFAULTS, AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
+from audio.catalog import finite_number, validate_audio_assets
 from file_io import atomic_output, write_json_atomic
 from save_data import validate_save_view, plain_save_text
 from single_instance import single_instance, AlreadyRunningError
@@ -147,15 +147,15 @@ from rich.segment import Segment
 from rich.text import Text
 from rich.cells import cell_len
 
-from script_parser import ScriptParser, format_script_state, TIMES_OF_DAY
-from script_locale import load_interface_locale
+from story.parser import ScriptParser, format_script_state, TIMES_OF_DAY
+from story.locale import load_interface_locale
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from music_room import MusicRoom
 from camp_map import CampMap, map_choice_zones, map_render_width
-from card_game import CardGame, Phase
-from card_session import CardSession
-from card_table import CardTable
-from script_cards import RESULTS
+from cards.game import CardGame, Phase
+from cards.session import CardSession
+from cards.table import CardTable
+from story.card_commands import RESULTS
 from endings_menu import EndingsMenu, EndingsList, EndingResult
 from endings_catalog import current_ending
 from credits import CREDIT_PAGES, CreditsTimeline
@@ -1735,7 +1735,7 @@ class TerminalSummer(App):
             self.set_text_mode("adv")
 
             # Сброс всех глобальных переменных
-            from script_parser import reset_globals
+            from story.parser import reset_globals
             reset_globals()
             self.update_script_header()
 
@@ -2606,7 +2606,7 @@ class TerminalSummer(App):
         if not isinstance(variables.get("state"), dict):
             self._show_load_error("Invalid script variables")
             return
-        from script_parser import normalize_script_state
+        from story.parser import normalize_script_state
         try:
             restored_variables = normalize_script_state(variables["state"])
             restored_ending_dates = normalize_ending_dates(game_state.get("ending_dates", {}), restored_variables)
@@ -2651,7 +2651,7 @@ class TerminalSummer(App):
             return
 
         # Закрытие меню сохранений
-        from script_parser import get_persistent_state, update_persistent_state
+        from story.parser import get_persistent_state, update_persistent_state
         previous_progress = get_persistent_state()
         self.close_save_menu()
 
@@ -2659,7 +2659,7 @@ class TerminalSummer(App):
         self.reset_game_view()
 
         # Восстановление состояния сценария.
-        from script_parser import set_script_state
+        from story.parser import set_script_state
         set_script_state(restored_variables)
         update_persistent_state(previous_progress)
         # Persistent-флаги не должны откатываться загрузкой старого слота.
@@ -2739,7 +2739,7 @@ class TerminalSummer(App):
         if not self.is_savable_game_state():
             return
 
-        import script_parser
+        from story import parser as script_parser
 
         # Текущий текст и имя персонажа из текстового бара
         text_bar = self.query_one("#text-bar", Widget)
@@ -3579,7 +3579,7 @@ class TerminalSummer(App):
         try:
             with self.PERSISTENT_FILE.open("r", encoding="utf-8") as file:
                 state = json.load(file)
-            from script_parser import update_persistent_state
+            from story.parser import update_persistent_state
 
             flags, dates = split_persistent_progress(state)
             update_persistent_state(flags)
@@ -3594,7 +3594,7 @@ class TerminalSummer(App):
 
     def record_ending_unlock(self, flag: str) -> None:
         """Вызывается только при сценарном переходе False → True, не при загрузке."""
-        from script_parser import ENDING_STATE_KEYS, get_persistent_state
+        from story.parser import ENDING_STATE_KEYS, get_persistent_state
 
         if flag in ENDING_STATE_KEYS and get_persistent_state().get(flag) is True:
             self._new_ending_flags.add(flag)
@@ -3603,7 +3603,7 @@ class TerminalSummer(App):
 
     def save_persistent_state(self) -> None:
         """Атомарно сохраняет persistent-флаги рядом с настройками."""
-        from script_parser import get_persistent_state
+        from story.parser import get_persistent_state
 
         state = get_persistent_state()
         if self.ending_dates:
@@ -3913,7 +3913,7 @@ class TerminalSummer(App):
                 self._preload_after_settings = True
 
     def start_credits(self, script: ScriptParser, duration: float) -> None:
-        from script_parser import get_script_state
+        from story.parser import get_script_state
 
         ending = current_ending(get_script_state())
         timeline = CreditsTimeline(duration)

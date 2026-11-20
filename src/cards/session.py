@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass
 
-from card_game import CardGame, Phase
-from script_cards import CardCommand, parse_card_command, validate_card_labels
+from cards.game import CardGame, Phase
+from story.card_commands import CardCommand, parse_card_command, validate_card_labels
 
 
 @dataclass

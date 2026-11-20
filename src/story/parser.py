@@ -3,20 +3,21 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from rich.markup import escape
+from textual import _time
 from textual.widget import Widget
 from textual.widgets import ListView
-from textual import _time
-from script_conditions import evaluate_script_condition
-from audio_catalog import load_audio_catalog
-from script_audio import parse_audio_command
-from script_resources import resource_manifest
-from script_structure import OPTION_RE, read_block_range
-from script_cards import parse_card_command, validate_card_labels
-from script_locale import (
+
+from audio.catalog import load_audio_catalog
+from story.audio_commands import parse_audio_command
+from story.card_commands import parse_card_command, validate_card_labels
+from story.conditions import evaluate_script_condition
+from story.locale import (
     DIALOGUE_RE, SPEAKER_KEYS, decode_dsl_dialogue, load_chapter_locale, read_script_source,
     script_content_hash,
 )
-from rich.markup import escape
+from story.resources import resource_manifest
+from story.structure import OPTION_RE, read_block_range
 
 TIMES_OF_DAY = ("day", "sunset", "night", "prologue")
 

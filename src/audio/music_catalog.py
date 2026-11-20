@@ -7,9 +7,9 @@ import json
 from pathlib import Path
 import re
 
-from audio_catalog import _unique_object, load_audio_catalog, validate_audio_assets
+from audio.catalog import _unique_object, load_audio_catalog, validate_audio_assets
 from paths import get_resource_path
-from script_audio import validate_audio_key
+from story.audio_commands import validate_audio_key
 
 
 @dataclass(frozen=True)

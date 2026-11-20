@@ -5,7 +5,7 @@ from rich.errors import MarkupError
 from rich.text import Text
 
 from sprites_builder import parse_show_like, normalize_sprite_position, SPRITE_SIZES
-from script_parser import TIMES_OF_DAY
+from story.parser import TIMES_OF_DAY
 
 
 def plain_save_text(value: str) -> str:

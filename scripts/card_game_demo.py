@@ -18,12 +18,12 @@ from textual.screen import ModalScreen
 from textual.widgets import Footer, Static
 
 from art_renderer import ART_STYLES
-from card_game import CardGame, Phase, RIVAL_NAMES
-from card_story import CardStory
-from card_table import CardTable, render_card_scene
+from cards.game import CardGame, Phase, RIVAL_NAMES
+from cards.demo_story import CardStory
+from cards.table import CardTable, render_card_scene
 from console_button import ConsoleButton as Button
 from main import NovelMenu, TextBar
-from script_parser import DISPLAY_NAMES
+from story.parser import DISPLAY_NAMES
 from terminal_size import MINIMUM_TERMINAL_SIZE, TerminalSizeWarning
 
 

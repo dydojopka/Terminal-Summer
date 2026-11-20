@@ -17,11 +17,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from file_io import write_json_atomic
-from script_locale import read_chapter_locale, read_script_source, script_content_hash, text_sites
-from script_locale import SPEAKER_KEYS
-from script_parser import DISPLAY_NAMES
-from script_resources import RELEASE_SCRIPTS
-from script_structure import read_block_range
+from story.locale import read_chapter_locale, read_script_source, script_content_hash, text_sites
+from story.locale import SPEAKER_KEYS
+from story.parser import DISPLAY_NAMES
+from story.resources import RELEASE_SCRIPTS
+from story.structure import read_block_range
 from camp_map import map_choice_zones
 from endings_catalog import load_endings_catalog
 

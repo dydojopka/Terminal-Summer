@@ -18,7 +18,7 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from script_parser import (
+from story.parser import (
     DEFAULT_SCRIPT_STATE,
     DISPLAY_NAMES,
     ScriptParser,
@@ -28,10 +28,10 @@ from script_parser import (
     parse_script_assignment,
 )
 from sprites_builder import load_yaml_dict, parse_show_like, resolve_sprite
-from script_conditions import evaluate_script_condition, parse_script_condition
-from script_resources import RELEASE_SCRIPTS, find_scene_path, visual_asset_problems
-from script_structure import read_block_range, structure_errors
-from script_cards import parse_card_command, validate_card_labels
+from story.conditions import evaluate_script_condition, parse_script_condition
+from story.resources import RELEASE_SCRIPTS, find_scene_path, visual_asset_problems
+from story.structure import read_block_range, structure_errors
+from story.card_commands import parse_card_command, validate_card_labels
 
 
 LABEL_RE = re.compile(r"label\s+([a-zA-Z0-9_]+):?$")
@@ -337,8 +337,8 @@ def validate_script(
 ) -> list[str]:
     """Применяет существующие статические проверки к любому TXT, без обхода."""
     errors: list[str] = []
-    from audio_catalog import load_audio_catalog
-    from script_audio import parse_audio_command
+    from audio.catalog import load_audio_catalog
+    from story.audio_commands import parse_audio_command
     audio_catalog = load_audio_catalog()
     project_root = ROOT_DIR if root_dir is None else root_dir
     resources_path = project_root / "TS" / "resources.yaml"

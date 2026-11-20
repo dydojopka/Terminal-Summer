@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 import re
 
-from audio_catalog import AudioTrack, finite_number
+from audio.catalog import AudioTrack, finite_number
 
 
 CHANNELS = ("music", "ambience", "sfx", "sfx2", "loop", "loop2")

@@ -13,7 +13,7 @@ from console_button import ConsoleButton as Button
 from endings_catalog import load_endings_catalog, runtime_ending_ansi
 from endings_ansi import read_ending_ansi
 from ending_progress import format_ending_date
-from script_parser import get_persistent_state
+from story.parser import get_persistent_state
 
 
 def ending_labels(ending, strings: dict[str, str]) -> tuple[Text, Text]:

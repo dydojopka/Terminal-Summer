@@ -10,13 +10,13 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-import script_parser as sp
-from audio_catalog import load_audio_catalog
+from story import parser as sp
+from audio.catalog import load_audio_catalog
 from endings_catalog import current_ending, load_endings_catalog
-from script_audio import parse_audio_command
-from card_game import CardGame, Phase
-from card_session import CardSession
-from script_cards import RESULTS
+from story.audio_commands import parse_audio_command
+from cards.game import CardGame, Phase
+from cards.session import CardSession
+from story.card_commands import RESULTS
 
 
 class RouteApp:

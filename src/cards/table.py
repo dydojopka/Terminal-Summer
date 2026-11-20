@@ -10,9 +10,9 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Static
 
-from card_faces import render_card, render_card_legend
-from card_game import CardGame, Phase, RIVAL_NAMES, SUIT_NAMES, score_hand
-from card_scene import CardScene, render_card_scene, render_portrait
+from cards.faces import render_card, render_card_legend
+from cards.game import CardGame, Phase, RIVAL_NAMES, SUIT_NAMES, score_hand
+from cards.scene import CardScene, render_card_scene, render_portrait
 from console_button import ConsoleButton as Button
 
 

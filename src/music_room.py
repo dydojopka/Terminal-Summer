@@ -6,7 +6,7 @@ from textual.widgets import Input, Label, ListItem, ListView, Static
 
 from console_button import ConsoleButton as Button
 
-from music_catalog import filter_music, format_duration, load_music_catalog
+from audio.music_catalog import filter_music, format_duration, load_music_catalog
 
 
 class MusicRow(ListItem):

@@ -3,7 +3,7 @@
 from datetime import datetime
 import re
 
-from script_parser import ENDING_STATE_KEYS, normalize_script_state
+from story.parser import ENDING_STATE_KEYS, normalize_script_state
 
 
 TIMESTAMP_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})")

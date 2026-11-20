@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from script_structure import OPTION_RE, read_block_range
+from story.structure import OPTION_RE, read_block_range
 
 DIALOGUE_RE = re.compile(r'(?:([a-zA-Z0-9_-]+)\s+)?"(.*)"')
 DSL_ESCAPE = re.compile(r'\\([n"\\])')

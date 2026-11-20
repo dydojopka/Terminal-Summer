@@ -10,9 +10,9 @@ import sys
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR / "src"))
 
-from audio_catalog import load_audio_catalog, resolve_audio_path, validate_audio_assets
-from script_audio import parse_audio_command
-from music_catalog import validate_music_assets
+from audio.catalog import load_audio_catalog, resolve_audio_path, validate_audio_assets
+from story.audio_commands import parse_audio_command
+from audio.music_catalog import validate_music_assets
 
 
 def validate_audio(ts_dir: Path, *, decode=False) -> list[str]:

@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 import main as game
-from script_parser import ScriptParser, get_script_state, set_script_state
+from story.parser import ScriptParser, get_script_state, set_script_state
 from sprites_builder import parse_show_like
 
 

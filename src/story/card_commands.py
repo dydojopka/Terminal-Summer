@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 import re
 
-from card_game import RIVAL_NAMES
+from cards.game import RIVAL_NAMES
 
 
 WAIT_TARGETS = ("defend", "select", "rival_defend", "next_round")

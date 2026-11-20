@@ -14,8 +14,8 @@ import queue
 import threading
 import time
 
-from audio_catalog import finite_number, load_audio_catalog, resolve_audio_path
-from script_audio import CHANNELS, CHANNEL_GROUPS, LOOP_CHANNELS, parse_audio_command, validate_audio_key
+from audio.catalog import finite_number, load_audio_catalog, resolve_audio_path
+from story.audio_commands import CHANNELS, CHANNEL_GROUPS, LOOP_CHANNELS, parse_audio_command, validate_audio_key
 
 
 AUDIO_DEFAULTS = {"audio_master": 1.0, "audio_music": 0.7, "audio_environment": 0.7,

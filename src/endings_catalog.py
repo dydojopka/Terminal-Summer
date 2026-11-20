@@ -36,7 +36,7 @@ def endings_manifest_path() -> Path:
 
 
 def load_endings_catalog(path: Path | None = None) -> tuple[Ending, ...]:
-    from script_parser import ENDING_STATE_KEYS
+    from story.parser import ENDING_STATE_KEYS
 
     manifest = endings_manifest_path() if path is None else path
     try:
