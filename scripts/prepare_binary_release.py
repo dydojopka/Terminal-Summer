@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Упаковывает готовую сборку в ZIP со сценариями и лицензиями."""
+"""Упаковывает готовую сборку со сценариями и лицензиями: TAR.GZ для Linux, ZIP для Windows."""
 
 from __future__ import annotations
 
@@ -217,18 +217,27 @@ def collect(binary: Path, analysis: Path, output: Path, *, download: bool) -> li
 
 
 def package_release(binary: Path, analysis: Path, output: Path, *, download: bool) -> list[str]:
+    archive_name = output.name.lower()
+    if not archive_name.endswith((".tar.gz", ".zip")):
+        raise ValueError("Имя архива должно оканчиваться на .tar.gz или .zip")
     if output.exists() or output.is_symlink():
         raise FileExistsError(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".release-", dir=output.parent) as temporary:
         support = Path(temporary)
         issues = collect(binary, analysis, support, download=download)
+        members = [(binary, binary.name)]
+        members.extend((path, path.relative_to(support).as_posix())
+                       for path in sorted(support.rglob("*")) if path.is_file())
         with atomic_output(output, overwrite=False) as target:
-            with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                archive.write(binary, binary.name)
-                for path in sorted(support.rglob("*")):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(support).as_posix())
+            if archive_name.endswith(".tar.gz"):
+                with tarfile.open(fileobj=target, mode="w:gz", dereference=True) as archive:
+                    for path, name in members:
+                        archive.add(path, arcname=name, recursive=False)
+            else:
+                with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                    for path, name in members:
+                        archive.write(path, name)
     return issues
 
 
@@ -236,10 +245,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=Path)
     parser.add_argument("analysis", type=Path, help="Analysis-00.toc от этой сборки")
-    parser.add_argument("--output", type=Path, help="Новый ZIP (по умолчанию build/release/<имя бинарника>.zip)")
+    parser.add_argument("--output", type=Path, help="Путь к новому .tar.gz или .zip (по умолчанию в build/release/)")
     parser.add_argument("--download-sources", action="store_true", help="Скачать проверяемые архивы certifi и pygame-ce")
     args = parser.parse_args()
-    output = args.output or ROOT / "build" / "release" / f"{args.binary.stem}.zip"
+    extension = ".zip" if args.binary.suffix.lower() == ".exe" else ".tar.gz"
+    output = args.output or ROOT / "build" / "release" / f"{args.binary.stem}{extension}"
     try:
         issues = package_release(args.binary, args.analysis, output, download=args.download_sources)
     except FileExistsError:
