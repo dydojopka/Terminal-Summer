@@ -14,6 +14,9 @@ import script_parser as sp
 from audio_catalog import load_audio_catalog
 from endings_catalog import current_ending, load_endings_catalog
 from script_audio import parse_audio_command
+from card_game import CardGame, Phase
+from card_session import CardSession
+from script_cards import RESULTS
 
 
 class RouteApp:
@@ -26,6 +29,45 @@ class RouteApp:
         self.audio = SimpleNamespace(execute=lambda line: parse_audio_command(line, self.audio.catalog),
                                      catalog=load_audio_catalog())
         self.text_bar = SimpleNamespace(text="", refresh=lambda: None)
+        self.cards = None
+        self.card_outcomes = iter(())
+
+    @staticmethod
+    def _card_step(game):
+        if game.phase == Phase.DEFEND:
+            game.finish_defence()
+        elif game.phase == Phase.GIVE:
+            game.give(next(i for i, card in enumerate(game.player) if card is not None))
+        elif game.phase == Phase.SELECT:
+            game.select(game.allowed_takes[-1])
+        else:
+            game.advance()
+
+    async def execute_card_command(self, command, parser, pc):
+        if command.action == "play":
+            desired = next(self.card_outcomes, None)
+            if desired not in RESULTS:
+                raise ValueError("В свидетеле не указан результат карточной партии")
+            for seed in range(5000):
+                game = CardGame(command.argument, seed=seed)
+                while game.phase != Phase.RESULT:
+                    self._card_step(game)
+                if game.result == desired:
+                    parser.jump_to_label(command.labels[RESULTS.index(desired)])
+                    return True
+            raise ValueError("Не найдена карточная раздача для свидетеля")
+        if command.action == "tutorial":
+            self.cards = CardSession.start(command, pc, seed=0)
+        elif command.action == "reveal":
+            self.cards.player_visible = True
+        elif command.action == "end":
+            self.cards = None
+        else:
+            self.cards.wait(command, pc)
+            while self.cards.playing:
+                self._card_step(self.cards.game)
+                self.cards.finish_wait()
+        return True
 
     def query_one(self, *args, **kwargs):
         return self.text_bar
@@ -132,6 +174,7 @@ async def validate_release_routes(ts_dir: Path) -> list[str]:
             sp.set_script_state(progress)
             choices = iter(route["choices"])
             app = RouteApp()
+            app.card_outcomes = iter(route.get("cards", ()))
             parser = RouteParser(ts_dir / "text/prologue.txt", app, lambda *_: next(choices))
             try:
                 await parser.next_line()
@@ -139,7 +182,8 @@ async def validate_release_routes(ts_dir: Path) -> list[str]:
                     raise ValueError(app.sub_title or "Не достигнут конец титров")
                 if app.ending.id != route["ending"]:
                     raise ValueError(f"Получена {app.ending.id} вместо {route['ending']}")
-                if next(choices, None) is not None or parser.menu_digest.hexdigest() != route["menu_hash"]:
+                if (next(choices, None) is not None or next(app.card_outcomes, None) is not None
+                        or parser.menu_digest.hexdigest() != route["menu_hash"]):
                     raise ValueError("Изменились меню или последовательность выборов свидетеля")
                 progress = sp.get_persistent_state()
                 print(f"Маршрут {app.ending.id}: выборов — {len(parser.choice_indices)}, реплик — {parser.dialogues}, титры завершены.")

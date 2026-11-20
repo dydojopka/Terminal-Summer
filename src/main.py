@@ -7,7 +7,7 @@ import threading
 import time
 import tempfile
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from audio_manager import AUDIO_DEFAULTS, AudioManager, NullAudioBackend, PygameAudioBackend, normalize_audio_settings
 from audio_catalog import finite_number, validate_audio_assets
@@ -186,6 +186,10 @@ from rich.cells import cell_len
 from script_parser import ScriptParser, format_script_state, TIMES_OF_DAY
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from music_room import MusicRoom
+from card_game import CardGame, Phase
+from card_session import CardSession
+from card_table import CardTable
+from script_cards import RESULTS
 from endings_menu import EndingsMenu, EndingsList, EndingResult
 from endings_catalog import current_ending
 from credits import CREDIT_PAGES, CreditsTimeline
@@ -921,6 +925,8 @@ class NovelWindow(Widget):
     def compose(self):
         yield ChoiceBar(id="choice-bar", classes="hidden")
         yield AnsiView("", id="bg-cg", classes="mouse-passive-art")
+        yield CardTable(CardGame(), ts_path=get_ts_path(), external_scenery=True,
+                        id="card-table", classes="hidden")
         
 class ChoiceList(ListView):
     """Сюжетные ответы с быстрым выбором по номеру."""
@@ -1111,6 +1117,11 @@ class TerminalSummer(App):
         self.gallery_images = []
         self._gallery_catalog = None
         self._gallery_error = None
+        self.card_session: CardSession | None = None
+        self._card_auto_key = None
+        self._card_move_due = 0.0
+        self._card_art_key = None
+        self._card_render_generation = 0
 
     text_speed = "0.025" # Скорость текста 0.04 | 0.025 | 0.01 | 0
 
@@ -1240,6 +1251,157 @@ class TerminalSummer(App):
             or not choice_bar.has_class("hidden"),
             "hidden",
         )
+        if self.card_session is not None:
+            novel_window.remove_class("hidden")
+            bg_cg.add_class("hidden")
+        self.sync_card_view()
+
+    async def execute_card_command(self, command, script, pc):
+        """Возвращает False, когда выполнение TXT ждёт игрового действия."""
+        if script is not getattr(self, "script", None):
+            raise ValueError("Карточная команда от неактивного сценария")
+        self.stop_skipping()
+        if command.action in {"tutorial", "play"}:
+            if self.card_session is not None:
+                raise ValueError("Предыдущая карточная партия не завершена")
+            self.card_session = CardSession.start(command, pc)
+            table = self.query_one(CardTable)
+            table.replace_game(self.card_session.game)
+            self._card_art_key = None
+        elif self.card_session is None:
+            raise ValueError("Карточная партия не начата")
+        elif command.action == "end":
+            if not self.card_session.tutorial or self.card_session.playing:
+                raise ValueError("Нельзя завершить незаконченный карточный ход")
+            self.close_card_game()
+        elif command.action == "reveal":
+            if not self.card_session.tutorial or self.card_session.playing:
+                raise ValueError("Нельзя открыть карты во время активного хода")
+            self.card_session.player_visible = True
+        else:
+            self.card_session.wait(command, pc)
+        self.sync_text_mode_display()
+        await self.flush_scene_render()
+        return self.card_session is None or not self.card_session.playing
+
+    def close_card_game(self):
+        self.card_session = None
+        self._card_auto_key = self._card_art_key = None
+        self._card_render_generation += 1
+        self.query_one(CardTable).add_class("hidden")
+        self.query_one("#novel-menu").remove_class("card-mode")
+        self.mark_scene_dirty()
+
+    def _card_save_data(self):
+        if self.card_session is None:
+            return None
+        self.card_session.selection = self.query_one(CardTable).swap_first
+        return self.card_session.to_save_data()
+
+    def sync_card_view(self):
+        if not self.is_running:
+            return
+        table = self.query_one(CardTable)
+        session = self.card_session
+        table.set_class(session is None, "hidden")
+        self.query_one("#novel-menu").set_class(session is not None, "card-mode")
+        if session is None:
+            return
+        table.card_style = self.settings["style"]
+        table.player_visible = session.player_visible
+        table.targets_visible = session.targets_visible
+        table.rival_name = "Пробная игра" if session.tutorial else None
+        table.query_one("#card-sidebar").set_class(self._interface_hidden, "hidden")
+        table.input_enabled = self.is_card_input_ready()
+        table.sync()
+        if table.input_enabled:
+            self.call_after_refresh(self._focus_cards_if_playing)
+
+    def is_card_input_ready(self):
+        return (self.card_session is not None and self.card_session.playing
+                and self.is_gameplay_context() and not self._next_scene_in_progress
+                and not self.script.failed and not self.script.has_diagnostic)
+
+    def _focus_cards_if_playing(self):
+        if not self.is_running:
+            return
+        table = self.query_one(CardTable)
+        if (self.card_session is not None and table.input_enabled and self.is_gameplay_context()
+                and (self.focused is None or table not in self.focused.ancestors_with_self)):
+            table.focus_active_hand()
+
+    async def on_card_table_scene_resized(self, event: CardTable.SceneResized):
+        event.stop()
+        if self.is_running and self.card_session is not None:
+            await self.refresh_card_scene()
+
+    async def refresh_card_scene(self):
+        session = self.card_session
+        if session is None:
+            return
+        table = self.query_one(CardTable)
+        snapshot = replace(self._capture_scene_snapshot(),
+                           width=min(table.scene_width, int(self.settings["quality"])))
+        if snapshot.key == self._card_art_key:
+            return
+        generation = self._scene_generation
+        self._card_render_generation += 1
+        card_generation = self._card_render_generation
+        art = await self._get_render_async(snapshot)
+        if (self.is_running and session is self.card_session and generation == self._scene_generation
+                and card_generation == self._card_render_generation):
+            table.query_one("#card-scenery", Static).update(art)
+            self._card_art_key = snapshot.key
+
+    def on_card_table_changed(self, event: CardTable.Changed):
+        event.stop()
+        session = self.card_session
+        if session is None or event.game is not session.game:
+            return
+        session.selection = self.query_one(CardTable).swap_first
+        if session.finish_wait():
+            self.sync_card_view()
+            self._start_script_advance()
+
+    def on_card_table_finished(self, event: CardTable.Finished):
+        event.stop()
+
+    def on_card_table_result_accepted(self, event: CardTable.ResultAccepted):
+        event.stop()
+        self.accept_card_result(event.game)
+
+    def accept_card_result(self, game):
+        session = self.card_session
+        if (session is None or game is not session.game or not self.is_card_input_ready()
+                or session.command is None or session.command.action != "play"
+                or game.phase != Phase.RESULT):
+            return
+        label = session.command.labels[RESULTS.index(game.result)]
+        self.script.jump_to_label(label)
+        self.close_card_game()
+        self.sync_text_mode_display()
+        self._start_script_advance()
+
+    def _card_tick(self):
+        if not self.is_running:
+            return
+        session = self.card_session
+        if session is not None:
+            enabled = self.is_card_input_ready()
+            if self.query_one(CardTable).input_enabled != enabled:
+                self.sync_card_view()
+        if (not self.is_card_input_ready()
+                or session.game.phase not in {Phase.RIVAL_TAKE, Phase.RIVAL_DEFEND, Phase.PLAYER_TAKE}):
+            self._card_auto_key = None
+            return
+        game = session.game
+        key = id(session), game.round, game.phase, game.swaps_left, game.opponent_target
+        if key != self._card_auto_key:
+            self._card_auto_key = key
+            self._card_move_due = _time.get_time() + 0.65
+        elif _time.get_time() >= self._card_move_due:
+            self.query_one(CardTable).confirm()
+            self._card_auto_key = None
 
 
 
@@ -1540,6 +1702,7 @@ class TerminalSummer(App):
         self.start_menu_music()
         self.set_interval(0.5, self.poll_audio_errors)
         self._skip_timer = self.set_interval(0.05, self._skip_tick)
+        self.set_interval(0.1, self._card_tick)
         self.app_suspend_signal.subscribe(
             self, lambda _: self.stop_skipping(), immediate=True
         )
@@ -1618,6 +1781,20 @@ class TerminalSummer(App):
             event.stop()
             event.prevent_default()
             return
+        if self.is_card_input_ready() and isinstance(event, events.Key):
+            if event.key == "space":
+                if self.card_session.game.phase == Phase.RESULT:
+                    self.accept_card_result(self.card_session.game)
+                elif self.card_session.game.phase == Phase.DEFEND:
+                    self.query_one(CardTable).confirm()
+                event.stop()
+                event.prevent_default()
+                return
+            if event.key in tuple("1234567"):
+                self.query_one(CardTable).action_number(int(event.key) - 1)
+                event.stop()
+                event.prevent_default()
+                return
         await super().on_event(event)
 
     def poll_audio_errors(self) -> None:
@@ -1743,7 +1920,10 @@ class TerminalSummer(App):
         self._interface_hidden = True
         self.set_novel_menu_visible(False)
         novel_window.remove_class("hidden")
-        self.query_one("#bg-cg").remove_class("hidden")
+        if self.card_session is None:
+            self.query_one("#bg-cg").remove_class("hidden")
+        else:
+            self.sync_card_view()
 
     def action_pause_game(self) -> None:
         """Открытие меню паузы"""
@@ -2231,10 +2411,13 @@ class TerminalSummer(App):
             self._show_load_error("Invalid game state")
             return
         version = game_state.get("save_format")
-        if type(version) is not int or version != 3:
-            self._show_load_error("Unsupported save format; expected 3")
+        if type(version) is not int or version not in (3, 4):
+            self._show_load_error("Unsupported save format; expected 3 or 4")
             if version is None or (type(version) is int and version < 3):
                 self._offer_outdated_save(page, slot_index)
+            return
+        if (version == 4) != (game_state.get("cards") is not None):
+            self._show_load_error("Карточные позиции требуют save format 4 с секцией cards")
             return
 
         variables = game_state.get("variables", {})
@@ -2281,6 +2464,9 @@ class TerminalSummer(App):
                 if loaded_script.runtime_outdated:
                     self._offer_outdated_save(page, slot_index)
                 return
+            restored_cards = CardSession.from_save_data(
+                game_state.get("cards"), lines=loaded_script.lines, pc=loaded_script.index,
+                labels=loaded_script.labels)
             for sprite in sprites_data["active_sprites"].values():
                 built = self._build_sprite_png(sprite["show_line"])
                 if built is None:
@@ -2323,6 +2509,10 @@ class TerminalSummer(App):
 
         # Проверенный выше parser становится активным только после сброса.
         self.script = loaded_script
+        self.card_session = restored_cards
+        if restored_cards is not None:
+            self.query_one(CardTable).replace_game(restored_cards.game)
+            self.query_one(CardTable).swap_first = restored_cards.selection
         self.audio.restore(restored_audio)
 
         # Скрытие главного меню (если загрузка из главного меню)
@@ -2397,9 +2587,12 @@ class TerminalSummer(App):
                 pass
 
         game_state = {
-            "save_format": 3,
+            # Старый executable обязан отклонить позицию с картами, а не
+            # проигнорировать новую секцию и продолжить TXT после партии.
+            "save_format": 4 if self.card_session is not None else 3,
             "ending_dates": self.ending_dates.copy(),
             "audio": self.audio.snapshot(),
+            "cards": self._card_save_data(),
             "script": script_runtime,
             "variables": {
                 "state": script_parser.get_script_state(),
@@ -2482,7 +2675,7 @@ class TerminalSummer(App):
         return not self.query_one("#novel-menu").has_class("hidden")
 
     def can_start_skipping(self) -> bool:
-        return self._credits is None and self.is_gameplay_context() and not (
+        return self.card_session is None and self._credits is None and self.is_gameplay_context() and not (
             self.script.failed or self.script.finished or self.script.has_diagnostic
         )
 
@@ -2948,6 +3141,13 @@ class TerminalSummer(App):
 
     async def flush_scene_render(self) -> None:
         """Рендерит сцену только в момент, когда её действительно увидит игрок."""
+        if self.card_session is not None:
+            self.sync_card_view()
+            generation = self._scene_generation
+            await self.refresh_card_scene()
+            if generation == self._scene_generation:
+                self.scene_dirty = False
+            return
         if not self.scene_dirty:
             return
         if not getattr(self, "current_scene", ""):
@@ -3531,6 +3731,7 @@ class TerminalSummer(App):
     def reset_game_view(self):
         """Сбрасывает визуальное состояние игры перед выходом в меню"""
         self.stop_credits()
+        self.close_card_game()
         self._new_ending_flags.clear()
         self._menu_music_active = False
         self.audio.reset()
@@ -3600,6 +3801,8 @@ class TerminalSummer(App):
     def can_advance_scene(self) -> bool:
         """Можно ли переходить к следующей строке по пользовательскому вводу."""
         if self._terminal_too_small or self._next_scene_in_progress:
+            return False
+        if self.card_session is not None and self.card_session.playing:
             return False
         if self._text_animating:
             return False
@@ -3673,6 +3876,7 @@ class TerminalSummer(App):
         if is_current:
             self._script_advance_task = None
             self._next_scene_in_progress = False
+            self.sync_card_view()
 
         if task.cancelled():
             return
@@ -3683,6 +3887,7 @@ class TerminalSummer(App):
             # Исключение уже извлечено из Task и не останется незамеченным.
             if is_current:
                 self.script._report_script_error(str(exc))
+                self.sync_card_view()
 
     def set_game_paused(self, paused: bool) -> None:
         """Меняет состояние паузы и будит ожидающие сценарные задачи."""

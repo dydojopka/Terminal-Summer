@@ -12,6 +12,7 @@ from audio_catalog import load_audio_catalog
 from script_audio import parse_audio_command
 from script_resources import resource_manifest
 from script_structure import read_block_range
+from script_cards import parse_card_command, validate_card_labels
 
 TIMES_OF_DAY = ("day", "sunset", "night", "prologue")
 
@@ -65,7 +66,7 @@ DEFAULT_SCRIPT_STATE = {
     "day2_map_library": False, "day2_cards_with_sl": 0,
     "day2_dv_bet": 0, "day2_un": 0, "day2_card_result": None,
     "d2_gave_keys": False,
-    "d2_cardgame_block_rollback": False,  # Legacy save: мини-игра заменена меню.
+    "d2_cardgame_block_rollback": False,  # Совместимость старых save, отката в UI нет.
     "persistent.CardsDemo": False, "persistent.CardsWon1": False,
     "persistent.CardsWon2": False, "persistent.CardsWon3": False,
     "persistent.CardsFail": False,
@@ -498,6 +499,8 @@ class ScriptParser:
             await self._handle_play(line)
         elif line.startswith("window"):
             await self._handle_window(line)
+        elif line.startswith("cards"):
+            await self._handle_cards(line)
         elif line.startswith("time"):
             time_of_day = line.split(maxsplit=1)[1].strip() if " " in line else "day"
             if time_of_day not in TIMES_OF_DAY:
@@ -542,11 +545,27 @@ class ScriptParser:
             self._report_script_error(f"Label not found: {label}", stop_execution=False)
             return
 
-        self.index = target_index
+        self.jump_to_label(label)
         # Переход по метке выходит из текущих структурных блоков так же,
         # как это происходило при старой подмене общего массива строк.
-        self.frames.clear()
         await self.next_line()
+
+    def jump_to_label(self, label):
+        if label not in self.labels:
+            raise ValueError(f"Label not found: {label}")
+        self.index = self.labels[label]
+        self.frames.clear()
+
+    async def _handle_cards(self, line):
+        try:
+            command = parse_card_command(line)
+            validate_card_labels(command, self.labels)
+            ready = await self.app.execute_card_command(command, self, self.index - 1)
+        except (TypeError, ValueError) as exc:
+            self._report_script_error(str(exc))
+            return
+        if ready:
+            await self.next_line()
 
     def _read_block_range(self, start: int) -> tuple[int, int]:
         """Возвращает полуоткрытый диапазон тела `{ ... }` в исходном сценарии."""
@@ -664,6 +683,8 @@ class ScriptParser:
             if line.startswith("menu"):
                 break
             if line.startswith("load"):
+                break
+            if line.startswith("cards"):
                 break
             # Пауза - граница видимого кадра. Команды перед ней должны быть
             # показаны игроку, а не слиты с визуальными командами после неё.

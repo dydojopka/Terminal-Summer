@@ -31,6 +31,7 @@ from sprites_builder import load_yaml_dict, parse_show_like, resolve_sprite
 from script_conditions import evaluate_script_condition, parse_script_condition
 from script_resources import RELEASE_SCRIPTS, find_scene_path, visual_asset_problems
 from script_structure import read_block_range, structure_errors
+from script_cards import parse_card_command, validate_card_labels
 
 
 LABEL_RE = re.compile(r"label\s+([a-zA-Z0-9_]+):?$")
@@ -41,7 +42,7 @@ VARIABLE_RE = re.compile(r"\$([a-zA-Z0-9_.]+)")
 SUPPORTED_PREFIXES = (
     "label ", "goto ", "if ", "if(", "else if ", "pause ",
     "scene ", "show ", "hide ", "play ", "stop ", "window ",
-    "time ", "mode ", "menu", "load ", "with ", "volume ",
+    "time ", "mode ", "menu", "load ", "with ", "volume ", "cards ",
 )
 
 
@@ -281,6 +282,19 @@ def explore_routes(
                     _apply_route_assignment(line, variables)
                     continue
 
+                if line.startswith("cards"):
+                    command = parse_card_command(line)
+                    validate_card_labels(command, document.labels)
+                    if command.action == "play":
+                        # Произвольное число ничьих не меняет сюжетный вход.
+                        # Сам переход draw и переигровка проверяются отдельно.
+                        stack.append((document, document.labels[command.labels[1]], tuple(),
+                                      variables.copy(), choices + (f"Карты: {command.argument}, fail",),
+                                      seen, visited_labels, steps))
+                        pc, frames = document.labels[command.labels[0]], tuple()
+                        choices += (f"Карты: {command.argument}, win",)
+                    continue
+
                 if line.startswith("load"):
                     target = _route_load_target(document, line)
                     document = _route_document(target, cache)
@@ -364,6 +378,12 @@ def validate_script(
     show_count = 0
 
     for number, line in source_lines:
+        if line.startswith("cards"):
+            try:
+                command = parse_card_command(line)
+                validate_card_labels(command, parser.labels)
+            except ValueError as exc:
+                errors.append(f"{script_path.name}:{number}: {exc}")
         if line.split(maxsplit=1)[:1] in (["play"], ["stop"], ["volume"]):
             try:
                 parse_audio_command(line, audio_catalog)
