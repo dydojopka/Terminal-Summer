@@ -25,9 +25,12 @@ class TerminalSizeWarning(Static):
 
     def update_size(self, size: Size) -> None:
         minimum = MINIMUM_TERMINAL_SIZE
-        self.update(
-            f"Увеличьте окно терминала минимум до {minimum.width} столбцов × "
-            f"{minimum.height} строк.\n"
-            f"Сейчас: {size.width} × {size.height}.\n"
-            "Разверните окно или уменьшите размер шрифта терминала."
-        )
+        strings = getattr(self.app, "runtime_ui", {})
+        minimum_text = strings.get("terminal.minimum",
+                                   "Увеличьте окно терминала минимум до {width} столбцов × {height} строк.")
+        current_text = strings.get("terminal.current", "Сейчас: {width} × {height}.")
+        hint = strings.get("terminal.hint", "Разверните окно или уменьшите размер шрифта терминала.")
+        self.update("\n".join(
+            template.replace("{width}", str(dimensions.width)).replace("{height}", str(dimensions.height))
+            for template, dimensions in ((minimum_text, minimum), (current_text, size), (hint, size))
+        ))

@@ -69,6 +69,9 @@ MENU_MUSIC_KEY = "blow_with_the_fires"
 
 
 # ============ Сохранения ============
+CORRUPT_SAVE = "Повреждённое сохранение"
+
+
 def _save_path(page: int, slot: int) -> Path:
     """Путь к файлу сохранения: saves/{page+1}/{slot+1}.json"""
     return SAVES_PATH / str(page + 1) / f"{slot + 1}.json"
@@ -144,7 +147,7 @@ def get_all_saves() -> dict[str, dict]:
                     slot_num = int(save_file.stem)
                 except ValueError:
                     continue
-                saves[f"{page_num - 1}/{slot_num - 1}"] = {"error": "Повреждённое сохранение"}
+                saves[f"{page_num - 1}/{slot_num - 1}"] = {"error": CORRUPT_SAVE}
     return saves
 
 
@@ -230,6 +233,7 @@ class SceneRenderSnapshot:
     width: int
     style: str
     cache_epoch: int
+    diagnostics: tuple[str, str, str | None] = ("Неизвестный цвет сцены", "Файл не найден", None)
 
     @property
     def key(self) -> tuple:
@@ -245,7 +249,7 @@ class SceneRenderSnapshot:
             )
             for sprite in self.sprites
         )
-        return self.category, self.name, sprite_key, str(self.width), self.style, self.cache_epoch, 3
+        return self.category, self.name, sprite_key, str(self.width), self.style, self.cache_epoch, 3, self.diagnostics
 
 def main():
     if not IS_FROZEN:
@@ -489,10 +493,21 @@ class GalleryMenu(HorizontalGroup):
         for key in ("up", "down", "left", "right")
     ]
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.strings: dict[str, str] = {}
+
     def compose(self):
         yield GalleryMenuLeftBtns()
         yield GalleryMenuMidBtns()
         yield GalleryMenuBottomBtns()
+
+    def apply_language(self, strings: dict[str, str]) -> None:
+        self.strings = strings
+        self.border_title = strings.get("gallery.title", self.BORDER_TITLE)
+        for key, label in self.BUTTON_LABELS.items():
+            self.query_one(f"#{key}", Button).label = strings.get(key, label)
+        self.query_one(MusicRoom).apply_language(strings)
 
     def update_size_selection(self, width: str) -> None:
         for key, (size, variant) in self.SIZE_BUTTONS.items():
@@ -654,6 +669,8 @@ class SaveMenuActionBtns(HorizontalGroup):
 class SaveMenu(HorizontalGroup):
     """Меню сохранений с пагинацией и слотами"""
     BORDER_TITLE = "Сохранения"
+    BUTTONS = {"btn-close-save-menu": "Назад", "btn-save-delete": "Удалить",
+               "btn-save-load-game": "Загрузить", "btn-save-save": "Сохранить"}
 
     def __init__(self, *args, opened_from: str = "menu", **kwargs):
         super().__init__(*args, **kwargs)
@@ -661,11 +678,24 @@ class SaveMenu(HorizontalGroup):
         self.current_page = 0  # 0-8 (страницы 1-9)
         self.selected_slot: str | None = None  # id выбранного слота
         self.all_saves: dict[str, dict] = {}
+        self.strings: dict[str, str] = {}
 
     def compose(self):
         yield SaveMenuLeftBtns()
         yield SaveMenuMidBtns()
 
+    def apply_language(self, strings: dict[str, str]) -> None:
+        self.strings = strings
+        for key, label in self.BUTTONS.items():
+            self.query_one(f"#{key}", Button).label = strings.get(key, label)
+        self.update_titles()
+
+    def update_titles(self) -> None:
+        title = self.strings.get("title", self.BORDER_TITLE)
+        if self.opened_from == "menu":
+            title = self.strings.get("load.title", title)
+        self.border_title = title
+        self.query_one(SaveMenuMidBtns).border_title = title
 
 
 class LanguageDialog(ModalScreen[str | None]):
@@ -697,19 +727,23 @@ class LanguageDialog(ModalScreen[str | None]):
 
 
 class OutdatedSaveDialog(ModalScreen):
-    BINDINGS = [("escape", "keep", "Оставить")]
+    BINDINGS = [Binding("escape", "keep", show=False)]
 
-    def __init__(self, **kwargs):
+    def __init__(self, *, strings: dict[str, str] | None = None, **kwargs):
         super().__init__(**kwargs)
-        self.keep_button = Button("Оставить", id="outdated-save-keep", variant="primary")
+        self.strings = strings or {}
+        self.keep_button = Button(self.strings.get("outdated.keep", "Оставить"),
+                                  id="outdated-save-keep", variant="primary")
 
     def compose(self):
         with Vertical(id="outdated-save-panel"):
-            yield Label("Сохранение устарело", id="outdated-save-title")
-            yield Static("Оно несовместимо с текущей версией сценария.\nУдалить выбранное сохранение?")
+            yield Label(self.strings.get("outdated.title", "Сохранение устарело"), id="outdated-save-title")
+            yield Static(self.strings.get("outdated.message",
+                                         "Оно несовместимо с текущей версией сценария.\nУдалить выбранное сохранение?"))
             with HorizontalGroup():
                 yield self.keep_button
-                yield Button("Удалить", id="outdated-save-delete", variant="error", classes="danger")
+                yield Button(self.strings.get("btn-save-delete", "Удалить"),
+                             id="outdated-save-delete", variant="error", classes="danger")
 
     def on_mount(self):
         if self.keep_button.is_mounted:
@@ -1176,6 +1210,8 @@ class TerminalSummer(App):
         self.ts_path = get_ts_path()
         self.bundled_text_path = get_resource_path("TS/text") if IS_FROZEN else None
         self.interface_locale: dict[str, str] = {}
+        self.endings_locale: dict[str, str] = {}
+        self.runtime_ui: dict[str, str] = {}
         self._russian_main_labels = None
         self.audio = AudioManager(self.ts_path)
         self._menu_music_active = False
@@ -1435,7 +1471,7 @@ class TerminalSummer(App):
         table.card_style = self.settings["style"]
         table.player_visible = session.player_visible
         table.targets_visible = session.targets_visible
-        table.rival_name = "Пробная игра" if session.tutorial else None
+        table.rival_name = self.runtime_ui.get("card.tutorial", "Пробная игра") if session.tutorial else None
         table.query_one("#card-sidebar").set_class(self._interface_hidden, "hidden")
         table.input_enabled = self.is_card_input_ready()
         table.sync()
@@ -1842,8 +1878,11 @@ class TerminalSummer(App):
         if not self.is_headless:
             errors = validate_audio_assets(self.ts_path, self.audio.catalog)
             if errors:
-                self.notify("Часть аудиофайлов отсутствует. Установите TS/sound из нового архива ассетов.",
-                            title="Звук", severity="warning", timeout=10)
+                self.notify(
+                    self.runtime_ui.get("audio.missing",
+                        "Часть аудиофайлов отсутствует. Установите TS/sound из нового архива ассетов."),
+                    title=self.runtime_ui.get("audio.title", "Звук"), severity="warning", timeout=10,
+                )
 
     def on_resize(self, event: events.Resize) -> None:
         self.sync_terminal_size(event.size)
@@ -1931,7 +1970,8 @@ class TerminalSummer(App):
     def poll_audio_errors(self) -> None:
         errors = self.audio.drain_errors()
         if errors:
-            self.notify("\n".join(errors[:3]), title="Звук", severity="warning", timeout=10)
+            self.notify(self.runtime_ui.get("audio.error", "\n".join(errors[:3])),
+                        title=self.runtime_ui.get("audio.title", "Звук"), severity="warning", timeout=10)
 
     async def on_unmount(self) -> None:
         self.cancel_script_advance()
@@ -2166,7 +2206,9 @@ class TerminalSummer(App):
         for tab in ("music", "cg", "bg"):
             self.query_one(f"#btn-gallery-{tab}", Button).variant = "primary" if tab == mode else "default"
         if mode == "music":
-            self.query_one(GalleryMenuMidBtns).border_title = "Музыка"
+            self.query_one(GalleryMenuMidBtns).border_title = (
+                self.query_one("#btn-gallery-music", Button).label.plain
+            )
             room.query_one("#music-list", ListView).focus()
             room.update_player()
         else:
@@ -2337,6 +2379,7 @@ class TerminalSummer(App):
         novel_window = self.query_one("#novel-window")
 
         save_menu.opened_from = opened_from
+        save_menu.update_titles()
         save_menu.current_page = 0
         save_menu.selected_slot = None
         save_menu.all_saves = get_all_saves()
@@ -2395,6 +2438,9 @@ class TerminalSummer(App):
         save_menu = self.query_one("#save-menu")
         page = save_menu.current_page
         all_saves = save_menu.all_saves
+        strings = save_menu.strings
+        empty = strings.get("slot.empty", "Пусто")
+        corrupt = strings.get("slot.corrupt", CORRUPT_SAVE)
 
         for slot_index in range(12):
             save_id = f"{page}/{slot_index}"
@@ -2407,7 +2453,7 @@ class TerminalSummer(App):
 
             save_data = all_saves.get(save_id)
             if save_data:
-                save_data = save_data if isinstance(save_data, dict) else {"error": "Повреждённое сохранение"}
+                save_data = save_data if isinstance(save_data, dict) else {"error": CORRUPT_SAVE}
                 game_state = save_data.get("game_state", {})
                 game_state = game_state if isinstance(game_state, dict) else {}
                 dialogue = game_state.get("dialogue", {})
@@ -2415,10 +2461,10 @@ class TerminalSummer(App):
                 speaker = dialogue.get("speaker", "")
                 speaker = speaker if isinstance(speaker, str) else ""
                 text = dialogue.get("text", "")
-                text = text if isinstance(text, str) else "Повреждённое сохранение"
+                text = text if isinstance(text, str) else corrupt
                 error = save_data.get("error")
                 if error is not None:
-                    text = error if isinstance(error, str) else "Повреждённое сохранение"
+                    text = error if isinstance(error, str) and error != CORRUPT_SAVE else corrupt
                 speaker, text = plain_save_text(speaker), plain_save_text(text)
                 timestamp = save_data.get("timestamp", "")
                 timestamp = timestamp if isinstance(timestamp, str) else ""
@@ -2436,13 +2482,14 @@ class TerminalSummer(App):
                 elif short_text:
                     label = short_text
                 else:
-                    label = "Пусто"
+                    label = empty
 
                 btn.label = Text(f"{label}\n{timestamp}")
                 btn.remove_class("save-slot-empty")
                 btn.add_class("save-slot-filled")
             else:
-                btn.label = f"Пусто\nСлот {slot_index + 1}"
+                number = strings.get("slot.number", "Слот {number}").replace("{number}", str(slot_index + 1))
+                btn.label = f"{empty}\n{number}"
                 btn.remove_class("save-slot-filled")
                 btn.add_class("save-slot-empty")
 
@@ -2512,15 +2559,17 @@ class TerminalSummer(App):
         try:
             delete_save(page, slot_index)
         except OSError as exc:
-            self._show_load_error(str(exc))
+            self._show_load_error(str(exc), key="delete.error")
             return
         save_menu.all_saves = get_all_saves()
         save_menu.selected_slot = None
         self.update_save_menu_display()
 
-    def _show_load_error(self, detail: str) -> None:
+    def _show_load_error(self, detail: str, *, key: str | None = None) -> None:
+        strings = self.query_one(SaveMenu).strings
         self.sub_title = f"[Load error] {detail}"
-        self.notify(detail, title="Ошибка загрузки", severity="error", timeout=8)
+        self.notify(strings.get(key, detail), title=strings.get("load.error", "Ошибка загрузки"),
+                    severity="error", timeout=8)
 
     def _offer_outdated_save(self, page: int, slot: int) -> None:
         if isinstance(self.screen, OutdatedSaveDialog):
@@ -2536,10 +2585,11 @@ class TerminalSummer(App):
                 return
             try:
                 if signature is None or hashlib.sha256(path.read_bytes()).digest() != signature:
-                    raise ValueError("Слот изменился; сохранение не удалено")
+                    self._show_load_error("Слот изменился; сохранение не удалено", key="outdated.changed")
+                    return
                 delete_save(page, slot)
             except (OSError, ValueError) as exc:
-                self._show_load_error(str(exc))
+                self._show_load_error(str(exc), key="delete.error")
                 return
             menu = self.query_one("#save-menu")
             menu.all_saves = get_all_saves()
@@ -2547,7 +2597,7 @@ class TerminalSummer(App):
                 menu.selected_slot = None
             self.update_save_menu_display()
 
-        self.push_screen(OutdatedSaveDialog(id="outdated-save"), confirmed)
+        self.push_screen(OutdatedSaveDialog(strings=self.query_one(SaveMenu).strings, id="outdated-save"), confirmed)
 
     def load_selected_save(self) -> None:
         """Загрузка выбранного сохранения"""
@@ -2564,7 +2614,7 @@ class TerminalSummer(App):
         try:
             game_state = load_game_state(page, slot_index)
         except (OSError, ValueError, UnicodeError) as exc:
-            self._show_load_error(str(exc))
+            self._show_load_error(str(exc), key="load.failed")
             return
         if game_state is None:
             return
@@ -2578,7 +2628,7 @@ class TerminalSummer(App):
                 self._offer_outdated_save(page, slot_index)
             return
         if (version == 4) != (game_state.get("cards") is not None):
-            self._show_load_error("Карточные позиции требуют save format 4 с секцией cards")
+            self._show_load_error("Карточные позиции требуют save format 4 с секцией cards", key="load.cards")
             return
 
         variables = game_state.get("variables", {})
@@ -2601,7 +2651,7 @@ class TerminalSummer(App):
             restored_audio = self.audio.validate_snapshot(game_state.get("audio"))
             scene, sprites_data, dialogue = validate_save_view(game_state)
         except (TypeError, ValueError) as exc:
-            self._show_load_error(str(exc))
+            self._show_load_error(str(exc), key="load.failed")
             return
 
         # До изменения текущей игры полностью проверяем файл и runtime-state.
@@ -2621,7 +2671,8 @@ class TerminalSummer(App):
                 script_filename = str(self.ts_path / script_filename)
             loaded_script = ScriptParser(script_filename, self)
             if not loaded_script.restore_runtime_state(script_runtime):
-                self._show_load_error(loaded_script.runtime_error)
+                self._show_load_error(loaded_script.runtime_error,
+                                      key="outdated.load" if loaded_script.runtime_outdated else "load.failed")
                 if loaded_script.runtime_outdated:
                     self._offer_outdated_save(page, slot_index)
                 return
@@ -2634,7 +2685,7 @@ class TerminalSummer(App):
                     raise ValueError(f"Не удалось восстановить спрайт: {sprite['character']}")
                 sprite["image_path"] = str(built[1])
         except (OSError, TypeError, ValueError, UnicodeError) as exc:
-            self._show_load_error(str(exc))
+            self._show_load_error(str(exc), key="load.failed")
             return
 
         # Закрытие меню сохранений
@@ -2783,7 +2834,9 @@ class TerminalSummer(App):
         try:
             save_game_state(page, slot_index, game_state, timestamp)
         except (OSError, ValueError, TypeError) as exc:
-            self.notify(str(exc), title="Не удалось сохранить игру", severity="error")
+            strings = save_menu.strings
+            self.notify(strings.get("save.failed", str(exc)),
+                        title=strings.get("save.error", "Не удалось сохранить игру"), severity="error")
             return
 
         # Обновление отображения
@@ -3036,6 +3089,11 @@ class TerminalSummer(App):
             width=int(self.settings.get("quality", 150)),
             style=str(self.settings.get("style", "ANSI")),
             cache_epoch=self._cache_epoch,
+            diagnostics=(
+                self.runtime_ui.get("scene.unknown-color", "Неизвестный цвет сцены"),
+                self.runtime_ui.get("scene.missing", "Файл не найден"),
+                self.runtime_ui.get("scene.error"),
+            ),
         )
 
     def _capture_scene_snapshot(self) -> SceneRenderSnapshot:
@@ -3118,16 +3176,14 @@ class TerminalSummer(App):
                 }
                 rgba = colors.get(snapshot.name.lower())
                 if rgba is None:
-                    return Text.from_markup(
-                        f"[Неизвестный цвет сцены: {snapshot.name}]"
-                    )
+                    label = snapshot.diagnostics[0]
+                    return Text(f"[{label}: {snapshot.name}]")
                 composed = Image.new("RGBA", (1920, 1080), rgba)
             else:
                 scene_path = self._get_scene_image_path(snapshot.category, snapshot.name)
                 if scene_path is None:
-                    return Text.from_markup(
-                        f"[Файл не найден: TS/images/{snapshot.category}/{snapshot.name}.*]"
-                    )
+                    label = snapshot.diagnostics[1]
+                    return Text(f"[{label}: TS/images/{snapshot.category}/{snapshot.name}.*]")
                 composed = self._load_rgba_cached(scene_path, snapshot.cache_epoch)
             for sprite in snapshot.sprites:
                 if not sprite.image_path or not os.path.exists(sprite.image_path):
@@ -3180,7 +3236,7 @@ class TerminalSummer(App):
                 alpha=not snapshot.sprites,
             )
         except Exception as exc:
-            art = Text.from_markup(f"[Ошибка сборки сцены со спрайтами: {exc}]")
+            return Text(snapshot.diagnostics[2] or f"[Ошибка сборки сцены со спрайтами: {exc}]")
         finally:
             if composed is not None:
                 composed.close()
@@ -3392,7 +3448,7 @@ class TerminalSummer(App):
             for number, (category, name) in enumerate(scenes, start=1):
                 if generation != self._preload_generation:
                     return
-                label.update(f"Подготовка сценария: {number}/{total}")
+                label.update(f"{self.runtime_ui.get('preload.story', 'Подготовка сценария')}: {number}/{total}")
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(
                     None, self._cache_plain_scene, category, name, generation
@@ -3402,7 +3458,7 @@ class TerminalSummer(App):
             for offset, show_line in enumerate(show_lines, start=len(scenes) + 1):
                 if generation != self._preload_generation:
                     return
-                label.update(f"Подготовка спрайтов: {offset}/{total}")
+                label.update(f"{self.runtime_ui.get('preload.sprites', 'Подготовка спрайтов')}: {offset}/{total}")
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(
                     None, self._build_sprite_png, show_line, generation
@@ -3411,12 +3467,12 @@ class TerminalSummer(App):
             if generation == self._preload_generation:
                 current_snapshot = self._capture_scene_snapshot()
                 if current_snapshot.name and current_snapshot.category:
-                    label.update("Подготовка текущего кадра…")
+                    label.update(self.runtime_ui.get("preload.current", "Подготовка текущего кадра…"))
                     current_art = await self._get_render_async(current_snapshot)
                     if generation == self._preload_generation:
                         self.query_one("#bg-cg", Widget).update(current_art)
                         self.scene_dirty = False
-                label.update("Подготовка следующего кадра…")
+                label.update(self.runtime_ui.get("preload.next", "Подготовка следующего кадра…"))
                 snapshot = self._snapshot_after_visual_commands(
                     script.predict_visual_commands()
                 )
@@ -3597,7 +3653,8 @@ class TerminalSummer(App):
             self._persistent_read_error = False
         except OSError as exc:
             self.sub_title = f"[Persistent state error] {exc}"
-            self.notify(str(exc), title="Не удалось сохранить прогресс", severity="error")
+            self.notify(self.runtime_ui.get("file.write-error", str(exc)),
+                        title=self.runtime_ui.get("progress.error", "Не удалось сохранить прогресс"), severity="error")
 
     def update_script_header(self) -> None:
         """Обновляет Header согласно выбранным группам сценарных переменных."""
@@ -3679,7 +3736,8 @@ class TerminalSummer(App):
             write_json_atomic(self.CONFIG_FILE, self.settings)
             self._settings_read_error = False
         except (OSError, ValueError, TypeError) as exc:
-            self.notify(str(exc), title="Не удалось сохранить настройки", severity="error")
+            self.notify(self.runtime_ui.get("file.write-error", str(exc)),
+                        title=self.runtime_ui.get("settings.error", "Не удалось сохранить настройки"), severity="error")
 
     def sync_art_style_buttons(self) -> None:
         """Ровно одна кнопка соответствует выбранному стилю кадра."""
@@ -3746,9 +3804,21 @@ class TerminalSummer(App):
         if self.bundled_text_path is not None:
             roots.append(self.bundled_text_path)
         self.interface_locale = load_interface_locale(language, *roots)
+        self.runtime_ui = load_interface_locale(language, *roots, filename="runtime-ui.json")
+        self.query_one(PauseMenuContainer).border_title = self.runtime_ui.get("pause.title", PauseMenuContainer.BORDER_TITLE)
+        self.query_one("#script-loading-text", Label).update(
+            self.runtime_ui.get("preload.initial", "Подготовка сценария…")
+        )
+        for warning in self.query(TerminalSizeWarning):
+            warning.update_size(self.size)
         announcements = load_interface_locale(language, *roots, filename="main-menu.json")
         settings_copy = load_interface_locale(language, *roots, filename="settings-menu.json")
+        self.endings_locale = load_interface_locale(language, *roots, filename="endings-menu.json")
         self.query_one(SettingsMenu).apply_language(settings_copy)
+        self.query_one(EndingsMenu).apply_language(self.endings_locale)
+        self.query_one(SaveMenu).apply_language(load_interface_locale(language, *roots, filename="save-menu.json"))
+        self.update_save_menu_display()
+        self.query_one(GalleryMenu).apply_language(load_interface_locale(language, *roots, filename="gallery-menu.json"))
         self.apply_footer_language(load_interface_locale(language, *roots, filename="footer.json"))
         self.query_one("#btn-language-menu", Button).label = language.upper()
         for code in LANGUAGE_NAMES:
@@ -3829,25 +3899,36 @@ class TerminalSummer(App):
     def update_gallery_display(self):
         """Показывает текущее изображение в выбранном размере и формате."""
         static = self.query_one("#ansi-content", Static)
+        strings = self.query_one(GalleryMenu).strings
         if not self.gallery_images:
-            static.update(Text(self._gallery_error or "[Ничего не найдено]"))
-            self.query_one(GalleryMenuMidBtns).border_title = "Ошибка" if self._gallery_error else "Пусто"
+            if self._gallery_error:
+                static.update(Text(strings.get("gallery.catalog-error", self._gallery_error)))
+                title = strings.get("gallery.error-title", "Ошибка")
+            else:
+                static.update(Text(strings.get("gallery.empty", "[Ничего не найдено]")))
+                title = strings.get("gallery.empty-title", "Пусто")
+            self.query_one(GalleryMenuMidBtns).border_title = title
             return
 
         image = self.gallery_images[self.gallery_index]
+
+        def image_error(key: str, reason: str) -> None:
+            fallback = f"[Ошибка изображения {image.id}: {reason}]"
+            static.update(Text(strings.get(key, fallback).replace("{image}", image.id)))
+
         try:
             image_path = resolve_gallery_image(self.ts_path / "images", image)
             with Image.open(image_path) as img:
                 art = render_art(img, width=int(self.gallery_size), alpha=True, style=self.gallery_style)
             static.update(art)
         except FileNotFoundError:
-            static.update(Text(f"[Ошибка изображения {image.id}: файл не найден]"))
+            image_error("gallery.image-missing", "файл не найден")
         except PermissionError:
-            static.update(Text(f"[Ошибка изображения {image.id}: нет доступа к файлу]"))
+            image_error("gallery.image-permission", "нет доступа к файлу")
         except OSError:
-            static.update(Text(f"[Ошибка изображения {image.id}: не удалось прочитать файл изображения]"))
+            image_error("gallery.image-read", "не удалось прочитать файл изображения")
         except Exception:
-            static.update(Text(f"[Ошибка изображения {image.id}: не удалось загрузить или преобразовать изображение в ANSI-арт]"))
+            image_error("gallery.image-render", "не удалось загрузить или преобразовать изображение")
         self.query_one(GalleryMenuMidBtns).border_title = image.id
 
     async def update_current_scene_art(self):
@@ -3894,7 +3975,8 @@ class TerminalSummer(App):
         bar = self.query_one("#text-bar", TextBar)
         bar.remove_class(*list(bar.classes))
         bar.border_title = ""
-        bar.text = CREDIT_PAGES[self._credits.page]
+        page = self._credits.page
+        bar.text = self.endings_locale.get(f"credits.{page}", CREDIT_PAGES[page])
         bar.scroll_home(animate=False)
         bar.refresh()
 
@@ -3948,7 +4030,8 @@ class TerminalSummer(App):
         self._menu_music_active = False
         self.audio.reset()
         self.push_screen(
-            EndingResult(ending, newly_unlocked=newly_unlocked, date=self.ending_dates.get(ending.flag)),
+            EndingResult(ending, newly_unlocked=newly_unlocked, date=self.ending_dates.get(ending.flag),
+                         strings=self.endings_locale),
             self.return_from_ending,
         )
 

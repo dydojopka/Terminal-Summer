@@ -17,6 +17,15 @@ class MusicRow(ListItem):
 
 
 class MusicRoom(Vertical):
+    BUTTON_LABELS = {
+        "music-previous": "Предыдущий", "music-pause": "Пауза", "music-stop": "Стоп",
+        "music-next": "Следующий", "music-repeat": "Повтор: выкл.",
+        "music-volume-minus": "Музыка −10%", "music-volume-plus": "Музыка +10%",
+    }
+    PLAYBACK_LABELS = {"loading": "Загрузка", "playing": "Сейчас играет", "paused": "Пауза",
+                       "stopped": "Остановлено", "error": "Ошибка"}
+    SEARCH_PLACEHOLDER = "Поиск по названию"
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.tracks = ()
@@ -27,21 +36,34 @@ class MusicRoom(Vertical):
         self.catalog_error = None
         self._rebuilding = False
         self._last_display = None
+        self.strings: dict[str, str] = {}
 
     def compose(self):
-        yield Input(placeholder="Поиск по названию", id="music-search")
+        yield Input(placeholder=self.SEARCH_PLACEHOLDER, id="music-search")
         yield ListView(id="music-list")
         yield Static("", id="music-empty", classes="hidden")
         yield Static("Фоновая музыка меню", id="music-status")
         with Grid(id="music-controls"):
-            yield Button("Предыдущий", id="music-previous")
-            yield Button("Пауза", id="music-pause", disabled=True)
-            yield Button("Стоп", id="music-stop", disabled=True)
-            yield Button("Следующий", id="music-next")
-            yield Button("Повтор: выкл.", id="music-repeat")
-            yield Button("Музыка −10%", id="music-volume-minus")
-            yield Label("", id="music-volume")
-            yield Button("Музыка +10%", id="music-volume-plus")
+            for key, label in self.BUTTON_LABELS.items():
+                if key == "music-volume-plus":
+                    yield Label("", id="music-volume")
+                yield Button(label, id=key, disabled=key in {"music-pause", "music-stop"})
+
+    def apply_language(self, strings: dict[str, str]) -> None:
+        self.strings = strings
+        self.query_one("#music-search", Input).placeholder = strings.get("music-search", self.SEARCH_PLACEHOLDER)
+        for key, label in self.BUTTON_LABELS.items():
+            self.query_one(f"#{key}", Button).label = strings.get(key, label)
+        self.update_empty()
+        self._last_display = None
+        self.update_player()
+
+    def update_empty(self) -> None:
+        empty = self.query_one("#music-empty", Static)
+        empty.set_class(bool(self.filtered), "hidden")
+        message = (self.strings.get("music.catalog-error", self.catalog_error) if self.catalog_error
+                   else self.strings.get("music.empty", "Ничего не найдено"))
+        empty.update(Text(message))
 
     async def on_mount(self):
         try:
@@ -72,9 +94,7 @@ class MusicRoom(Vertical):
                               if track.id == self.selected_id), 0) if self.filtered else None
         if listing.index is not None:
             self.selected_id = self.filtered[listing.index].id
-        empty = self.query_one("#music-empty", Static)
-        empty.set_class(bool(self.filtered), "hidden")
-        empty.update(Text(self.catalog_error or "Ничего не найдено"))
+        self.update_empty()
         self._rebuilding = False
         self._last_display = None
         self.update_player()
@@ -147,26 +167,31 @@ class MusicRoom(Vertical):
             return
         self._last_display = display
         title = self.last_track.title if self.last_track and preview else ""
-        labels = {"loading": "Загрузка", "playing": "Сейчас играет", "paused": "Пауза",
-                  "stopped": "Остановлено", "error": "Ошибка"}
+        strings = self.strings
         if status["error"]:
-            message = status["error"]
+            message = strings.get("music.playback-error", status["error"])
         elif preview:
             duration = self.last_track.duration if self.last_track else 0
-            message = (f"{labels[status['status']]}: {title}  "
+            playback = status["status"]
+            label = strings.get(f"music.{playback}", self.PLAYBACK_LABELS[playback])
+            message = (f"{label}: {title}  "
                        f"{format_duration(status['position'])} / {format_duration(duration)}")
         else:
-            message = "Фоновая музыка меню: Blow With The Fires"
+            message = f"{strings.get('music.menu-theme', 'Фоновая музыка меню')}: Blow With The Fires"
         if self.app.settings["audio_muted"]:
-            message += " · Без звука"
+            message += " · " + strings.get("music.muted", "Без звука")
         self.query_one("#music-status", Static).update(Text(message))
         pause = self.query_one("#music-pause", Button)
-        pause.label = "Продолжить" if status["status"] == "paused" else "Пауза"
+        pause.label = (strings.get("music.resume", "Продолжить") if status["status"] == "paused"
+                       else strings.get("music-pause", self.BUTTON_LABELS["music-pause"]))
         pause.disabled = not active or status["status"] == "loading"
         self.query_one("#music-stop", Button).disabled = not active
         for identity in ("music-previous", "music-next"):
             self.query_one(f"#{identity}", Button).disabled = not self.filtered
-        self.query_one("#music-repeat", Button).label = "Повтор: вкл." if self.repeat else "Повтор: выкл."
+        self.query_one("#music-repeat", Button).label = (
+            strings.get("music.repeat-on", "Повтор: вкл.") if self.repeat
+            else strings.get("music-repeat", self.BUTTON_LABELS["music-repeat"])
+        )
         self.query_one("#music-volume", Label).update(f"{round(self.app.settings['audio_music'] * 100)}%")
         for row in self.query(MusicRow):
             playing = active and row.track.audio_key == status["key"]

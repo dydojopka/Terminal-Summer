@@ -53,11 +53,14 @@ def merge_ending_dates(current: dict[str, str], incoming: dict[str, str]) -> dic
     return merged
 
 
-def format_ending_date(value: str | None) -> str:
+def format_ending_date(value: str | None, strings: dict[str, str] | None = None) -> str:
+    strings = strings or {}
+    unknown = strings.get("date.unknown", "Дата неизвестна")
     if value is None:
-        return "Дата неизвестна"
+        return unknown
     try:
         timestamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
-        return "Дата неизвестна"
-    return f"Получена: {timestamp:%d.%m.%Y в %H:%M}"
+        return unknown
+    label = strings.get("date.unlocked", "Получена: {date} в {time}")
+    return label.replace("{date}", f"{timestamp:%d.%m.%Y}").replace("{time}", f"{timestamp:%H:%M}")

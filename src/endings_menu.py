@@ -16,6 +16,13 @@ from ending_progress import format_ending_date
 from script_parser import get_persistent_state
 
 
+def ending_labels(ending, strings: dict[str, str]) -> tuple[Text, Text]:
+    return (
+        Text(strings.get(f"route.{ending.id}", ending.ending)),
+        Text(strings.get(f"title.{ending.id}", ending.title)),
+    )
+
+
 @lru_cache(maxsize=128)
 def load_ending_icon(path: str, mtime_ns: int, width: int) -> Text:
     """Кеширует чтение готового ассета"""
@@ -50,6 +57,7 @@ class EndingRow(ListItem):
         self.unlocked = False
         self.icon_error = None
         self._icon_signature = None
+        self.strings: dict[str, str] = {}
 
     def compose(self):
         yield Static("", classes="ending-icon")
@@ -60,13 +68,20 @@ class EndingRow(ListItem):
                 yield Label("Не открыта", classes="ending-status")
                 yield Label("", classes="ending-date hidden")
 
-    def update_progress(self, state, dates=None):
+    def update_progress(self, state, dates=None, strings=None):
+        self.strings = strings or {}
         self.unlocked = state.get(self.ending.flag) is True
         self.set_class(self.unlocked, "ending-unlocked")
-        self.query_one(".ending-status", Label).update("Открыта" if self.unlocked else "Не открыта")
+        route, title = ending_labels(self.ending, self.strings)
+        self.query_one(".ending-route", Label).update(route)
+        self.query_one(".ending-title", Label).update(title)
+        status = (self.strings.get("status.unlocked", "Открыта") if self.unlocked
+                  else self.strings.get("status.locked", "Не открыта"))
+        self.query_one(".ending-status", Label).update(status)
         date = self.query_one(".ending-date", Label)
         date.set_class(not self.unlocked, "hidden")
-        date.update(format_ending_date((dates or {}).get(self.ending.flag)) if self.unlocked else "")
+        date.update(format_ending_date((dates or {}).get(self.ending.flag), self.strings)
+                    if self.unlocked else "")
         self.update_icon()
 
     def on_resize(self):
@@ -94,7 +109,7 @@ class EndingRow(ListItem):
         except (OSError, ValueError) as exc:
             self._icon_signature = None
             self.icon_error = str(exc)
-            icon.update(Text("Нет иконки", style="dim"))
+            icon.update(Text(self.strings.get("icon.missing", "Нет иконки"), style="dim"))
 
 
 class EndingsMenu(Vertical):
@@ -104,6 +119,7 @@ class EndingsMenu(Vertical):
         super().__init__(**kwargs)
         self.endings = ()
         self.catalog_error = None
+        self.strings: dict[str, str] = {}
 
     def compose(self):
         with Horizontal(id="endings-toolbar"):
@@ -117,19 +133,35 @@ class EndingsMenu(Vertical):
             self.endings = load_endings_catalog()
         except ValueError as exc:
             self.catalog_error = str(exc)
-            self.query_one("#endings-error", Static).update(Text(self.catalog_error))
+            self.update_catalog_error()
             self.query_one("#endings-error").remove_class("hidden")
         listing = self.query_one(EndingsList)
         await listing.extend(EndingRow(ending) for ending in self.endings)
         listing.index = 0 if self.endings else None
         self.refresh_progress()
 
+    def apply_language(self, strings: dict[str, str]) -> None:
+        self.strings = strings
+        self.border_title = strings.get("menu.title", self.BORDER_TITLE)
+        self.query_one("#btn-close-endings", Button).label = strings.get("menu.back", "Назад")
+        if self.catalog_error is not None:
+            self.update_catalog_error()
+        self.refresh_progress()
+
+    def update_catalog_error(self) -> None:
+        self.query_one("#endings-error", Static).update(
+            Text(self.strings.get("menu.error", self.catalog_error))
+        )
+
     def refresh_progress(self):
         state = get_persistent_state()
         opened = sum(state.get(ending.flag) is True for ending in self.endings)
-        self.query_one("#endings-progress", Label).update(f"Открыто: {opened}/{len(self.endings)}")
+        progress = self.strings.get("menu.progress", "Открыто: {opened}/{total}")
+        self.query_one("#endings-progress", Label).update(
+            progress.replace("{opened}", str(opened)).replace("{total}", str(len(self.endings)))
+        )
         for row in self.query(EndingRow):
-            row.update_progress(state, self.app.ending_dates)
+            row.update_progress(state, self.app.ending_dates, self.strings)
 
     def on_list_view_selected(self, event: ListView.Selected):
         event.stop()  # Enter/клик только выделяют строку, не запускают сценарий.
@@ -147,26 +179,30 @@ class EndingResult(ModalScreen):
         Binding("space", "ignore", show=False, priority=True),
     ]
 
-    def __init__(self, ending, *, newly_unlocked: bool, date: str | None):
+    def __init__(self, ending, *, newly_unlocked: bool, date: str | None,
+                 strings: dict[str, str] | None = None):
         super().__init__(id="ending-result")
         self.ending = ending
         self.newly_unlocked = newly_unlocked
         self.date = date
+        self.strings = strings or {}
         self.icon_error = None
         self._sound_played = False
         self._ending_icon = Static("", id="ending-result-icon")
-        self._menu_button = Button("В главное меню", id="btn-ending-menu")
+        self._menu_button = Button(self.strings.get("result.back", "В главное меню"), id="btn-ending-menu")
 
     def compose(self):
+        route, title = ending_labels(self.ending, self.strings)
+        status = (self.strings.get("status.new", "Впервые открыта") if self.newly_unlocked
+                  else self.strings.get("status.previously_unlocked", "Уже открыта"))
         with Vertical(id="ending-result-panel"):
-            yield Label("Игра окончена", id="ending-result-heading")
+            yield Label(self.strings.get("result.heading", "Игра окончена"), id="ending-result-heading")
             with VerticalScroll(id="ending-result-content"):
                 yield self._ending_icon
-                yield Label(Text(self.ending.ending), id="ending-result-route")
-                yield Label(Text(self.ending.title), id="ending-result-title")
-                yield Label("Впервые открыта" if self.newly_unlocked else "Уже открыта",
-                            id="ending-result-status")
-                yield Label(format_ending_date(self.date), id="ending-result-date")
+                yield Label(route, id="ending-result-route")
+                yield Label(title, id="ending-result-title")
+                yield Label(status, id="ending-result-status")
+                yield Label(format_ending_date(self.date, self.strings), id="ending-result-date")
             with Horizontal(id="ending-result-actions"):
                 yield self._menu_button
 
@@ -192,7 +228,7 @@ class EndingResult(ModalScreen):
             self.icon_error = None
         except (OSError, ValueError) as exc:
             self.icon_error = str(exc)
-            icon.update(Text("Нет иконки", style="dim"))
+            icon.update(Text(self.strings.get("icon.missing", "Нет иконки"), style="dim"))
 
     def play_completion_sound(self):
         if self.is_mounted and self.app.screen is self and not self._sound_played:
