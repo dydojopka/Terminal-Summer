@@ -957,3 +957,28 @@ CardSlot.last-card { margin-right: 0; }
     #card-portrait { height: 3; }
     #card-legend { height: 4; margin-top: 0; }
 }
+.card-demo-screen {
+    align: left top;
+    background: #202622;
+    #card-story-scene { height: 1fr; width: 100%; content-align: center middle; }
+    NovelMenu { height: 6; margin-bottom: 1; }
+    NovelMenu .novel-control { width: 17; }
+    NovelMenu #btn-log { margin-left: 0; margin-bottom: 0; height: 4; }
+    NovelMenu #btn-next { margin-right: 0; margin-bottom: 0; height: 4; }
+    TextBar { background: #202622; }
+}
+DemoDialog {
+    align: center middle;
+    background: #101410 80%;
+    #card-demo-dialog {
+        width: 76;
+        max-width: 96%;
+        height: 90%;
+        padding: 1 2;
+        border: round #dcd168;
+        background: #202622;
+    }
+    #card-demo-dialog-title { height: 2; text-style: bold; color: #dcd168; }
+    VerticalScroll { height: 1fr; }
+    Button { height: 3; width: 100%; }
+}
