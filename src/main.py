@@ -151,7 +151,8 @@ from story.parser import ScriptParser, format_script_state, TIMES_OF_DAY
 from story.locale import load_interface_locale
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from music_room import MusicRoom
-from camp_map import CampMap, map_choice_zones, map_render_width
+from story.map_choices import map_choice_zones
+from ui.novel.camp_map import CampMap, map_render_width
 from cards.game import CardGame, Phase
 from cards.session import CardSession
 from cards.table import CardTable
@@ -162,7 +163,7 @@ from credits import CREDIT_PAGES, CreditsTimeline
 from ending_progress import (
     ending_unlock_time, normalize_ending_dates, split_persistent_progress, merge_ending_dates,
 )
-from sprites_builder import (
+from rendering.sprites import (
     parse_show_like,
     load_yaml_dict as load_sprite_resources_yaml,
     resolve_sprite,

@@ -3,7 +3,7 @@
 from pathlib import Path
 import re
 
-from sprites_builder import load_yaml_dict, parse_show_like, resolve_sprite
+from rendering.sprites import load_yaml_dict, parse_show_like, resolve_sprite
 
 RELEASE_SCRIPTS = (
     "prologue.txt", *(f"day{day}.txt" for day in range(1, 8)),

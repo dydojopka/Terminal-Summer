@@ -9,7 +9,7 @@ from rich.text import Text
 
 from art_renderer import render_art
 from story.resources import find_scene_path
-from sprites_builder import SPRITE_POSITIONS, compose_layers, load_yaml_dict, parse_show_like, resolve_sprite
+from rendering.sprites import SPRITE_POSITIONS, compose_layers, load_yaml_dict, parse_show_like, resolve_sprite
 
 
 @dataclass(frozen=True)

@@ -27,7 +27,7 @@ from story.parser import (
     apply_script_assignment,
     parse_script_assignment,
 )
-from sprites_builder import load_yaml_dict, parse_show_like, resolve_sprite
+from rendering.sprites import load_yaml_dict, parse_show_like, resolve_sprite
 from story.conditions import evaluate_script_condition, parse_script_condition
 from story.resources import RELEASE_SCRIPTS, find_scene_path, visual_asset_problems
 from story.structure import read_block_range, structure_errors

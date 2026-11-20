@@ -4,7 +4,7 @@ import re
 from rich.errors import MarkupError
 from rich.text import Text
 
-from sprites_builder import parse_show_like, normalize_sprite_position, SPRITE_SIZES
+from rendering.sprites import parse_show_like, normalize_sprite_position, SPRITE_SIZES
 from story.parser import TIMES_OF_DAY
 
 

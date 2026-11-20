@@ -33,7 +33,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import main as game
 from story.parser import ScriptParser, get_script_state, set_script_state
-from sprites_builder import parse_show_like
+from rendering.sprites import parse_show_like
 
 
 OUTPUT = ROOT / ".github/readme"

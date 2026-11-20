@@ -22,7 +22,7 @@ from story.locale import SPEAKER_KEYS
 from story.parser import DISPLAY_NAMES
 from story.resources import RELEASE_SCRIPTS
 from story.structure import read_block_range
-from camp_map import map_choice_zones
+from story.map_choices import map_choice_zones
 from endings_catalog import load_endings_catalog
 
 
