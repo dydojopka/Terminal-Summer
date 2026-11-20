@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Воспроизводимые PNG для README из ANSI-логотипа и настоящего Textual UI.
+"""Воспроизводимые PNG для README: ANSI-логотип и Textual UI на английском.
 
 Из корня: .venv/bin/python scripts/render_readme_assets.py
 Нужны игровые изображения/YAML и установленные шрифты Hack (4 начертания).
@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from contextlib import suppress
 from dataclasses import dataclass
 import io
 import json
@@ -50,39 +49,36 @@ class PreviewCase:
     filename: str
     dialogue: str
     commands: tuple[str, ...]
-
-    @property
-    def visible_text(self) -> str:
-        return self.dialogue.split('"', 1)[1].rsplit('"', 1)[0].split("<w>", 1)[0]
+    time_of_day: str = "day"
+    speaker: str = ""
 
 
 CASES = (
     PreviewCase(1, "prologue.txt",
                 '"Я никогда не любил зиму.<w> Впрочем, и жаркое лето – тоже не моя стихия."',
-                ("scene bg bus_stop with esfade",)),
+                ("scene bg bus_stop with esfade",), time_of_day="prologue"),
     PreviewCase(2, "day7.txt",
                 '"Через некоторое время все разместились в автобусе.<w> Я сел на последнее сиденье вместе с Ульянкой."',
                 ("scene bg int_bus_people_day with dissolve2",)),
     PreviewCase(3, "epilogue_uv.txt",
                 '"На меня смотрел облупившийся от старости потолок, большая продольная трещина разделяла его надвое, грозясь обрушить все верхние этажи."',
-                ("scene bg semen_room with esfade2",)),
+                ("scene bg semen_room with esfade2",), time_of_day="prologue"),
     PreviewCase(4, "day4.txt",
                 '"У меня мурашки побежали по спине."',
-                ("scene bg ext_old_building_night_moonlight with dissolve2",)),
+                ("scene bg ext_old_building_night_moonlight with dissolve2",), time_of_day="night"),
     PreviewCase(5, "day5.txt", 'un "Но корзинки-то только две."',
                 ("scene bg ext_island_day with dissolve",
-                 "show un normal_pioneer size normal at cleft",
-                 "show sl normal_pioneer size normal at cright",
-                 "show un surprise_pioneer size normal at cleft with dspr")),
+                  "show un normal_pioneer size normal at cleft",
+                  "show sl normal_pioneer size normal at cright",
+                  "show un surprise_pioneer size normal at cleft with dspr"), speaker="Lena"),
     PreviewCase(6, "day2.txt",
                 '"Не удавалось вспомнить ни одного революционера с похожей фамилией."',
                 ("scene cg d2_lineup with dissolve",)),
 )
 
 
-def validate_case(case: PreviewCase, ts_path: Path) -> int:
+def case_position(case: PreviewCase, parser: ScriptParser) -> int:
     """Не угадывать кадр, если сценарий или прямолинейный вход изменились."""
-    parser = ScriptParser(ts_path / "text" / case.filename, None)
     matches = [pc for pc, line in enumerate(parser.lines) if line == case.dialogue]
     if len(matches) != 1:
         raise ValueError(f"Кадр {case.number}: реплика должна встречаться ровно один раз")
@@ -99,7 +95,12 @@ def validate_case(case: PreviewCase, ts_path: Path) -> int:
     commands = tuple(line for line in block if line.startswith(("scene ", "show ", "hide ")))
     if commands != case.commands:
         raise ValueError(f"Кадр {case.number}: изменились визуальные команды: {commands!r}")
-    return parser.source_line_numbers[pc]
+    return pc
+
+
+def validate_case(case: PreviewCase, ts_path: Path) -> int:
+    parser = ScriptParser(ts_path / "text" / case.filename, None)
+    return parser.source_line_numbers[case_position(case, parser)]
 
 
 class CellRasterizer:
@@ -217,7 +218,7 @@ def render_logo(rasterizer: CellRasterizer) -> Image.Image:
     return result
 
 
-def assert_frame(app: TerminalSummer, case: PreviewCase) -> None:
+def assert_frame(app: TerminalSummer, case: PreviewCase, translated: str) -> None:
     snapshot = app._capture_scene_snapshot()
     category, name = case.commands[0].split()[1:3]
     if (snapshot.category, snapshot.name) != (category, name):
@@ -238,7 +239,8 @@ def assert_frame(app: TerminalSummer, case: PreviewCase) -> None:
     if widget.size.width < 150 or widget.size.height < len(art.plain.splitlines()):
         raise ValueError("Арт не помещается в окно")
     bar = app.query_one("#text-bar")
-    if bar.text != case.visible_text or bar.border_title != ("Лена" if case.number == 5 else ""):
+    expected_text = " ".join(part.strip() for part in translated.split("<w>") if part.strip())
+    if Text.from_markup(bar.text).plain != expected_text or bar.border_title != case.speaker:
         raise ValueError(f"Кадр {case.number}: неверная реплика или говорящий: {bar.text!r}")
     if bar.max_scroll_y:
         raise ValueError("Реплика не помещается в текстовую панель")
@@ -252,16 +254,15 @@ async def capture_case(case: PreviewCase, style: str, rasterizer: CellRasterizer
         # Только визуальные команды и точная реплика из текущего сценария.
         # Маршрут, аудио, достижения и сохранения здесь не исполняются.
         source = folder / "preview.txt"
-        source.write_text("\n".join((*case.commands, case.dialogue)) + "\n", encoding="utf-8")
+        source.write_text("\n".join((f"time {case.time_of_day}", *case.commands, case.dialogue)) + "\n",
+                          encoding="utf-8")
         config = folder / "settings.json"
-        config.write_text(json.dumps({"quality": "150", "style": style, "text_speed": "0"}))
-        at_wait = asyncio.Event()
+        config.write_text(json.dumps({"quality": "150", "style": style, "text_speed": "0", "language": "en"}),
+                          encoding="utf-8")
 
-        async def hold_wait(seconds, kind, **kwargs):
+        async def skip_dialogue_wait(seconds, kind, **kwargs):
             if kind != "w":
                 raise ValueError(f"Неожиданная пауза: {kind}")
-            at_wait.set()
-            await asyncio.Future()
 
         app = TerminalSummer()
         app.CONFIG_FILE = config
@@ -270,40 +271,28 @@ async def capture_case(case: PreviewCase, style: str, rasterizer: CellRasterizer
         try:
             with patch.object(saves, "SAVES_PATH", folder / "saves"), \
                     patch.object(app, "start_menu_music"), \
-                    patch.object(app, "wait_script_delay", side_effect=hold_wait):
+                    patch.object(app, "wait_script_delay", side_effect=skip_dialogue_wait):
                 async with app.run_test(size=TERMINAL_SIZE) as pilot:
+                    chapter = ScriptParser(app.ts_path / "text" / case.filename, app)
+                    translated = chapter.translations.get(case_position(case, chapter))
+                    if not translated:
+                        raise ValueError(f"Кадр {case.number}: нет актуального английского перевода")
                     app.query_one("#main-menu").add_class("hidden")
-                    for selector in ("#novel-menu", "#novel-window", "Footer"):
-                        app.query_one(selector).remove_class("hidden")
+                    app.query_one("#novel-window").remove_class("hidden")
+                    app.set_novel_menu_visible(True)
                     app.script = ScriptParser(source, app)
-                    task = asyncio.create_task(app.script.next_line())
-                    try:
-                        if "<w>" in case.dialogue:
-                            waiter = asyncio.create_task(at_wait.wait())
-                            try:
-                                done, _ = await asyncio.wait(
-                                    (task, waiter), timeout=30, return_when=asyncio.FIRST_COMPLETED)
-                                if task in done:
-                                    task.result()
-                                    raise ValueError("Не достигнута пауза <w>")
-                                if waiter not in done:
-                                    raise TimeoutError("Не достигнута пауза <w> за 30 секунд")
-                            finally:
-                                waiter.cancel()
-                                with suppress(asyncio.CancelledError):
-                                    await waiter
-                        else:
-                            await asyncio.wait_for(asyncio.shield(task), timeout=30)
-                        app.query_one("#btn-next").focus()
-                        await pilot.pause()
-                        assert_frame(app, case)
-                        # Уже скомпонованные Textual ячейки, не макет похожего UI.
-                        rows = app.screen._compositor.render_strips()
-                        return rasterizer.render(rows, TERMINAL_SIZE)
-                    finally:
-                        task.cancel()
-                        with suppress(asyncio.CancelledError):
-                            await task
+                    # Сокращённый сценарий имеет другой хеш и позицию реплики.
+                    app.script.translations[len(app.script.lines) - 1] = translated
+                    await asyncio.wait_for(app.script.next_line(), timeout=30)
+                    app.query_one("#btn-next").focus()
+                    await pilot.pause()
+                    assert_frame(app, case, translated)
+                    # Уже скомпонованные Textual ячейки, не макет похожего UI.
+                    rows = app.screen._compositor.render_strips()
+                    controls = "\n".join(row.text for row in rows[-6:])
+                    if not all(label in controls for label in ("Continue", "History", "Pause", "Hide UI")):
+                        raise ValueError(f"Кадр {case.number}: не видны английские подписи интерфейса")
+                    return rasterizer.render(rows, TERMINAL_SIZE)
         finally:
             app._renderer.clear()
             app.audio.close()
@@ -334,7 +323,7 @@ async def generate(output: Path, originals: Path, cases: tuple[PreviewCase, ...]
             dst = target / src.name
             if src.resolve() != dst.resolve():
                 shutil.copyfile(src, dst)
-            print(f"OK {case.number}: {case.filename}:{locations[case.number]} — {case.visible_text}")
+            print(f"OK {case.number}: {case.filename}:{locations[case.number]} (EN)", flush=True)
     finally:
         set_script_state(previous_state)
 
