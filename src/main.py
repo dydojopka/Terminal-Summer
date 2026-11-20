@@ -184,6 +184,7 @@ from rich.text import Text
 from rich.cells import cell_len
 
 from script_parser import ScriptParser, format_script_state, TIMES_OF_DAY
+from script_locale import load_interface_locale
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from music_room import MusicRoom
 from camp_map import CampMap, map_choice_zones, map_render_width
@@ -369,10 +370,15 @@ class PerformanceScreen(Screen):
         return super().get_style_at(x, y)
 
 
+LANGUAGE_NAMES = {"ru": "Русский", "en": "English"}
+
+
 class MainMenu(Static):
     """Виджет главного меню"""
     BORDER_TITLE="Главное меню"
     def compose(self):
+        with HorizontalGroup(id="main-language-bar"):
+            yield Button("RU", id="btn-language-menu", tooltip="Язык / Language")
         yield MainMenuBrand(classes="mouse-passive-art")
         yield MainMenuMiddleBtns()
         yield MainMenuBottomBtns()
@@ -435,7 +441,7 @@ class MainMenuStartBtn(Vertical):
         'Ты — на пороге удивительных открытий.\n' \
         '   Перед тобой распахнулись двери самого прекрасного места в мире — ' \
         'нашего любимого лагеря "Совёнок". Эта смена запомнится тебе на всю жизнь.\n' \
-        'Добро пожаловать!')
+        'Добро пожаловать!', id="main-start-description")
 
 class MainMenuLoadBtn(Vertical):
     """Виджет для кнопки "Соханение" с описанием"""
@@ -445,7 +451,7 @@ class MainMenuLoadBtn(Vertical):
         'свои наблюдения и мысли о прошедших днях.\nПри помощи сохранений ты всегда ' \
         'сможешь вернуться назад к пройденному эпизоду и осмыслить его заново. ' \
         'Удачи тебе в твоих начинаниях!\n' \
-        '   Если что-то пойдёт не так, ты знаешь, что делать')
+        '   Если что-то пойдёт не так, ты знаешь, что делать', id="main-load-description")
 
 class MainMenuGalleryBtn(Vertical):
     """Виджет для кнопки "Галерея" с описанием"""
@@ -454,7 +460,7 @@ class MainMenuGalleryBtn(Vertical):
         yield Label('   Здесь представлены работы участников нашего фотокружка. ' \
         'Твои товарищи всегда готовы запечатлеть важные моменты из жизни лагеря, ' \
         'а на многих снимках ты сможешь встретить и себя. Будь опрятен и своим ' \
-        'поведением подавай пример окружающим.')
+        'поведением подавай пример окружающим.', id="main-gallery-description")
 
 
 class GalleryMenu(HorizontalGroup):
@@ -661,6 +667,35 @@ class SaveMenu(HorizontalGroup):
         yield SaveMenuMidBtns()
 
 
+
+class LanguageDialog(ModalScreen[str | None]):
+    BINDINGS = [Binding("escape", "cancel", show=False)]
+
+    def __init__(self, active: str):
+        super().__init__()
+        self.active = active
+
+    def compose(self):
+        with Vertical(id="language-panel"):
+            yield Label("Язык / Language", id="language-dialog-title")
+            with HorizontalGroup():
+                for code, name in LANGUAGE_NAMES.items():
+                    yield Button(name, id=f"quick-language-{code}",
+                                 variant="success" if code == self.active else "default")
+                yield Button("×", id="quick-language-cancel", tooltip="Отмена / Cancel")
+
+    def on_mount(self) -> None:
+        self.query_one(f"#quick-language-{self.active}", Button).focus()
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        code = (event.button.id or "").removeprefix("quick-language-")
+        self.dismiss(code if code in LANGUAGE_NAMES else None)
+
+
 class OutdatedSaveDialog(ModalScreen):
     BINDINGS = [("escape", "keep", "Оставить")]
 
@@ -707,15 +742,44 @@ class PauseMenuContainer(VerticalScroll):
 class SettingsMenu(VerticalScroll):
     """Виджет меню настроек"""
     BORDER_TITLE = "Настройки"
+    PANEL_IDS = ("settings-menu", "setting-language", "setting-header", "setting-quality",
+                 "setting-art-style", "setting-scene-filters", "setting-text-speed", "setting-audio")
+    BUTTON_IDS = ("btn-header-on", "btn-header-off", "btn-header-lp-points", "btn-header-flags",
+                  "btn-small", "btn-medium", "btn-large", "btn-ASCII", "btn-COLOR-ASCII",
+                  "btn-scene-filters-on", "btn-scene-filters-off", "btn-speed-slow",
+                  "btn-speed-medium", "btn-speed-fast", "btn-speed-instantly", "btn-audio-mute",
+                  "btn-close-settings")
+    COPY_IDS = ("setting-language-description", "header-content-label", "setting-header-description",
+                "setting-quality-description", "setting-art-style-description",
+                "setting-scene-filters-description", "setting-text-speed-description",
+                "audio-master-title", "audio-music-title", "audio-environment-title", "audio-effects-title")
 
     def compose(self):
-        yield SettingHeader(classes="setting-with-description")
-        yield SettingQuality(classes="setting-with-description")
-        yield SettingASCIIorANSI(classes="setting-with-description")
-        yield SettingSceneFilters(classes="setting-with-description")
-        yield SettingTextSpeed(classes="setting-with-description")
-        yield SettingAudio()
+        yield SettingLanguage(id="setting-language", classes="setting-with-description hidden")
+        yield SettingHeader(id="setting-header", classes="setting-with-description")
+        yield SettingQuality(id="setting-quality", classes="setting-with-description")
+        yield SettingASCIIorANSI(id="setting-art-style", classes="setting-with-description")
+        yield SettingSceneFilters(id="setting-scene-filters", classes="setting-with-description")
+        yield SettingTextSpeed(id="setting-text-speed", classes="setting-with-description")
+        yield SettingAudio(id="setting-audio")
         yield Button("Назад", id="btn-close-settings")
+
+    def apply_language(self, strings: dict[str, str]) -> None:
+        panels = {key: self if key == self.id else self.query_one(f"#{key}") for key in self.PANEL_IDS}
+        buttons = {key: self.query_one(f"#{key}", Button) for key in self.BUTTON_IDS}
+        copy = {key: self.query_one(f"#{key}", Static) for key in self.COPY_IDS}
+        if not hasattr(self, "_russian_copy"):
+            self._russian_copy = {
+                **{key: panel.border_title for key, panel in panels.items()},
+                **{key: button.label for key, button in buttons.items()},
+                **{key: widget.content for key, widget in copy.items()},
+            }
+        for key, panel in panels.items():
+            panel.border_title = strings.get(key, self._russian_copy[key])
+        for key, button in buttons.items():
+            button.label = strings.get(key, self._russian_copy[key])
+        for key, widget in copy.items():
+            widget.update(strings.get(key, self._russian_copy[key]))
 
     def on_key(self, event: events.Key) -> None:
         focused = self.screen.focused
@@ -738,6 +802,17 @@ class SettingsMenu(VerticalScroll):
             # иначе правая кнопка перескакивает блоки с одной левой колонкой.
             min(candidates, key=lambda item: item[:2])[2].focus()
 
+
+class SettingLanguage(HorizontalGroup):
+    BORDER_TITLE = "Язык"
+
+    def compose(self):
+        with HorizontalGroup(id="language-controls", classes="setting-controls setting-controls-wide"):
+            for code, name in LANGUAGE_NAMES.items():
+                yield Button(name, id=f"btn-language-{code}")
+        yield Label("Язык сюжета и меню.", id="setting-language-description", classes="setting-description")
+
+
 class SettingAudio(Vertical):
     """Независимые пользовательские уровни, не сценарные volume-команды."""
     BORDER_TITLE = "Звук"
@@ -747,7 +822,7 @@ class SettingAudio(Vertical):
     def compose(self):
         for group, title in self.GROUPS.items():
             with HorizontalGroup(classes="audio-setting-row"):
-                yield Label(title, classes="audio-setting-title")
+                yield Label(title, id=f"audio-{group}-title", classes="audio-setting-title")
                 yield Button("−10%", id=f"btn-audio-{group}-minus")
                 yield Label("", id=f"audio-{group}-level", classes="audio-setting-level")
                 yield Button("+10%", id=f"btn-audio-{group}-plus")
@@ -765,12 +840,19 @@ class SettingHeader(HorizontalGroup):
             with HorizontalGroup(classes="header-setting-row"):
                 yield Button("LP-поинты", id="btn-header-lp-points")
                 yield Button("Флаги", id="btn-header-flags")
-        yield DescriptionSettingHeader(classes="setting-description")
+        yield DescriptionSettingHeader(id="setting-header-description", classes="setting-description")
 
-class DescriptionSettingHeader(Widget):
+
+class SettingDescription(Static):
+    TEXT = ""
+
+    def __init__(self, **kwargs):
+        super().__init__(self.TEXT, markup=False, **kwargs)
+
+
+class DescriptionSettingHeader(SettingDescription):
     """Описание настройки 'Верхняя панель(Header)'"""
-    def render(self):
-        return """Верхняя панель будет отображать:
+    TEXT = """Верхняя панель будет отображать:
 название программы, выбранные группы переменных и системное время.\n
 LP-поинты и флаги можно включать независимо.
 (может слегка уменьшить обзор)"""
@@ -783,12 +865,11 @@ class SettingQuality(HorizontalGroup):
             yield Button("маленький\n(50)", variant="default", id="btn-small")
             yield Button("Средний\n(150)", variant="default", id="btn-medium")
             yield Button("ОГРОМНЫЙ\n(200)", variant="default", id="btn-large")
-        yield DescriptionSettingQuality(classes="setting-description")
+        yield DescriptionSettingQuality(id="setting-quality-description", classes="setting-description")
 
-class DescriptionSettingQuality(Widget):
+class DescriptionSettingQuality(SettingDescription):
     """Описание настройки 'Размер ANSI/ASCII артов'"""
-    def render(self):
-        return """Размер артов лучше подбирать по размеру окна консоли,
+    TEXT = """Размер артов лучше подбирать по размеру окна консоли,
 с сильно большим размером изображение может не поместиться.\n 
 Можно так же попробовать уменьшить размер шрифта самой консоли 
 (Обычно это Ctrl+"+" и Ctrl+"-")"""
@@ -807,12 +888,11 @@ class SettingASCIIorANSI(HorizontalGroup):
             yield Button("ANSI", variant="default", id="btn-ANSI")
             yield Button("ЧБ ASCII", variant="default", id="btn-ASCII")
             yield Button("Цветной ASCII", variant="default", id="btn-COLOR-ASCII")
-        yield DescriptionSettingASCIIorANSI(classes="setting-description")
+        yield DescriptionSettingASCIIorANSI(id="setting-art-style-description", classes="setting-description")
 
-class DescriptionSettingASCIIorANSI(Widget):
+class DescriptionSettingASCIIorANSI(SettingDescription):
     """Описание настройки 'Стиль артов'"""
-    def render(self):
-        return """ANSI — цветные блоки
+    TEXT = """ANSI — цветные блоки
 ЧБ ASCII — одноцветные символы .,:+*?%@
 Цветной ASCII — те же символы в цветах изображения"""
 
@@ -831,6 +911,7 @@ class SettingSceneFilters(HorizontalGroup):
         yield Static(
             "В ASCII фильтры можно отключить для лучшей различимости изображения. "
             "Персонажи и их тонировка сохраняются.",
+            id="setting-scene-filters-description",
             classes="setting-description scene-filter-description",
         )
 
@@ -844,12 +925,11 @@ class SettingTextSpeed(HorizontalGroup):
             yield Button("Средне", variant="default", id="btn-speed-medium")
             yield Button("Быстро", variant="default", id="btn-speed-fast")
             yield Button("Моментально", variant="default", id="btn-speed-instantly")
-        yield DescriptionSettingTextSpeed(classes="setting-description")
+        yield DescriptionSettingTextSpeed(id="setting-text-speed-description", classes="setting-description")
 
-class DescriptionSettingTextSpeed(Widget):
+class DescriptionSettingTextSpeed(SettingDescription):
     """Описание настройки 'Скорость текста'"""
-    def render(self):
-        return """Скорость появления текста в текстовом окне.\n
+    TEXT = """Скорость появления текста в текстовом окне.\n
 Медленно    - 0.04
 Средне      - 0.025
 Быстро      - 0.01
@@ -1076,6 +1156,7 @@ class TerminalSummer(App):
     PERSISTENT_FILE = PERSISTENT_PATH
 
     DEFAULT_SETTINGS = {
+        "language": "ru",
         "header": False,
         "header_lp_points": True,
         "header_flags": True,
@@ -1094,6 +1175,8 @@ class TerminalSummer(App):
 
         self.ts_path = get_ts_path()
         self.bundled_text_path = get_resource_path("TS/text") if IS_FROZEN else None
+        self.interface_locale: dict[str, str] = {}
+        self._russian_main_labels = None
         self.audio = AudioManager(self.ts_path)
         self._menu_music_active = False
         self.ending_dates = {}
@@ -1492,6 +1575,10 @@ class TerminalSummer(App):
             self.app.exit()
 
         # Кнопки в SettingsMenu:
+        elif button_id in ("btn-language-ru", "btn-language-en"):
+            if self.query_one("#settings-menu").has_class("open-from-menu"):
+                self.set_language(button_id.rsplit("-", 1)[1])
+
         # Header
         elif button_id == "btn-header-on":        # Кнопка "Включить"
             # Включаем заголовок
@@ -1671,6 +1758,8 @@ class TerminalSummer(App):
             self.action_open_gallery()
         elif button_id in {"btn-achievements", "btn-close-endings"}:
             self.action_open_endings()
+        elif button_id == "btn-language-menu":
+            self.push_screen(LanguageDialog(self.settings["language"]), self.set_language)
         elif button_id == "btn-settings-menu":    # Кнопка "Настройки"
             self.query_one("#settings-menu").remove_class("open-from-pause")
             self.query_one("#settings-menu").add_class("open-from-menu") # Класс-флаг что настройки открыты из MainMenu
@@ -2126,10 +2215,14 @@ class TerminalSummer(App):
                 main_menu.add_class("hidden")
 
             # Показ меню настроек
+            self.query_one("#setting-language").set_class(
+                not settings_menu.has_class("open-from-menu"), "hidden",
+            )
             settings_menu.remove_class("hidden")
 
-            # Устанавливаем фокус на первую кнопку в меню настроек
-            self.query_one("#btn-header-on", Button).focus()
+            first_button = (f"#btn-language-{self.settings['language']}"
+                            if settings_menu.has_class("open-from-menu") else "#btn-header-on")
+            self.query_one(first_button, Button).focus()
         else:
             # Cкрытие меню настроек
             settings_menu.add_class("hidden")
@@ -3544,6 +3637,8 @@ class TerminalSummer(App):
             if not isinstance(loaded, dict):
                 raise ValueError("Настройки должны быть JSON-объектом")
             self.settings = {**self.DEFAULT_SETTINGS, **loaded}
+            if self.settings["language"] not in ("ru", "en"):
+                self.settings["language"] = "ru"
             for key in ("header", "header_lp_points", "header_flags", "scene_filters_enabled"):
                 if type(self.settings[key]) is not bool:
                     raise ValueError(f"Некорректная настройка: {key}")
@@ -3600,6 +3695,7 @@ class TerminalSummer(App):
 
     def apply_settings(self):
         """Применение настроек при старте"""
+        self.apply_language()
         self.apply_audio_settings()
         # Header
         if self.settings["header"]:
@@ -3636,6 +3732,69 @@ class TerminalSummer(App):
             self.query_one("#btn-speed-fast", Button).variant = "success"
         elif text_speed == "0":
             self.query_one("#btn-speed-instantly", Button).variant = "primary"
+
+    def set_language(self, language: str | None) -> None:
+        if language is None or language not in LANGUAGE_NAMES or language == self.settings["language"]:
+            return
+        self.settings["language"] = language
+        self.apply_language()
+        self.save_settings()
+
+    def apply_language(self) -> None:
+        language = self.settings["language"]
+        roots = [self.ts_path / "text"]
+        if self.bundled_text_path is not None:
+            roots.append(self.bundled_text_path)
+        self.interface_locale = load_interface_locale(language, *roots)
+        announcements = load_interface_locale(language, *roots, filename="main-menu.json")
+        settings_copy = load_interface_locale(language, *roots, filename="settings-menu.json")
+        self.query_one(SettingsMenu).apply_language(settings_copy)
+        self.apply_footer_language(load_interface_locale(language, *roots, filename="footer.json"))
+        self.query_one("#btn-language-menu", Button).label = language.upper()
+        for code in LANGUAGE_NAMES:
+            self.query_one(f"#btn-language-{code}", Button).variant = (
+                "success" if code == language else "default"
+            )
+
+        # Menus already exist by on_mount. Keep the Russian labels for a round trip.
+        buttons = {
+            "btn-start-game": "Start game", "btn-save-load": "Load game", "btn-gallery": "Gallery",
+            "btn-achievements": "Achievements", "btn-settings-menu": "Settings", "btn-exit-menu": "Quit",
+            "btn-next": "Continue", "btn-log": "History",
+            "btn-continue": "Continue", "btn-save": "Saves", "btn-settings-pause": "Settings",
+            "btn-menu": "Main menu", "btn-exit-pause": "Quit",
+        }
+        descriptions = ("main-start-description", "main-load-description", "main-gallery-description")
+        widgets = {key: self.query_one(f"#{key}", Button) for key in buttons}
+        labels = {key: self.query_one(f"#{key}", Label) for key in descriptions}
+        if self._russian_main_labels is None:
+            self._russian_main_labels = {
+                **{key: widget.label for key, widget in widgets.items()},
+                **{key: widget.content for key, widget in labels.items()},
+            }
+        for key, widget in widgets.items():
+            widget.label = buttons[key] if language == "en" else self._russian_main_labels[key]
+        for key, widget in labels.items():
+            widget.update(announcements.get(key, self._russian_main_labels[key]))
+        self.query_one(MainMenuMiddleBtns).border_title = announcements.get("information", "Информация")
+        self.query_one("#main-menu").border_title = "Main menu" if language == "en" else "Главное меню"
+
+    def apply_footer_language(self, strings: dict[str, str]) -> None:
+        # Keep Textual's active bindings, keyboard aliases and keymap behavior intact.
+        originals = {binding.id: binding.description for binding in self.BINDINGS}
+        bindings = self._bindings.key_to_bindings
+        changed = False
+        for key, entries in bindings.items():
+            updated = [
+                replace(binding, description=strings.get(binding.id, originals[binding.id]))
+                if binding.id in originals else binding
+                for binding in entries
+            ]
+            if updated != entries:
+                bindings[key] = updated
+                changed = True
+        if changed:
+            self.refresh_bindings()
 
     def apply_audio_settings(self) -> None:
         self.settings.update(normalize_audio_settings(self.settings))
