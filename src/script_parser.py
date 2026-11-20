@@ -917,7 +917,7 @@ class ScriptParser:
         choice_bar = self.app.query_one("#choice-bar")
         list_view = choice_bar.query_one(ListView)
 
-        await list_view.set_choices(options)
+        await choice_bar.set_choices(options, self)
 
         # сохранить варианты в app
         self.app.pending_choices = options
@@ -928,6 +928,8 @@ class ScriptParser:
         # Видимость текстового окна задаёт сценарий, выбор её не переопределяет.
         choice_bar.remove_class("hidden")
         self.app.sync_text_mode_display()
+        if choice_bar.has_class("map-mode"):
+            self.app.call_after_refresh(self.app.refresh_camp_map)
 
         # найти ListView и перевести на него фокус 
         if list_view.children:

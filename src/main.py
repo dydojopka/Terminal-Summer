@@ -186,6 +186,7 @@ from rich.cells import cell_len
 from script_parser import ScriptParser, format_script_state, TIMES_OF_DAY
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image
 from music_room import MusicRoom
+from camp_map import CampMap, map_choice_zones, map_render_width
 from card_game import CardGame, Phase
 from card_session import CardSession
 from card_table import CardTable
@@ -928,6 +929,13 @@ class NovelWindow(Widget):
         yield CardTable(CardGame(), ts_path=get_ts_path(), external_scenery=True,
                         id="card-table", classes="hidden")
         
+class ChoiceItem(ListItem):
+    def on_enter(self) -> None:
+        listing = self.parent
+        if isinstance(listing, ChoiceList) and listing.parent.has_class("map-mode"):
+            listing.index = listing.children.index(self)
+
+
 class ChoiceList(ListView):
     """Сюжетные ответы с быстрым выбором по номеру."""
     BINDINGS = [
@@ -935,7 +943,7 @@ class ChoiceList(ListView):
         Binding("shift+tab", "cycle_choice(-1)", show=False),
     ]
 
-    async def set_choices(self, options) -> None:
+    async def set_choices(self, options, *, on_map: bool = False) -> None:
         """Общие колонки номеров и центрированных подписей для всего меню."""
         captions = tuple(options)
         number_width = len(str(len(captions))) + 2
@@ -943,21 +951,30 @@ class ChoiceList(ListView):
             (cell_len(line) for caption in captions for line in caption.splitlines()),
             default=0,
         )
-        self.styles.width = caption_width + 2 * number_width
+        self.styles.width = "1fr" if on_map else caption_width + 2 * number_width
         rows = []
         for number, caption in enumerate(captions, start=1):
             number_label = Label(f"{number}.", classes="choice-number")
             number_label.styles.width = number_width
-            row = ListItem(
+            row = ChoiceItem(
                 number_label,
                 Center(Label(caption, markup=False, classes="choice-caption")),
                 name=caption,
             )
             # Правое поле уравновешивает номер, чтобы центр текста не смещался.
-            row.styles.padding = (0, number_width, 1, 0)
+            row.styles.padding = (0, 0 if on_map else number_width, 1, 0)
             rows.append(row)
         await self.clear()
         await self.extend(rows)
+
+    def on_resize(self) -> None:
+        if self.parent.has_class("map-mode"):
+            self.call_after_refresh(self._keep_map_choice_visible)
+
+    def _keep_map_choice_visible(self) -> None:
+        item = self.highlighted_child
+        if item is not None:
+            item.scroll_visible(animate=False)
 
     def action_cycle_choice(self, direction: int) -> None:
         if self.children:
@@ -980,7 +997,28 @@ class ChoiceList(ListView):
 class ChoiceBar(Widget):
     """Окно выбора"""
     def compose(self):
-        yield ChoiceList()
+        yield CampMap(id="camp-map", classes="hidden mouse-passive-art")
+        with Vertical(id="choice-options"):
+            yield ChoiceList()
+
+    async def set_choices(self, options, script: ScriptParser) -> None:
+        zones = map_choice_zones(script.filename, tuple(
+            script.lines[target.start:target.end] for target in options.values()
+        ))
+        on_map = bool(zones)
+        self.set_class(on_map, "map-mode")
+        self.query_one("#choice-options").set_class(on_map, "map-mode")
+        self.query_one(CampMap).set_class(not on_map, "hidden")
+        self.query_one(CampMap).set_zones(zones)
+        await self.query_one(ChoiceList).set_choices(options, on_map=on_map)
+
+    def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
+        if self.has_class("map-mode") and event.list_view is self.query_one(ChoiceList):
+            self.query_one(CampMap).preview(event.list_view.index)
+
+    def close(self) -> None:
+        self.add_class("hidden")
+        self.query_one(CampMap).set_zones(())
 
 
 class LogMenu(Log):
@@ -1812,6 +1850,32 @@ class TerminalSummer(App):
     def on_app_blur(self) -> None:
         self.stop_skipping()
 
+    async def on_camp_map_viewport_changed(self, event: CampMap.ViewportChanged) -> None:
+        event.stop()
+        await self.refresh_camp_map()
+
+    async def refresh_camp_map(self) -> None:
+        """Общий кэш сцен готовит фон; навигация меняет только рамку и номера."""
+        bar = self.query_one(ChoiceBar)
+        view = bar.query_one(CampMap)
+        if bar.has_class("hidden") or not view.zones or not bar.is_on_screen:
+            return
+        width = map_render_width(
+            view.content_size.width, view.content_size.height, int(self.settings["quality"])
+        )
+        if not width:
+            return
+        snapshot = replace(self._make_scene_snapshot("cg", "map", {}), width=width)
+        view.request_key = snapshot.key
+        if snapshot.key == view.art_key:
+            return
+        revision = view.revision
+        art = await self._get_render_async(snapshot)
+        if (self.is_running and not bar.has_class("hidden") and view.zones
+                and revision == view.revision and view.request_key == snapshot.key
+                and snapshot.cache_epoch == self._cache_epoch):
+            view.set_art(art, snapshot.key, snapshot.style)
+
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Обработка выбора из меню"""
         if self._terminal_too_small:
@@ -1835,7 +1899,7 @@ class TerminalSummer(App):
         self.pending_choices = None
 
         # Скрываем меню выбора и возвращаем видимость, подходящую текущему режиму.
-        choice_bar.add_class("hidden")
+        choice_bar.close()
         self.set_novel_menu_visible(True)
         self.sync_text_mode_display()
 
@@ -3625,6 +3689,7 @@ class TerminalSummer(App):
 
     async def update_current_scene_art(self):
         """Перерисовывает текущий арт при смене размера или стиля."""
+        await self.refresh_camp_map()
         if not hasattr(self, "current_scene") or not self.current_scene:
             return
         if not hasattr(self, "current_scene_category") or not self.current_scene_category:
@@ -3777,7 +3842,7 @@ class TerminalSummer(App):
         # Очистка pending_choices
         if hasattr(self, "pending_choices"):
             self.pending_choices = None
-        self.query_one("#choice-bar").add_class("hidden")
+        self.query_one(ChoiceBar).close()
 
         # Очистка истории диалогов
         self.clear_log()

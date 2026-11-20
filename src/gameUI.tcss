@@ -198,6 +198,39 @@ NovelWindow {
     }
 }
 
+# У карты отдельный вписанный кадр; обычные ответы остаются по центру.
+#choice-options {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    align: center middle;
+}
+NovelWindow ChoiceBar.map-mode {
+    layout: horizontal;
+    height: 100%;
+    margin: 0 1;
+    #camp-map {
+        width: 1fr;
+        height: 100%;
+        content-align: center middle;
+        text-wrap: nowrap;
+        overflow: hidden hidden;
+    }
+    #choice-options {
+        width: 32;
+        max-width: 40%;
+        height: 100%;
+        margin-left: 2;
+        align: left middle;
+    }
+    ListView {
+        height: 1fr;
+        align-vertical: middle;
+    }
+    Center { align-horizontal: left; }
+    .choice-caption { text-align: left; }
+}
+
 # Режим новеллы
 NovelMenu {
     layout: horizontal;
