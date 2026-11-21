@@ -26,3 +26,6 @@ pyinstaller-hooks-contrib==2026.7
 setuptools==84.0.0
 pefile==2024.8.26; sys_platform == "win32"
 pywin32-ctypes==0.2.3; sys_platform == "win32"
+
+# Измерение покрытия проверок.
+coverage==7.17.3

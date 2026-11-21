@@ -42,6 +42,53 @@ Screen {
     layers: base loading;
 }
 
+ScriptStateHeader HeaderIcon {
+    display: none;
+}
+
+# Палитра списков концовок и музыки, независимая от сюжетного времени.
+$console-text: #d8d5c8;
+$console-muted: #9d9687;
+$console-hover: #f3f0df;
+$console-accent: #e3b778;
+
+# Консольная прокрутка: одна ячейка, без отдельной фоновой дорожки.
+* {
+    scrollbar-size: 1 1;
+    scrollbar-color: #d8d5c8;
+    scrollbar-color-hover: #f3f0df;
+    scrollbar-color-active: #e3b778;
+    scrollbar-background: transparent;
+    scrollbar-background-hover: transparent;
+    scrollbar-background-active: transparent;
+}
+
+# Одна рамка вокруг всей кнопки; цвет рамки соответствует выделению подписи.
+ConsoleButton {
+    border: solid #77736a;
+    background: transparent;
+    color: #d8d5c8;
+    text-style: none;
+    background-tint: transparent;
+    tint: transparent;
+}
+ConsoleButton:hover {
+    border: solid #f3f0df;
+}
+ConsoleButton.-selected, ConsoleButton.-primary, ConsoleButton.-success,
+ConsoleButton.-warning, ConsoleButton.-error {
+    border: solid #e3b778;
+}
+ConsoleButton.danger {
+    border: solid #ce8578;
+}
+ConsoleButton:disabled {
+    border: solid #858278;
+    color: #858278;
+    opacity: 1;
+    text-opacity: 1;
+}
+
 TerminalSizeWarning { display: none; }
 .terminal-too-small {
     layers: base loading terminal-size;
@@ -72,9 +119,10 @@ TerminalSizeWarning { display: none; }
     layout: vertical;
     align: center middle;
 
-    LoadingIndicator {
+    #script-loading-indicator {
         height: 3;
         width: 34;
+        color: $console-accent;
     }
 
     Label {
@@ -103,16 +151,84 @@ NovelWindow {
         max-height: 100%;
         margin: 0 2;
 
-        ListView { height: auto; max-height: 100%; }
+        ListView {
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            padding: 0;
+            background: transparent;
+            background-tint: transparent;
+        }
 
-        # Элементы в окне выбора
+        ListItem, ListItem.-hovered, ListItem.-highlight {
+            layout: horizontal;
+            margin: 0;
+            background: transparent;
+            color: #d8d5c8;
+            text-style: none;
+        }
+
         Label {
-            width: 100%;
+            width: auto;
+            max-width: 100%;
+            height: auto;
             text-align: center;
-            border: hkey $boost;
-            color: $text-muted;
+            border: none;
+        }
+
+        .choice-number {
+            padding-right: 1;
+            text-align: right;
+        }
+
+        Center {
+            width: 1fr;
+            height: auto;
+        }
+
+        ListItem.-hovered Label {
+            color: #f3f0df;
+            text-style: underline;
+        }
+
+        ListItem.-highlight Label {
+            color: #e3b778;
+            text-style: underline;
         }
     }
+}
+
+# У карты отдельный вписанный кадр; обычные ответы остаются по центру.
+#choice-options {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    align: center middle;
+}
+NovelWindow ChoiceBar.map-mode {
+    layout: horizontal;
+    height: 100%;
+    margin: 0 1;
+    #camp-map {
+        width: 1fr;
+        height: 100%;
+        content-align: center middle;
+        text-wrap: nowrap;
+        overflow: hidden hidden;
+    }
+    #choice-options {
+        width: 32;
+        max-width: 40%;
+        height: 100%;
+        margin-left: 2;
+        align: left middle;
+    }
+    ListView {
+        height: 1fr;
+        align-vertical: middle;
+    }
+    Center { align-horizontal: left; }
+    .choice-caption { text-align: left; }
 }
 
 # Режим новеллы
@@ -212,10 +328,15 @@ NovelMenu.nvl-mode {
         height: 100%;
         min-height: 6;
         background: $boost;
-        border: round white;
         overflow-y: auto;
     }
 }
+
+# Во время выбора скрыта только кнопка продолжения.
+NovelMenu.choice-mode {
+    #btn-next { visibility: hidden; }
+}
+NovelMenu.card-mode { height: 6; max-height: 6; }
 
 # Пауза
 PauseMenu {
@@ -298,18 +419,6 @@ SaveMenu {
                 margin: 1;
                 text-align: center;
             }
-
-            .save-slot-empty {
-                background: $boost;
-            }
-
-            .save-slot-filled {
-                background: $surface;
-            }
-
-            .save-slot-selected {
-                border: tall $accent;
-            }
         }
 
         SaveMenuActionBtns {
@@ -342,6 +451,44 @@ LogMenu {
     height: 95%;
 }
 
+# Как persistent.timeofday в оригинале: палитра общая для ADV/NVL, истории,
+# паузы и сюжетных кнопок. Имена персонажей и формы рамок не меняются.
+$novel-day: #9dcd55;
+$novel-sunset: #dcd168;
+$novel-night: #527ba3;
+$novel-prologue: #98d8da;
+
+.time-day {
+    TextBar, PauseMenuContainer { border: round $novel-day; }
+    LogMenu { border: dashed $novel-day; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton, CardTable ConsoleButton { border: solid $novel-day; }
+    ChoiceBar ListItem.-highlight Label { color: $novel-day; }
+}
+.time-sunset {
+    TextBar, PauseMenuContainer { border: round $novel-sunset; }
+    LogMenu { border: dashed $novel-sunset; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton, CardTable ConsoleButton { border: solid $novel-sunset; }
+    ChoiceBar ListItem.-highlight Label { color: $novel-sunset; }
+}
+.time-night {
+    TextBar, PauseMenuContainer { border: round $novel-night; }
+    LogMenu { border: dashed $novel-night; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton, CardTable ConsoleButton { border: solid $novel-night; }
+    ChoiceBar ListItem.-highlight Label { color: $novel-night; }
+}
+.time-prologue {
+    TextBar, PauseMenuContainer { border: round $novel-prologue; }
+    LogMenu { border: dashed $novel-prologue; }
+    NovelMenu ConsoleButton, PauseMenu ConsoleButton, CardTable ConsoleButton { border: solid $novel-prologue; }
+    ChoiceBar ListItem.-highlight Label { color: $novel-prologue; }
+}
+# Наведение заметно и в ночной палитре, а выбор остаётся без рамок и заливки.
+.time-day ChoiceBar ListItem.-hovered Label,
+.time-sunset ChoiceBar ListItem.-hovered Label,
+.time-night ChoiceBar ListItem.-hovered Label,
+.time-prologue ChoiceBar ListItem.-hovered Label {
+    color: #f3f0df;
+}
 
 # Настройки
 SettingsMenu {
@@ -381,7 +528,7 @@ SettingsMenu {
 
     .setting-controls-wide { width: 34; }
 
-    #scene-filter-controls { height: 3; }
+    #language-controls, #scene-filter-controls { height: 3; }
 
     #header-controls .header-setting-row {
         width: 34;
@@ -441,11 +588,27 @@ MainMenu {
     width: 100%;
     align: center middle;
     overflow: auto auto;
+    layers: default language;
 
 
     border: round white;
     border-title-align: center;
     border-title-style: b;
+
+    #main-language-bar {
+        /* Отдельный слой: dock не отнимает место у доски объявлений. */
+        layer: language;
+        dock: right;
+        width: 8;
+        height: 3;
+        align: right middle;
+        padding-right: 1;
+    }
+
+    #btn-language-menu {
+        width: 7;
+        min-width: 7;
+    }
 
     MainMenuBrand {
         width: 120;
@@ -548,44 +711,43 @@ GalleryMenu {
 
         #bg-cg-gallery {
             overflow: scroll;
-            scrollbar-size: 1 1;
-            scrollbar-color: #888 #333;
         }
         #ansi-content {
             width: auto;
             height: auto;
             text-wrap: nowrap;
         }
-
-        #btn-back-gallery {
-            min-width: 3;
-            width: 5;
-            dock: left;
-            align: left middle;
-        }
-        #btn-next-gallery {
-            min-width: 3;
-            width: 5;
-            dock: right;
-            align: right middle;
-        }
     }
 
     GalleryMenuBottomBtns {
         dock: bottom;
-        align: center bottom;
         width: 100%;
-        
+        height: 3;
+        align: center middle;
+
+        HorizontalGroup {
+            width: auto;
+            height: 3;
+        }
+
+        #gallery-style-controls { margin-left: 2; }
+
         Button {
             height: 3;
+            width: auto;
+            min-width: 12;
+            padding: 0 1;
+            text-wrap: nowrap;
         }
 
         #btn-back-gallery {
             dock: left;
+            min-width: 0;
             width: 10;
         }
         #btn-next-gallery {
             dock: right;
+            min-width: 0;
             width: 10;
         }
     }
@@ -598,6 +760,17 @@ GalleryMenu {
     }
 }
 
+# На минимальной высоте все вкладки остаются видимыми.
+GalleryMenuLeftBtns.short-gallery #container-left-btns {
+    margin: 1 0;
+    Button { height: 3; }
+}
+.compact-terminal GalleryMenuBottomBtns {
+    Button { min-width: 0; }
+    #btn-back-gallery, #btn-next-gallery { width: 4; padding: 0; }
+    .gallery-quality { padding: 0; }
+}
+
 #gallery-art-panel { height: 1fr; }
 
 MusicRoom {
@@ -606,11 +779,25 @@ MusicRoom {
     padding: 0 1;
     overflow-y: auto;
 }
-#music-search { height: 3; }
-#music-help {
-    height: auto;
-    max-height: 2;
-    color: $text-muted;
+#music-search {
+    height: 3;
+    padding: 0 1;
+    border: solid #77736a;
+    background: transparent;
+    background-tint: transparent;
+    color: $console-text;
+}
+#music-search:hover { border: solid $console-hover; }
+#music-search:focus { border: solid $console-accent; }
+#music-search .input--placeholder, #music-search .input--suggestion { color: $console-muted; }
+#music-search .input--cursor {
+    background: $console-accent;
+    color: $background;
+    text-style: none;
+}
+#music-search .input--selection {
+    background: $console-accent 35%;
+    color: $console-hover;
 }
 #music-list { height: 1fr; min-height: 1; }
 #music-empty { height: auto; }
@@ -629,7 +816,23 @@ MusicRow {
     .music-title { width: 1fr; text-overflow: ellipsis; text-wrap: nowrap; }
     .music-duration { width: 6; text-align: right; }
 }
-MusicRow.music-playing { color: $success; text-style: bold; }
+MusicRow .music-duration { color: $console-muted; }
+
+# Списки выделяют подписи, а не заливают строки и ANSI-иконки.
+#music-list, #endings-list {
+    background: transparent;
+    background-tint: transparent;
+}
+MusicRow, MusicRow.-hovered, MusicRow.-highlight,
+EndingRow, EndingRow.-hovered, EndingRow.-highlight {
+    background: transparent;
+    color: $console-text;
+    text-style: none;
+}
+MusicRow.music-playing Label { color: $console-accent; text-style: bold; }
+MusicRow.-highlight Label { color: $console-accent; text-style: underline; }
+MusicRow.music-playing.-highlight Label { text-style: bold underline; }
+MusicRow.-hovered Label { color: $console-hover; }
 
 EndingResult {
     align: center middle;
@@ -685,9 +888,8 @@ EndingsMenu {
     height: 3;
     content-align: right middle;
 }
-#endings-help { height: auto; max-height: 2; color: $text-muted; }
 #endings-error { height: auto; }
-#endings-list { height: 1fr; min-height: 1; background: transparent; }
+#endings-list { height: 1fr; min-height: 1; }
 EndingRow {
     layout: horizontal;
     align: left middle;
@@ -697,16 +899,22 @@ EndingRow {
     padding: 1;
     .ending-icon { width: 24; height: 12; margin-right: 2; }
     .ending-details { width: 1fr; height: auto; align: left middle; }
-    .ending-route { width: 23; height: auto; margin-right: 2; color: $text-muted; }
+    .ending-route { width: 23; height: auto; margin-right: 2; color: $console-muted; }
     .ending-caption { width: 1fr; height: auto; }
-    .ending-title { width: 1fr; height: auto; color: $text-muted; }
-    .ending-status { width: 1fr; height: auto; margin-top: 1; color: $text-muted; }
-    .ending-date { width: 1fr; height: auto; margin-top: 1; color: $text-muted; }
+    .ending-title { width: 1fr; height: auto; color: $console-muted; }
+    .ending-status { width: 1fr; height: auto; margin-top: 1; color: $console-muted; }
+    .ending-date { width: 1fr; height: auto; margin-top: 1; color: $console-muted; }
 }
 EndingRow.ending-unlocked {
-    .ending-route { color: $text; text-style: bold; }
-    .ending-title { color: $text; text-style: bold; }
-    .ending-status { color: $text; }
+    .ending-route { color: $console-text; text-style: bold; }
+    .ending-title { color: $console-text; text-style: bold; }
+    .ending-status { color: $console-accent; }
+}
+EndingRow.-highlight {
+    .ending-route, .ending-title { color: $console-accent; text-style: bold underline; }
+}
+EndingRow.-hovered {
+    .ending-route, .ending-title { color: $console-hover; text-style: bold underline; }
 }
 EndingRow.ending-compact {
     .ending-icon { margin-right: 1; }
@@ -716,6 +924,31 @@ EndingRow.ending-compact {
 
 .hidden {
     display: none;
+}
+
+LanguageDialog {
+    align: center middle;
+    background: $background 80%;
+
+    #language-panel {
+        width: 42;
+        max-width: 95%;
+        height: auto;
+        padding: 1 2;
+        background: $surface;
+        border: round white;
+    }
+
+    #language-dialog-title {
+        width: 100%;
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    HorizontalGroup { height: auto; }
+    Button { width: 1fr; min-width: 9; margin-right: 1; }
+    #quick-language-cancel { width: 5; min-width: 5; margin-right: 0; }
 }
 
 OutdatedSaveDialog {
@@ -736,4 +969,90 @@ OutdatedSaveDialog {
 }
 .invisible {
     visibility: hidden;
+}
+
+# Карточный стол и отдельный демонстрационный стенд.
+CardTable {
+    width: 1fr;
+    height: 1fr;
+    min-height: 12;
+}
+#card-scenery {
+    width: 100%;
+    height: 1fr;
+    content-align: center middle;
+}
+#card-layout {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+}
+#card-hands { width: 1fr; height: 100%; }
+.card-row { height: 7; width: 100%; align-horizontal: center; }
+CardSlot {
+    width: 9;
+    height: 7;
+    margin: 0 1 0 0;
+    padding: 0;
+    border: none;
+    background: #202622;
+}
+CardSlot.last-card { margin-right: 0; }
+#card-center { height: 1fr; min-height: 0; }
+#card-result-row {
+    width: 100%;
+    height: 1fr;
+    align: center middle;
+}
+#card-result {
+    width: 24;
+    max-width: 100%;
+    min-width: 0;
+    height: 3;
+    margin: 0;
+    align-horizontal: center;
+}
+#card-sidebar {
+    width: 24;
+    height: 100%;
+    margin-left: 1;
+    padding: 0 1;
+    background: #202622;
+}
+#card-portrait { width: 16; height: 8; content-align: center middle; }
+#card-rival-name { height: 1; text-style: bold; color: #dcd168; }
+#card-counters { height: 4; }
+#card-rival-name, #card-counters, #card-legend { text-wrap: nowrap; }
+#card-legend { height: 8; margin-top: 1; color: #bfb9a7; }
+#card-pass { width: 100%; min-width: 0; height: 3; padding: 0; }
+.compact-cards {
+    .card-row, CardSlot { height: 5; }
+    CardSlot { width: 7; }
+    #card-portrait { height: 3; }
+    #card-legend { height: 4; margin-top: 0; }
+}
+.card-demo-screen {
+    align: left top;
+    background: #202622;
+    #card-story-scene { height: 1fr; width: 100%; content-align: center middle; }
+    NovelMenu { height: 6; margin-bottom: 1; }
+    NovelMenu .novel-control { width: 17; }
+    NovelMenu #btn-log { margin-left: 0; margin-bottom: 0; height: 4; }
+    NovelMenu #btn-next { margin-right: 0; margin-bottom: 0; height: 4; }
+    TextBar { background: #202622; }
+}
+DemoDialog {
+    align: center middle;
+    background: #101410 80%;
+    #card-demo-dialog {
+        width: 76;
+        max-width: 96%;
+        height: 90%;
+        padding: 1 2;
+        border: round #dcd168;
+        background: #202622;
+    }
+    #card-demo-dialog-title { height: 2; text-style: bold; color: #dcd168; }
+    VerticalScroll { height: 1fr; }
+    Button { height: 3; width: 100%; }
 }

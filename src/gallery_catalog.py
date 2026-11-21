@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+
+from paths import get_resource_path
 
 
 @dataclass(frozen=True)
@@ -15,9 +16,7 @@ class GalleryImage:
 
 
 def get_gallery_manifest_path() -> Path:
-    if hasattr(sys, "_MEIPASS"):
-        return Path(sys._MEIPASS) / "gallery_manifest.json"
-    return Path(__file__).with_name("gallery_manifest.json")
+    return get_resource_path("gallery_manifest.json")
 
 
 def load_gallery_catalog(path: Path | None = None) -> dict[str, tuple[GalleryImage, ...]]:

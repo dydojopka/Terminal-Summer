@@ -9,6 +9,11 @@ APP_NAME="terminal-summer"
 PYI_BUILD_DIR="${ROOT_DIR}/build/pyinstaller"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 
+if [[ $# -gt 1 || ( $# -eq 1 && ${1:-} != "--release" ) ]]; then
+    echo "Использование: bash scripts/build_and_run.sh [--release]" >&2
+    exit 2
+fi
+
 # Проверка зависимостей окружения
 if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
     echo "Ошибка: не найден Python (${PYTHON_BIN})."
@@ -35,6 +40,7 @@ fi
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_release.py" --all
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_gallery.py"
 "${PYTHON_BIN}" "${ROOT_DIR}/scripts/validate_audio.py" --decode
+"${PYTHON_BIN}" "${ROOT_DIR}/scripts/import_english.py" --check
 
 # Сборка
 "${PYTHON_BIN}" -m PyInstaller --onefile \
@@ -51,7 +57,8 @@ fi
                        --add-data "${ROOT_DIR}/TS/text/prologue.txt:TS/text" \
                        --add-data "${ROOT_DIR}/TS/text/day*.txt:TS/text" \
                        --add-data "${ROOT_DIR}/TS/text/epilogue*.txt:TS/text" \
-                       --add-data "${ROOT_DIR}/TS/text/endings.txt:TS/text" \
+                        --add-data "${ROOT_DIR}/TS/text/endings.txt:TS/text" \
+                        --add-data "${ROOT_DIR}/TS/text/en:TS/text/en" \
                        --paths "${ROOT_DIR}/src" \
                        --paths "${ROOT_DIR}/scripts" \
                        --distpath "${ROOT_DIR}" \
@@ -62,4 +69,8 @@ fi
                        "${ROOT_DIR}/src/main.py"
 
 echo "Сборка завершена: ${ROOT_DIR}/${APP_NAME}"
+if [[ ${1:-} == "--release" ]]; then
+    "${PYTHON_BIN}" "${ROOT_DIR}/scripts/prepare_binary_release.py" \
+        "${ROOT_DIR}/${APP_NAME}" "${PYI_BUILD_DIR}/${APP_NAME}/Analysis-00.toc"
+fi
 echo "Запуск из корня проекта: ./${APP_NAME}"

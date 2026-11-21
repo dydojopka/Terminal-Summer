@@ -803,7 +803,6 @@ label day4_main1:
     play ambience ambience_camp_center_day fadein 2
     window show
     "И вот спустя десять минут я стоял на пороге домика Ольги Дмитриевны и думал, куда пойти."
-    window hide
     # $ disable_all_zones()
     # $ set_zone("camp_entrance","day4_busstop")
     # $ set_zone("boat_station","day4_boathouse")
@@ -881,7 +880,6 @@ label day4_busstop
     th "Даже у человека-оркестра есть свои слабости."
     me "Да ты знаешь, я и играть-то ни на чём толком не умею…"
     mi "Не страшно! Я тебе покажу! Пойдём!"
-    window hide
     menu
     {
         "Пойти с Мику"
@@ -990,7 +988,6 @@ label day4_busstop
     "Остаток фразы остался за дверью."
     "Я опёрся о стену музыкального кружка и облегчённо вздохнул."
     "Но песенка Мику всё ещё вертелась у меня в голове."
-    window hide
     #$ disable_current_zone()
     $day4_map_necessary_done += 1
     $day4_map_busstop = true
@@ -1106,7 +1103,6 @@ label day4_forest
     window show
     "Я быстро надел рубашку и убежал обратно в лес."
     th "Интересно, что это на него нашло?.."
-    window hide
     #$ disable_current_zone()
     $day4_map_necessary_done += 1
     $day4_map_forest = true
@@ -1278,11 +1274,6 @@ label day4_house_of_mt
     if ($day4_map_necessary_done == 0)
     {
         "Однако активность Слави меня так вдохновила, что я решил поискать ещё где-нибудь."
-        window hide
-    }
-    else
-    {
-        window hide
     }
     # $ disable_current_zone()
     $day4_map_necessary_done += 1
@@ -1490,7 +1481,6 @@ label day4_boathouse
     "Тем более всё обошлось в общем-то без последствий."
     "И даже более того – удача была на моей стороне, – её растерянный и смущённый вид доставил мне массу удовольствия."
     "Посмеиваясь, я удалялся от домика Алисы, который чуть не стал для меня смертельной ловушкой."
-    window hide
     # $ disable_current_zone()
     $day4_map_necessary_done += 1
     $day4_map_boathouse = true
@@ -1697,7 +1687,6 @@ label day4_main2
     "Она смутилась и покраснела."
     un "А почему ты спрашиваешь?"
     th "Действительно, почему…"
-    window hide
     menu
     {
         "Мне кажется, на тебе это бы смотрелось прекрасно"
@@ -1768,7 +1757,6 @@ label day4_main2
     us "Спасибо вам, доктор!"
     "Она весело улыбнулась."
     "Смотря на Ульянку, я никак не мог понять, как такой жизнерадостный и активный ребёнок может испытывать проблемы со здоровьем."
-    window hide
     menu
     {
         "Небось ворованных конфет объелась?"
@@ -1875,7 +1863,6 @@ label day4_main2
     show sl normal_pioneer size normal at center with dissolve
     "Через минуту открылась дверь, и вышла Славя."
     "У неё в руках был какой-то небольшой пакетик."
-    window hide
     menu
     {
         "Спросить, что это"
@@ -1950,7 +1937,6 @@ label day4_main2
     dv "Да."
     "Ехидно усмехнулась она."
     "Я почувствовал, что что-то здесь не так…"
-    window hide
     menu
     {
         "Дать Алисе уголь"
@@ -2076,7 +2062,6 @@ label day4_main2
     "И действительно, ставня была немного приоткрыта."
     th "Значит, его всё-таки кто-то сюда положил."
     th "Получается, ничего страшного нет! Хотя…"
-    window hide
     menu
     {
         "Съесть яблоко"
@@ -2336,7 +2321,6 @@ label day4_main2
     th "И правда ведь…<w> Электроник куда-то слинял!"
     "Однако мне всё равно совершенно не хотелось ночью в одиночестве слоняться по лесу."
     "Если бы можно было выбирать, я бы..."
-    window hide
     menu
     {
         "Пошёл с Алисой"
@@ -2672,7 +2656,6 @@ label day4_fail
     "Идти дальше опасно – можно и заблудиться!"
     "Я решил, что неплохо будет как-нибудь обозначить место, с которого придётся начать путь в лабиринт, взял с земли камень и сделал довольно большую зарубку на стене."
     th "Что же..."
-    window hide
 label labyrinth
     $point = 1
     if (($prologue == 0) && ($d1_keys) && ($day2_cards_with_sl == 0) && ($day4_mi_accept == 1) && ($day4_uv_apple == false) && ($persistent.scenario_complete))
@@ -2699,7 +2682,6 @@ label mine_crossroad
     {
         window show
         "Похоже, ещё одна развилка."
-        window hide
     }
 label mine_eval
     menu
@@ -3315,7 +3297,6 @@ label fail_mine_return_to_start
     "Я вернулся к тому месту, с которого и начинал."
     th "Значит, где-то не там повернул."
     th "Надо искать дальше."
-    window hide
     goto mine_eval
 label girls_mine_return_to_start
     #$ persistent.sprite_time = "night"
@@ -3324,7 +3305,6 @@ label girls_mine_return_to_start
     "Мы вернулись к тому месту, с которого и начинали."
     th "Значит, где-то не там повернули."
     th "Надо искать дальше."
-    window hide
     goto mine_eval
 label fail_mine_coalface
     #$ persistent.sprite_time = "night"
@@ -4073,7 +4053,6 @@ label day4_sl
     "Славя улыбнулась."
     sl "И куда?"
     "…"
-    window hide
     $mine_route = 2
     goto mine_start
 label sl_mine_coalface
@@ -4745,7 +4724,6 @@ label day4_dv
     "Я решил сделать засечку на стене на случай, если вернёмся сюда."
     "Вскоре на одной из балок красовался большой крест, нацарапанный камнем."
     me "Так, вот теперь можно идти…"
-    window hide
     $mine_route = 3
     goto mine_start
 label dv_mine_coalface
@@ -5631,7 +5609,6 @@ label day4_us
     me "Думаешь, сильно поможет?"
     us "Поможет!"
     th "Не уверен, но выбирать, куда идти, всё равно придётся мне – такое я не могу доверить маленькой девочке."
-    window hide
     $mine_route = 4
     goto mine_start
 label us_mine_coalface
@@ -6453,7 +6430,6 @@ label day4_un
     me "Только сначала…"
     "Я поднял с земли довольно большой камень и выцарапал на одной из балок, укрепляющих стену, крестик."
     me "Теперь хотя бы будем знать, откуда начинали."
-    window hide
     $mine_route = 5
     goto mine_start
 label un_mine_coalface
@@ -6803,7 +6779,6 @@ label un_mine_exit
     "Приготовившись к разносу, я совсем не ожидал подобной реакции."
     me "Ходил искать Шурика."
     mt "Один?"
-    window hide
     menu
     {
         "Сказать, что ходил с Леной"

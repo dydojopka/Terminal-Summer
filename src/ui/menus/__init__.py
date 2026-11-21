@@ -1,0 +1,1 @@
+"""Меню Terminal Summer."""

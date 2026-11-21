@@ -1,0 +1,22 @@
+{
+  "title": "Saved games",
+  "load.title": "Load game",
+  "btn-close-save-menu": "Back",
+  "btn-save-delete": "Delete",
+  "btn-save-load-game": "Load",
+  "btn-save-save": "Save",
+  "slot.empty": "Empty",
+  "slot.number": "Slot {number}",
+  "slot.corrupt": "Corrupted save",
+  "outdated.title": "Outdated save",
+  "outdated.message": "This save is incompatible with the current version of the story.\nDelete this save?",
+  "outdated.keep": "Keep",
+  "outdated.changed": "The slot changed. The save was not deleted.",
+  "outdated.load": "This save is incompatible with the current version of the story.",
+  "load.error": "Could not load the game",
+  "load.failed": "The file could not be read or does not contain a valid save.",
+  "load.cards": "Card game saves require format 4 and a cards section.",
+  "delete.error": "Could not delete the selected save.",
+  "save.error": "Could not save the game",
+  "save.failed": "The save file could not be written."
+}

@@ -6,6 +6,10 @@ if not defined PYTHON_BIN set "PYTHON_BIN=python"
 set "APP_NAME=Terminal-Summer-Windows"
 set "PYI_BUILD_DIR=build\pyinstaller"
 set "ROOT_DIR=%cd%"
+set "PREPARE_RELEASE="
+if /I "%~1"=="--release" set "PREPARE_RELEASE=1"
+if not "%~1"=="" if not defined PREPARE_RELEASE goto usage
+if not "%~2"=="" goto usage
 
 REM Проверка окружения
 "%PYTHON_BIN%" --version >nul 2>&1 || (
@@ -33,6 +37,7 @@ REM Проверка выпущенных сценариев и ресурсов
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_release.py" --all || exit /b 1
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_gallery.py" || exit /b 1
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\validate_audio.py" --decode || exit /b 1
+"%PYTHON_BIN%" "%ROOT_DIR%\scripts\import_english.py" --check || exit /b 1
 
 "%PYTHON_BIN%" -m PyInstaller --onefile ^
                       --name "%APP_NAME%" ^
@@ -48,7 +53,8 @@ REM Проверка выпущенных сценариев и ресурсов
                       --add-data "%ROOT_DIR%\TS\text\prologue.txt;TS/text" ^
                       --add-data "%ROOT_DIR%\TS\text\day*.txt;TS/text" ^
                       --add-data "%ROOT_DIR%\TS\text\epilogue*.txt;TS/text" ^
-                      --add-data "%ROOT_DIR%\TS\text\endings.txt;TS/text" ^
+                       --add-data "%ROOT_DIR%\TS\text\endings.txt;TS/text" ^
+                       --add-data "%ROOT_DIR%\TS\text\en;TS/text/en" ^
                       --paths "%ROOT_DIR%\src" ^
                       --paths "%ROOT_DIR%\scripts" ^
                       --distpath "." ^
@@ -59,5 +65,14 @@ REM Проверка выпущенных сценариев и ресурсов
                       "%ROOT_DIR%\src\main.py" || exit /b 1
 
 echo Сборка завершена: %cd%\%APP_NAME%.exe
+if defined PREPARE_RELEASE (
+    "%PYTHON_BIN%" "%ROOT_DIR%\scripts\prepare_binary_release.py" ^
+        "%ROOT_DIR%\%APP_NAME%.exe" "%PYI_BUILD_DIR%\%APP_NAME%\Analysis-00.toc" || exit /b 1
+)
 echo Запуск из корня проекта: %APP_NAME%.exe
 pause
+exit /b 0
+
+:usage
+echo Использование: scripts\build_and_run.bat [--release] >&2
+exit /b 2

@@ -1,0 +1,7 @@
+{
+  "bind-pause": "Pause",
+  "bind-next": "Next",
+  "bind-skip": "Skip",
+  "bind-log": "History",
+  "bind-toggle-interface": "Hide UI"
+}

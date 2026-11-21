@@ -1,0 +1,1121 @@
+import asyncio
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+from rich.markup import escape
+from textual import _time
+from textual.widget import Widget
+from textual.widgets import ListView
+
+from audio.catalog import load_audio_catalog
+from story.audio_commands import parse_audio_command
+from story.card_commands import parse_card_command, validate_card_labels
+from story.conditions import evaluate_script_condition
+from story.locale import (
+    DIALOGUE_RE, SPEAKER_KEYS, decode_dsl_dialogue, load_chapter_locale, read_script_source,
+    script_content_hash,
+)
+from story.resources import resource_manifest
+from story.structure import OPTION_RE, read_block_range
+
+TIMES_OF_DAY = ("day", "sunset", "night", "prologue")
+
+# Словарь имён
+DISPLAY_NAMES = {
+    "dreamgirl": "...",
+    "sl": "Славя",
+    "slp": "Пионерка",
+    "slg": "Девушка",
+    "sa": "Саша",
+    "un": "Лена",
+    "unp": "Пионерка",
+    "dv": "Алиса",
+    "dvp": "Пионерка",
+    "dvg": "Девушка",
+    "el": "Электроник",
+    "elp": "Пионер",
+    "ro": "Роутер",
+    "us": "Ульяна",
+    "usp": "Пионерка",
+    "usg": "Девушка",
+    "mt": "Ольга Дмитриевна",
+    "mtp": "Вожатая",
+    "mt_voice": "Голос",
+    "cs": "Виола",
+    "csp": "Медсестра",
+    "mz": "Женя",
+    "mi": "Мику",
+    "mip": "Пионерка",
+    "ma": "Маша",
+    "uv": "Юля",
+    "uvp": "Странная девочка",
+    "sh": "Шурик",
+    "pi": "Пионер",
+    "me": "Семён",
+    "my": "Я",
+    "FIXME_voice": "Голос",
+    "bush": "Голос", 
+    "message": "Сообщение", 
+    "odn": "Одногруппник", 
+    "all": "Пионеры"
+}
+
+# Состояние прохождения. Ключи совпадают с именами DSL без `$`.
+DEFAULT_SCRIPT_STATE = {
+    "lp_sl": 0, "lp_un": 0, "lp_dv": 0, "lp_us": 0,
+    "prologue": 0, "d1_keys": False,
+    "day2_map_necessary_done": 0,
+    "day2_map_clubs": False, "day2_map_musclub": False,
+    "day2_map_dinning_hall": False, "day2_map_aidpost": False,
+    "day2_map_library": False, "day2_cards_with_sl": 0,
+    "day2_dv_bet": 0, "day2_un": 0, "day2_card_result": None,
+    "d2_gave_keys": False,
+    "d2_cardgame_block_rollback": False,  # Совместимость старых save, отката в UI нет.
+    "persistent.CardsDemo": False, "persistent.CardsWon1": False,
+    "persistent.CardsWon2": False, "persistent.CardsWon3": False,
+    "persistent.CardsFail": False,
+    # День 3. Числовые флаги оставлены числами, поскольку сценарий
+    # сравнивает их с 0/1; dumped и переходы в day4 являются bool.
+    "day3_breakfast_with_un": 0, "day3_un_help_accept": 0,
+    "day3_house_of_mt": 0, "day3_sl_cleaned": 0,
+    "day3_us_football": 0, "day3_sl_library": 0,
+    "day3_us_cleaned": 0, "day3_dv_accept": 0,
+    "day3_got_fail": 0, "day3_sl_evening": 0,
+    "day3_un_evening": 0, "day3_us_evening": 0,
+    "day3_dv_evening": 0,
+    "day3_dv_dumped": False, "day3_un_dumped": False,
+    "goto_day4_std_morning": False,
+    "goto_day4_fail_morning": False,
+    "goto_day4_us_morning": False,
+    # Поздние дни: литеральные типы сохраняют числовую адаптацию TXT.
+    "day4_dv_compl": 0, "day4_sl_compl": 0,
+    "day4_un_compl": 0, "day4_us_compl": 0,
+    "day4_map_necessary_done": 0,
+    "day4_map_boathouse": False, "day4_map_busstop": False,
+    "day4_map_forest": False, "day4_map_house_of_mt": False,
+    "day4_mi_accept": 0, "day4_uv_apple": False, "day4_uv_mine": 0,
+    # Общий reset в day4.txt label mine_start соответствует оригинальному mine.
+    "point": 1, "previous_point": 1, "direction": 0, "mine_route": 0,
+    "first_turn": True, "back_to_start": False,
+    "halt_visited": False, "coalface_visited": False,
+    "day5_map_necessary_done": 0,
+    "day5_map_aidpost": False, "day5_map_clubs": False,
+    "day5_map_library": False,
+    "day5_sl_helped": 0, "day5_us_wire_accept": 0,
+    "day6_map": 0, "day6_map_aidpost": False, "day6_map_dinner": False,
+    "sl_root": False, "dv_root": False, "un_root": False, "us_root": False,
+    "fail_root": False, "mi_root": False, "uv_root": False, "harem_root": False,
+    "sl_good": False, "sl_bad": False,
+    "dv_good": 0, "dv_bad": 0,
+    "un_good": False, "un_bad": False,
+    "us_good": False, "us_bad": False,
+    "fail_good": False, "fail_bad": False,
+    "epilogue_uv_chosen": 0,
+    # Q05: окончания - bool; старый null мигрирует в False.
+    "persistent.endings_main_good": False, "persistent.endings_main_bad": False,
+    "persistent.endings_sl_good": False, "persistent.endings_sl_bad": False,
+    "persistent.endings_dv_good": False, "persistent.endings_dv_bad": False,
+    "persistent.endings_un_good": False, "persistent.endings_un_bad": False,
+    "persistent.endings_us_good": False, "persistent.endings_us_bad": False,
+    "persistent.endings_mi": False,
+    "persistent.endings_uv_city": False,
+    "persistent.endings_uv_unknown_fucken_shit": False,
+    # Q06: только производный признак, не самостоятельный unlock.
+    "persistent.scenario_complete": False,
+}
+ENDING_STATE_KEYS = tuple(key for key in DEFAULT_SCRIPT_STATE if key.startswith("persistent.endings_"))
+SCRIPT_STATE_TYPES = {
+    key: (type(default),) if default is not None else (int, type(None))
+    for key, default in DEFAULT_SCRIPT_STATE.items()
+}
+SCRIPT_STATE = DEFAULT_SCRIPT_STATE.copy()
+
+
+def _derive_progress(state: dict) -> None:
+    state["persistent.scenario_complete"] = any(state[key] for key in ENDING_STATE_KEYS)
+
+
+def normalize_script_state(state: dict) -> dict:
+    """Проверяет состояние до его применения; bool не является int DSL."""
+    if not isinstance(state, dict):
+        raise ValueError("Script state must be a dictionary")
+    normalized = DEFAULT_SCRIPT_STATE.copy()
+    for key, value in state.items():
+        if key not in SCRIPT_STATE_TYPES:
+            raise ValueError(f"Unknown script variable: ${key}")
+        if key in ENDING_STATE_KEYS and value is None:
+            value = False
+        if type(value) not in SCRIPT_STATE_TYPES[key]:
+            expected = "/".join(t.__name__ for t in SCRIPT_STATE_TYPES[key])
+            raise ValueError(f"Invalid type for ${key}: expected {expected}, got {type(value).__name__}")
+        normalized[key] = value
+    _derive_progress(normalized)
+    return normalized
+
+
+def apply_script_assignment(line: str, state: dict) -> None:
+    """Единый строгий контракт присваиваний для runtime и обходчика."""
+    key, operation, value = parse_script_assignment(line)
+    if key not in SCRIPT_STATE_TYPES or key not in state:
+        raise ValueError(f"Unknown script variable: ${key}")
+    if key == "persistent.scenario_complete":
+        raise ValueError("$persistent.scenario_complete is derived from ending flags")
+    current = state[key]
+    if type(current) not in SCRIPT_STATE_TYPES[key]:
+        raise ValueError(f"Invalid current type for ${key}: {type(current).__name__}")
+    if operation != "=":
+        if type(current) is not int or type(value) is not int:
+            raise ValueError(f"Arithmetic assignment requires integers: {line}")
+        value = current + value if operation == "+=" else current - value
+    if type(value) not in SCRIPT_STATE_TYPES[key]:
+        raise ValueError(f"Invalid assignment type for ${key}: {type(value).__name__}")
+    state[key] = value
+    _derive_progress(state)
+
+def format_script_state(
+    state: dict | None = None,
+    *,
+    include_lp_points: bool = True,
+    include_flags: bool = True,
+) -> str:
+    """Формирует Header, разделяя LP-поинты и прочее состояние сценария."""
+    values = SCRIPT_STATE if state is None else state
+    visible_values = (
+        (key, value)
+        for key, value in values.items()
+        if (
+            (include_lp_points and key.startswith("lp_"))
+            or (include_flags and not key.startswith("lp_"))
+        )
+    )
+    return " ".join(f"[{key}:{value}]" for key, value in visible_values)
+
+
+def get_script_state() -> dict:
+    """Возвращает копию сериализуемого состояния прохождения."""
+    return SCRIPT_STATE.copy()
+
+
+def get_persistent_state() -> dict:
+    """Возвращает переменные, которые должны переживать начало новой игры."""
+    return {
+        key: value
+        for key, value in SCRIPT_STATE.items()
+        if key.startswith("persistent.")
+    }
+
+
+def update_persistent_state(state: dict) -> None:
+    """Строго и монотонно объединяет прогресс, не откатывая открытия."""
+    if not isinstance(state, dict):
+        raise ValueError("Persistent state must be a dictionary")
+    for key in state:
+        if not isinstance(key, str) or not key.startswith("persistent."):
+            raise ValueError(f"Invalid persistent key: {key}")
+    normalized = normalize_script_state(state)
+    updated = SCRIPT_STATE.copy()
+    for key in state:
+        updated[key] = bool(updated[key] or normalized[key])
+    set_script_state(updated)
+
+
+def set_script_state(state: dict) -> None:
+    """Восстанавливает состояние, дополняя его новыми значениями по умолчанию."""
+    normalized = normalize_script_state(state)
+    SCRIPT_STATE.clear()
+    SCRIPT_STATE.update(normalized)
+
+
+def reset_globals(*, preserve_persistent: bool = True):
+    """Сбрасывает прохождение, при необходимости сохраняя persistent-флаги."""
+    persistent = get_persistent_state() if preserve_persistent else {}
+    set_script_state(persistent)
+
+
+SCRIPT_ASSIGNMENT_RE = re.compile(
+    r'\$([a-zA-Z0-9_.]+)\s*([+\-]?=)\s*(true|false|null|-?\d+)\s*$',
+    re.IGNORECASE,
+)
+
+
+def parse_script_assignment(line: str) -> tuple[str, str, object]:
+    """Разбирает безопасное присваивание DSL без выполнения выражений."""
+    match = SCRIPT_ASSIGNMENT_RE.fullmatch(line.strip())
+    if not match:
+        raise ValueError(f"Invalid assignment: {line}")
+
+    key, operation, raw_value = match.groups()
+    value_lower = raw_value.lower()
+    if value_lower == "true":
+        value = True
+    elif value_lower == "false":
+        value = False
+    elif value_lower == "null":
+        value = None
+    else:
+        value = int(raw_value)
+    return key, operation, value
+
+
+@dataclass(frozen=True)
+class ExecutionFrame:
+    """Диапазон исходного сценария, выполняемый вместо вставки строк."""
+
+    end: int
+    return_pc: int
+
+    def to_save_data(self) -> dict:
+        return {"end": self.end, "return_pc": self.return_pc}
+
+
+@dataclass(frozen=True)
+class ChoiceTarget:
+    """Неизменяемая ссылка на тело пункта меню в исходном сценарии."""
+
+    start: int
+    end: int
+    return_pc: int
+
+
+class ScriptParser:
+    def __init__(self, filename, app):
+        self.filename = filename
+        self.app = app
+        self.lines: tuple[str, ...] = ()
+        self.source_line_numbers: tuple[int, ...] = ()
+        self.labels = {}
+        self.index = 0
+        self.frames: list[ExecutionFrame] = []
+        self.content_hash = ""
+        self.resource_manifest = {"scenes": (), "show_lines": ()}
+        self.failed = False
+        self._advancing = False
+        self._continue_requested = False
+        self.load_script()
+
+    def _update_script_header(self) -> None:
+        """Обновляет Header с учётом пользовательских фильтров приложения."""
+        updater = getattr(self.app, "update_script_header", None)
+        if updater is not None:
+            updater()
+        else:
+            self.app.sub_title = format_script_state()
+
+
+    def load_script(self, filename=None):
+        """Загрузка файла сценария"""
+        if filename:
+            self.filename = str(filename)
+        source_lines = read_script_source(Path(self.filename))
+        self.source_line_numbers = tuple(number for number, _ in source_lines)
+        self.lines = tuple(line for _, line in source_lines)
+        self.content_hash = script_content_hash(self.lines)
+        language = getattr(self.app, "settings", {}).get("language", "ru")
+        self.translations = load_chapter_locale(
+            Path(self.filename), language, self.content_hash, len(self.lines),
+            getattr(self.app, "bundled_text_path", None),
+        )
+        self._index_labels()
+        self.index = 0
+        self.frames.clear()
+        self.failed = False
+        self.finished = False
+        self.has_diagnostic = False
+        self.rolling_credits = False
+        self.credits_skipped = False
+        self._build_resource_manifest()
+
+    def _build_resource_manifest(self) -> None:
+        """Лёгкий индекс ресурсов текущего файла, без открытия изображений."""
+        self.resource_manifest = resource_manifest(self.lines)
+
+    def get_runtime_state(self) -> dict:
+        """Компактное, не зависящее от копии сценария состояние выполнения."""
+        return {
+            "filename": str(Path(self.filename).resolve()),
+            "content_hash": self.content_hash,
+            "pc": self.index,
+            "frames": [frame.to_save_data() for frame in self.frames],
+        }
+
+    def restore_runtime_state(self, state: dict) -> bool:
+        """Восстанавливает позицию и вложенные выбранные блоки save format 3."""
+        self.runtime_error = "Invalid script runtime"
+        self.runtime_outdated = False
+        if not isinstance(state, dict):
+            return False
+        saved_hash = state.get("content_hash")
+        if not isinstance(saved_hash, str) or not saved_hash:
+            self.runtime_error = "Missing script content_hash"
+            return False
+        if saved_hash != self.content_hash:
+            self.runtime_error = "Script was changed since this save was created"
+            self.runtime_outdated = True
+            if self.app is not None:
+                self.app.sub_title = f"[Load error] {self.runtime_error}"
+            return False
+        pc = state.get("pc", 0)
+        frames_data = state.get("frames", [])
+        if type(pc) is not int or not 0 <= pc <= len(self.lines):
+            return False
+        frames = []
+        if not isinstance(frames_data, list):
+            return False
+        for frame in frames_data:
+            if not isinstance(frame, dict):
+                return False
+            end = frame.get("end")
+            return_pc = frame.get("return_pc")
+            if not all(type(value) is int and 0 <= value <= len(self.lines)
+                       for value in (end, return_pc)):
+                return False
+            frames.append(ExecutionFrame(end=end, return_pc=return_pc))
+        try:
+            ranges = self._runtime_frame_ranges() if frames else {}
+        except ValueError:
+            return False
+        outer_start, outer_end = 0, len(self.lines) + 1
+        for frame in frames:
+            start = ranges.get(frame)
+            if start is None or not (outer_start <= start < frame.end < outer_end
+                                     and frame.return_pc <= outer_end):
+                return False
+            outer_start, outer_end = start, frame.end
+        if frames and not outer_start <= pc <= outer_end:
+            return False
+        self.index = pc
+        self.frames = frames
+        self.finished = False
+        self.has_diagnostic = False
+        self.runtime_error = ""
+        return True
+
+    def _runtime_frame_ranges(self) -> dict[ExecutionFrame, int]:
+        """Допустимые выбранные блоки и адреса продолжения исходного TXT."""
+        ranges = {}
+        for pc, line in enumerate(self.lines):
+            if line.startswith(("if ", "if(")):
+                bodies = []
+                cursor = pc + 1
+                while True:
+                    start, end = self._read_block_range(cursor)
+                    bodies.append((start, end))
+                    cursor = end + 1
+                    if cursor < len(self.lines) and self.lines[cursor].startswith("else if"):
+                        cursor += 1
+                        continue
+                    if cursor < len(self.lines) and self.lines[cursor] == "else":
+                        start, end = self._read_block_range(cursor + 1)
+                        bodies.append((start, end))
+                        cursor = end + 1
+                    break
+                for start, end in bodies:
+                    ranges[ExecutionFrame(end, cursor)] = start
+            elif line in ("menu", "menu:"):
+                start, end = self._read_block_range(pc + 1)
+                cursor = start
+                while cursor < end:
+                    if not re.fullmatch(r'"(.+?)"(?:\s+if\s+(.+))?', self.lines[cursor]):
+                        raise ValueError("Invalid menu option")
+                    body, body_end = self._read_block_range(cursor + 1)
+                    ranges[ExecutionFrame(body_end, end + 1)] = body
+                    cursor = body_end + 1
+        return ranges
+
+    def _index_labels(self) -> None:
+        """Строит индекс меток для текущего набора строк."""
+        self.labels = {}
+        for index, line in enumerate(self.lines):
+            match = re.fullmatch(r"label\s+([a-zA-Z0-9_]+):?", line)
+            if match:
+                self.labels[match.group(1)] = index
+
+    async def next_line(self):
+        """Исполняет служебные команды итеративно до следующего ожидания.
+
+        Обработчики запрашивают продолжение тем же next_line, но внутри
+        диспетчера это только флаг, а не рекурсивный вызов/новая задача.
+        """
+        if self.failed or self.finished:
+            return
+        if self._advancing:
+            self._continue_requested = True
+            return
+        # После нефатальной ошибки только новый явный next_line снимает
+        # диагностику: автоматический планировщик до этого заблокирован.
+        self.has_diagnostic = False
+        self._advancing = True
+        steps = 0
+        try:
+            while not self.failed:
+                self._continue_requested = False
+                wait_until_resumed = getattr(self.app, "wait_until_game_resumed", None)
+                if wait_until_resumed is not None:
+                    await wait_until_resumed()
+                while self.frames and self.index >= self.frames[-1].end:
+                    self.index = self.frames.pop().return_pc
+                if self.index >= len(self.lines):
+                    self.finished = True
+                    self._stop_skipping()
+                    if self.rolling_credits:
+                        self.app.finish_game(self)
+                    return
+                line = self.lines[self.index]
+                self.index += 1
+                await self.parse_line(line)
+                if not self._continue_requested:
+                    return
+                steps += 1
+                if steps % 256 == 0:
+                    await asyncio.sleep(0)
+        finally:
+            self._advancing = False
+            self._continue_requested = False
+
+    async def parse_line(self, line):
+        """Считывание строки сценария (асинхронно)"""
+        if self.failed:
+            return
+
+        # Header строится динамически, поэтому новые флаги сценария не нужно
+        # вручную добавлять сюда при каждом расширении состояния.
+        self._update_script_header()
+
+        # ---- Логика обработки строк ----
+        if line.startswith("label"):
+            await self._handle_label(line)
+        elif line.startswith("goto"):
+            await self._handle_goto(line)
+        elif line.startswith("if ") or line.startswith("if("):
+            await self._handle_if(line)
+        elif line.startswith("pause"):
+            await self._handle_pause(line)
+        elif line == "rollcredits":
+            await self._handle_rollcredits()
+        elif line.startswith("scene"):
+            await self._handle_scene(line)
+        elif line.startswith("show"):
+            await self._handle_show(line)
+        elif line.startswith("hide"):
+            await self._handle_hide(line)
+        elif line.startswith(("play", "stop", "volume")):
+            await self._handle_audio(line)
+        elif line.startswith("with"):
+            await self._handle_play(line)
+        elif line.startswith("window"):
+            await self._handle_window(line)
+        elif line.startswith("cards"):
+            await self._handle_cards(line)
+        elif line.startswith("time"):
+            time_of_day = line.split(maxsplit=1)[1].strip() if " " in line else "day"
+            if time_of_day not in TIMES_OF_DAY:
+                self._report_script_error(f"Invalid time of day: {time_of_day}")
+                return
+            self.app.current_time = time_of_day
+            await self.next_line()
+        elif line.startswith("mode"):
+            mode = line.split(maxsplit=1)[1].strip() if " " in line else "adv"
+            self.app.set_text_mode(mode)
+            await self.next_line()
+        elif line == "clear":
+            widget = self.app.query_one("#text-bar", expect_type=Widget)
+            widget.text = ""
+            widget.refresh()
+            await self.next_line()
+        elif line.startswith("menu"):
+            await self._handle_choice(line)
+        elif line.startswith("$"):
+            await self._handle_changeLP(line)
+        elif line.startswith("load"):
+            await self._handle_load(line)
+        elif '"' in line:
+            await self._handle_dialogue(line)
+        else:
+            await self.next_line()
+
+    async def _handle_label(self, line):
+        """Пропускает метку: она нужна только для переходов."""
+        await self.next_line()
+
+    async def _handle_goto(self, line):
+        """Переходит на строку с именованной меткой."""
+        match = re.fullmatch(r"goto\s+([a-zA-Z0-9_]+)", line)
+        if not match:
+            self._report_script_error(f"Invalid goto: {line}", stop_execution=False)
+            return
+
+        label = match.group(1)
+        target_index = self.labels.get(label)
+        if target_index is None:
+            self._report_script_error(f"Label not found: {label}", stop_execution=False)
+            return
+
+        self.jump_to_label(label)
+        # Переход по метке выходит из текущих структурных блоков так же,
+        # как это происходило при старой подмене общего массива строк.
+        await self.next_line()
+
+    def jump_to_label(self, label):
+        if label not in self.labels:
+            raise ValueError(f"Label not found: {label}")
+        self.index = self.labels[label]
+        self.frames.clear()
+
+    async def _handle_cards(self, line):
+        try:
+            command = parse_card_command(line)
+            validate_card_labels(command, self.labels)
+            ready = await self.app.execute_card_command(command, self, self.index - 1)
+        except (TypeError, ValueError) as exc:
+            self._report_script_error(str(exc))
+            return
+        if ready:
+            await self.next_line()
+
+    def _read_block_range(self, start: int) -> tuple[int, int]:
+        """Возвращает полуоткрытый диапазон тела `{ ... }` в исходном сценарии."""
+        return read_block_range(self.lines, start)
+
+    def _enter_range(self, start: int, end: int, return_pc: int) -> None:
+        """Переходит в неизменяемый диапазон, запоминая адрес продолжения."""
+        if start >= end:
+            self.index = return_pc
+            return
+        self.frames.append(ExecutionFrame(end=end, return_pc=return_pc))
+        self.index = start
+
+    def _evaluate_condition(self, expression: str, state: dict | None = None) -> bool:
+        """Вычисляет ограниченное логическое выражение DSL."""
+        return evaluate_script_condition(
+            expression, SCRIPT_STATE if state is None else state, SCRIPT_STATE_TYPES
+        )
+
+    def _stop_skipping(self) -> None:
+        stop = getattr(self.app, "stop_skipping", None)
+        if stop is not None:
+            stop()
+
+    def _report_script_error(
+        self, detail: str, *, pc: int | None = None, stop_execution: bool = True
+    ) -> None:
+        if stop_execution:
+            self.failed = True
+        self.has_diagnostic = True
+        self._stop_skipping()
+        position = max(0, self.index - 1) if pc is None else pc
+        number = self.source_line_numbers[position] if position < len(self.source_line_numbers) else "EOF"
+        labels = [(index, name) for name, index in self.labels.items() if index <= position]
+        label = max(labels)[1] if labels else "<entry>"
+        self.app.sub_title = f"[Script error] {Path(self.filename).name}:{number} [{label}]: {detail}"
+
+    @staticmethod
+    def _predict_change_state(line: str, state: dict) -> None:
+        """Применяет простое присваивание к копии состояния для look-ahead."""
+        try:
+            apply_script_assignment(line, state)
+        except ValueError:
+            return
+
+    def predict_visual_commands(
+        self,
+        start: int | None = None,
+        frames: list[ExecutionFrame] | None = None,
+        max_steps: int = 2000,
+    ) -> tuple[str, ...]:
+        """Возвращает изменения сцены до следующей видимой точки без side effects."""
+        pc = self.index if start is None else start
+        predicted_frames = list(self.frames if frames is None else frames)
+        state = SCRIPT_STATE.copy()
+        visual_commands = []
+
+        for _ in range(max_steps):
+            while predicted_frames and pc >= predicted_frames[-1].end:
+                pc = predicted_frames.pop().return_pc
+            if pc >= len(self.lines):
+                break
+
+            line = self.lines[pc]
+            pc += 1
+            if line.startswith("label"):
+                continue
+            if line.startswith("goto"):
+                match = re.fullmatch(r"goto\s+([a-zA-Z0-9_]+)", line)
+                if not match or match.group(1) not in self.labels:
+                    break
+                pc = self.labels[match.group(1)]
+                predicted_frames.clear()
+                continue
+            if line.startswith("if ") or line.startswith("if("):
+                branches = []
+                condition = line[2:].strip()
+                cursor = pc
+                while True:
+                    try:
+                        block_start, block_end = self._read_block_range(cursor)
+                    except ValueError:
+                        return tuple(visual_commands)
+                    cursor = block_end + 1
+                    branches.append((condition, block_start, block_end))
+                    if cursor >= len(self.lines):
+                        break
+                    next_line = self.lines[cursor]
+                    if next_line.startswith("else if"):
+                        condition = next_line[len("else if"):].strip()
+                        cursor += 1
+                        continue
+                    if next_line == "else":
+                        cursor += 1
+                        try:
+                            block_start, block_end = self._read_block_range(cursor)
+                        except ValueError:
+                            return tuple(visual_commands)
+                        cursor = block_end + 1
+                        branches.append((None, block_start, block_end))
+                    break
+                pc = cursor
+                for branch_condition, block_start, block_end in branches:
+                    try:
+                        selected = branch_condition is None or self._evaluate_condition(branch_condition, state)
+                    except ValueError:
+                        return tuple(visual_commands)
+                    if selected:
+                        predicted_frames.append(
+                            ExecutionFrame(end=block_end, return_pc=cursor)
+                        )
+                        pc = block_start
+                        break
+                continue
+            if line.startswith("menu"):
+                break
+            if line.startswith("load"):
+                break
+            if line.startswith("cards"):
+                break
+            # Пауза - граница видимого кадра. Команды перед ней должны быть
+            # показаны игроку, а не слиты с визуальными командами после неё.
+            if line.startswith("pause"):
+                break
+            if line.startswith("$"):
+                self._predict_change_state(line, state)
+                continue
+            if line.startswith(("scene", "show", "hide")):
+                visual_commands.append(line)
+                continue
+            if '"' in line:
+                break
+
+        return tuple(visual_commands)
+
+    def predict_choice_visual_commands(
+        self, choice: ChoiceTarget
+    ) -> tuple[str, ...]:
+        """Прогнозирует первый кадр конкретного доступного пункта меню."""
+        frames = list(self.frames)
+        frames.append(ExecutionFrame(end=choice.end, return_pc=choice.return_pc))
+        return self.predict_visual_commands(start=choice.start, frames=frames)
+
+    async def _handle_if(self, line):
+        """Выполняет первую истинную ветку цепочки if/else if/else."""
+        branches = []
+        condition = line[2:].strip()
+        cursor = self.index
+
+        while True:
+            try:
+                start, end = self._read_block_range(cursor)
+            except ValueError as exc:
+                self._report_script_error(str(exc))
+                return
+            cursor = end + 1
+            branches.append((condition, start, end))
+
+            if cursor >= len(self.lines):
+                break
+            next_line = self.lines[cursor]
+            if next_line.startswith("else if"):
+                condition = next_line[len("else if"):].strip()
+                cursor += 1
+                continue
+            if next_line == "else":
+                cursor += 1
+                try:
+                    start, end = self._read_block_range(cursor)
+                except ValueError as exc:
+                    self._report_script_error(str(exc))
+                    return
+                cursor = end + 1
+                branches.append((None, start, end))
+            break
+
+        selected = None
+        for branch_condition, start, end in branches:
+            try:
+                selected_branch = branch_condition is None or self._evaluate_condition(branch_condition)
+            except ValueError as exc:
+                self._report_script_error(f"{exc}; expression: {branch_condition}", pc=max(0, start - 2))
+                return
+            if selected_branch:
+                selected = (start, end)
+                break
+
+        return_pc = cursor
+        if selected:
+            self._enter_range(*selected, return_pc)
+        else:
+            self.index = return_pc
+
+        await self.next_line()
+           
+
+
+    async def _handle_rollcredits(self):
+        try:
+            start, end = self._read_block_range(self.index)
+            duration = sum(
+                float(match.group(1))
+                for command in self.lines[start:end]
+                if (match := re.fullmatch(r"pause\s+(?:hard\s+)?(\d+(?:\.\d+)?)", command))
+            )
+            self.app.start_credits(self, duration)
+        except (OSError, ValueError) as exc:
+            self._report_script_error(str(exc))
+            return
+        self.rolling_credits = True
+        # В конце блока титров игра завершается, а не проваливается в другой рут.
+        self._enter_range(start, end, len(self.lines))
+        await self.next_line()
+
+    def skip_credits(self) -> bool:
+        if not self.rolling_credits or self.finished or self.failed:
+            return False
+        self.credits_skipped = True
+        self.index = len(self.lines)
+        self.frames.clear()
+        return True
+
+    async def _handle_pause(self, line):
+        """Обработка строки pause"""
+        match = re.search(r'pause\s+(hard\s+)?(\d+(?:\.\d+)?)', line)
+        if match:
+            is_hard_pause = bool(match.group(1))
+            seconds = float(match.group(2))
+            # Фиксируем кадр до ожидания, не сливая последовательность сцен.
+            await self.app.flush_scene_render()
+            self.app.prefetch_next_scene(self)
+            self.app._space_require_idle = True
+            if self.rolling_credits:
+                await self.app.wait_credit_pause(self, seconds, skippable=not is_hard_pause)
+            else:
+                await self.app.wait_script_delay(
+                    seconds,
+                    "hard_pause" if is_hard_pause else "pause",
+                    skippable=not is_hard_pause,
+                )
+            await self.next_line()
+
+
+    async def _handle_scene(self, line):
+        """Обработка строки scene cg/bg"""
+        color_match = re.search(r'scene\s+color\s+([a-zA-Z0-9_#]+)', line)
+        if color_match:
+            self.app.current_scene = color_match.group(1).lower()
+            self.app.current_scene_category = "color"
+            self.app.clear_active_sprites()
+            self.app.mark_scene_dirty()
+            await self.next_line()
+            return
+    
+        match = re.search(r'scene\s+(cg|bg)\s+([a-zA-Z0-9_]+)', line)
+        if match:
+            category = match.group(1)
+            scene_name = match.group(2)
+
+            # Смена сцены всегда очищает активные спрайты.
+            self.app.current_scene = scene_name
+            self.app.current_scene_category = category
+            self.app.clear_active_sprites()
+
+            self.app.mark_scene_dirty()
+    
+            await self.next_line()
+
+
+    async def _handle_show(self, line):
+        """Обработка show: собрать спрайт, добавить/заменить его на сцене."""
+        self.app.show_sprite_from_script_line(line)
+        self.app.mark_scene_dirty()
+
+        await self.next_line()
+
+
+    async def _handle_hide(self, line):
+        """Обработка hide: убрать персонажа со сцены."""
+        match = re.search(r'hide\s+([a-zA-Z0-9_]+)', line)
+        if match:
+            character_id = match.group(1)
+            self.app.hide_sprite_by_id(character_id)
+            self.app.mark_scene_dirty()
+
+        await self.next_line()
+
+
+    async def _handle_play(self, line):
+        """Заглушка визуальных переходов; аудио обрабатывается отдельно."""
+        await self.next_line()
+
+    async def _handle_audio(self, line):
+        try:
+            audio = getattr(self.app, "audio", None)
+            if audio is not None:
+                audio.execute(line)
+            else:
+                if not hasattr(self, "_audio_catalog"):
+                    self._audio_catalog = load_audio_catalog()
+                parse_audio_command(line, self._audio_catalog)
+        except (OSError, ValueError) as exc:
+            self._report_script_error(str(exc))
+            return
+        await self.next_line()
+
+
+    async def _handle_window(self, line):
+        """Обработка строки window"""
+        novel_menu = self.app.query_one("#novel-menu", expect_type=Widget)
+        novel_menu.set_class("show" not in line, "invisible")
+        await self.next_line()
+
+
+    def choice_targets(self, pc: int | None = None) -> tuple[dict[str, ChoiceTarget], int]:
+        """Разбирает меню в исходных строках для UI и безоконных проверок."""
+        start, end = self._read_block_range(self.index if pc is None else pc)
+        cursor, options = start, {}
+        while cursor < end:
+            match = OPTION_RE.fullmatch(self.lines[cursor])
+            if match is None:
+                raise ValueError("Invalid menu option")
+            text, condition = match.groups()
+            body, body_end = self._read_block_range(cursor + 1)
+            if condition is None or self._evaluate_condition(condition):
+                if text in options:
+                    raise ValueError(f"Duplicate menu option: {text}")
+                options[text] = ChoiceTarget(body, body_end, end + 1)
+            cursor = body_end + 1
+        if not options:
+            raise ValueError("Menu has no available choices")
+        return options, end + 1
+
+    def choice_caption(self, source: str, target: ChoiceTarget) -> str:
+        # Target starts inside the option body: caption, opening brace, body.
+        return self.translations.get(target.start - 2, source)
+
+    async def _handle_choice(self, line):
+        """Обработка строки menu и логика выбора"""
+        # Логическая граница устанавливается до первого await и включает
+        # пустое меню: CSS ещё может не успеть показать ChoiceBar.
+        self.app.pending_choices = {}
+        self._stop_skipping()
+
+        try:
+            options, cursor = self.choice_targets()
+        except ValueError as exc:
+            self._report_script_error(str(exc))
+            return
+        self.index = cursor
+
+        # показать ChoiceBar
+        choice_bar = self.app.query_one("#choice-bar")
+        list_view = choice_bar.query_one(ListView)
+
+        await choice_bar.set_choices(options, self)
+
+        # сохранить варианты в app
+        self.app.pending_choices = options
+
+        await self.app.flush_scene_render()
+        self.app.prefetch_choice_scenes(self, options.values())
+
+        # Видимость текстового окна задаёт сценарий, выбор её не переопределяет.
+        choice_bar.remove_class("hidden")
+        self.app.sync_text_mode_display()
+        if choice_bar.has_class("map-mode"):
+            self.app.call_after_refresh(self.app.refresh_camp_map)
+
+        # найти ListView и перевести на него фокус 
+        if list_view.children:
+            list_view.index = 0
+            list_view.focus() 
+
+    def select_choice(self, choice: ChoiceTarget) -> None:
+        """Выполняет выбранный пользователем неизменяемый диапазон меню."""
+        self._enter_range(choice.start, choice.end, choice.return_pc)
+
+
+    @staticmethod
+    def _normalize_log_text(text: str) -> str:
+        """Подготовка текста для окна истории."""
+        text = " ".join(part.strip() for part in text.split("<w>") if part.strip())
+        text = re.sub(r"</?(i|b)>", "", text)
+        return text.strip()
+
+
+    async def _handle_dialogue(self, line):
+        """Обработка строки диалога с анимацией текста"""
+        await self.app.flush_scene_render()
+        self.app.prefetch_next_scene(self)
+        widget = self.app.query_one("#text-bar", expect_type=Widget)
+        btn = self.app.query_one("#btn-next")
+
+        # Скрываем кнопку на время показа текста
+        btn.add_class("invisible")
+        self.app._text_animating = True
+        self.app._text_animating_since = _time.get_time()
+        self.app._text_animating_until = self.app._text_animating_since
+        self.app._space_require_idle = True
+
+        try:
+            translated = self.translations.get(self.index - 1)
+            match = DIALOGUE_RE.match(line)
+            if match and match[1]:
+                raw_speaker, text = match.groups()
+                raw_speaker = raw_speaker.strip()
+                text = translated if translated is not None else decode_dsl_dialogue(text.strip())
+
+                if raw_speaker == "th":
+                    speaker = ""
+                    text = f"~ {text} ~"
+                    id_to_set = None
+                else:
+                    speaker = DISPLAY_NAMES.get(raw_speaker, raw_speaker)
+                    speaker = getattr(self.app, "interface_locale", {}).get(
+                        SPEAKER_KEYS.get(raw_speaker, raw_speaker), speaker,
+                    )
+                    id_to_set = raw_speaker
+            else:
+                speaker = ""
+                text = translated if translated is not None else decode_dsl_dialogue(line.strip().strip('"'))
+                id_to_set = None
+
+            self.app.add_log_entry(
+                text=self._normalize_log_text(text),
+                speaker=speaker,
+                speaker_id=id_to_set,
+            )
+
+            is_nvl = self.app.current_text_mode == "nvl"
+            widget.remove_class(*[cls for cls in widget.classes if cls != "text-bar"])
+            if id_to_set:
+                widget.add_class(id_to_set)
+
+            widget.border_title = "" if is_nvl else speaker
+
+            # Конвертируем <i>, <b> в rich-разметку
+            if translated is not None:
+                text = escape(text)
+            text = re.sub(r'<i>(.*?)</i>', r'[italic]\1[/italic]', text, flags=re.S)
+            text = re.sub(r'<b>(.*?)</b>', r'[bold]\1[/bold]', text, flags=re.S)
+
+            if is_nvl:
+                widget.append_nvl_paragraph(speaker, id_to_set)
+
+            # Разбиваем текст на части по <w> с паузами
+            parts = text.split("<w>")
+            for i, part in enumerate(parts):
+                part = part.strip()
+                if part:
+                    prefix = "" if i == 0 else " "
+                    await widget.animate_text(
+                        prefix + part,
+                        append=is_nvl or i > 0,
+                    )
+
+                if i < len(parts) - 1:
+                    # В отличие от посимвольной печати, пауза <w> может быть
+                    # пропущена пробелом или кнопкой «Продолжить».
+                    show_skip_button = not self.app.query_one(
+                        "#novel-menu", expect_type=Widget
+                    ).has_class("invisible")
+                    if show_skip_button:
+                        btn.remove_class("invisible")
+                    try:
+                        await self.app.wait_script_delay(1, "w")
+                    finally:
+                        if (
+                            show_skip_button
+                            and getattr(self.app, "script", None) is self
+                        ):
+                            btn.add_class("invisible")
+        finally:
+            # При сбросе/загрузке app.script заменяется или удаляется до
+            # отмены старой задачи. Не позволяем её finally-блоку менять UI
+            # уже нового сценария.
+            if getattr(self.app, "script", None) is self:
+                self.app._text_animating = False
+                self.app._text_animating_until = _time.get_time()
+
+                # Показать кнопку обратно
+                btn.remove_class("invisible")
+
+                # Не возвращаем фокус из истории/паузы или уже закрытой игры.
+                gameplay_context = getattr(self.app, "is_gameplay_context", None)
+                if (
+                    gameplay_context() if gameplay_context is not None
+                    else self.app.query_one("#choice-bar").has_class("hidden")
+                ):
+                    btn.focus()
+
+
+    async def _handle_changeLP(self, line):
+        """Обработка изменения поинтов и флагов"""
+        # Парсим строку ($lp_sl += 1, $day2_flag = true, $persistent.flag = false)
+        try:
+            state_key, _, _ = parse_script_assignment(line)
+            was_unlocked = SCRIPT_STATE.get(state_key) is True
+            apply_script_assignment(line, SCRIPT_STATE)
+        except ValueError as exc:
+            self._report_script_error(str(exc), stop_execution=False)
+            # Не стираем диагностику немедленным автоматическим переходом
+            # к следующей строке. Продолжить можно явным действием «Далее».
+            return
+        # Обновляем единое состояние и Header.
+        self._update_script_header()
+        if state_key.startswith("persistent."):
+            if state_key in ENDING_STATE_KEYS and not was_unlocked and SCRIPT_STATE[state_key] is True:
+                record_unlock = getattr(self.app, "record_ending_unlock", None)
+                if record_unlock is not None:
+                    record_unlock(state_key)
+            save_persistent = getattr(self.app, "save_persistent_state", None)
+            if save_persistent is not None:
+                save_persistent()
+
+        # Продолжаем выполнение
+        await self.next_line()
+
+    async def _handle_load(self, line):
+        """Переход к файлу сценария"""
+        match = re.match(r'load\s+(.+)$', line)
+        if not match:
+            return
+
+        raw_target = match.group(1).strip().strip('"').strip("'")
+        if not raw_target:
+            return
+
+        current_dir = Path(self.filename).resolve().parent
+        target_path = Path(raw_target)
+
+        if target_path.suffix.lower() != ".txt":
+            target_path = target_path.with_suffix(".txt")
+        if not target_path.is_absolute():
+            target_path = current_dir / target_path
+
+        target_path = target_path.resolve()
+        if not target_path.exists():
+            self._report_script_error(f"File not found: {target_path}", stop_execution=False)
+            return
+
+        self.load_script(target_path)
+        preload_task = self.app.start_script_preload(self)
+        if preload_task is not None:
+            await preload_task
+        await self.next_line()

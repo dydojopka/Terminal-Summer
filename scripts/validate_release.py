@@ -18,18 +18,20 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from script_parser import (
+from story.parser import (
     DEFAULT_SCRIPT_STATE,
     DISPLAY_NAMES,
     ScriptParser,
     SCRIPT_STATE_TYPES,
+    TIMES_OF_DAY,
     apply_script_assignment,
     parse_script_assignment,
 )
-from sprites_builder import load_yaml_dict, parse_show_like, resolve_sprite
-from script_conditions import evaluate_script_condition, parse_script_condition
-from script_resources import RELEASE_SCRIPTS, find_scene_path, visual_asset_problems
-from script_structure import read_block_range, structure_errors
+from rendering.sprites import load_yaml_dict, parse_show_like, resolve_sprite
+from story.conditions import evaluate_script_condition, parse_script_condition
+from story.resources import RELEASE_SCRIPTS, find_scene_path, visual_asset_problems
+from story.structure import read_block_range, structure_errors
+from story.card_commands import parse_card_command, validate_card_labels
 
 
 LABEL_RE = re.compile(r"label\s+([a-zA-Z0-9_]+):?$")
@@ -40,7 +42,7 @@ VARIABLE_RE = re.compile(r"\$([a-zA-Z0-9_.]+)")
 SUPPORTED_PREFIXES = (
     "label ", "goto ", "if ", "if(", "else if ", "pause ",
     "scene ", "show ", "hide ", "play ", "stop ", "window ",
-    "time ", "mode ", "menu", "load ", "with ", "volume ",
+    "time ", "mode ", "menu", "load ", "with ", "volume ", "cards ",
 )
 
 
@@ -280,6 +282,19 @@ def explore_routes(
                     _apply_route_assignment(line, variables)
                     continue
 
+                if line.startswith("cards"):
+                    command = parse_card_command(line)
+                    validate_card_labels(command, document.labels)
+                    if command.action == "play":
+                        # Произвольное число ничьих не меняет сюжетный вход.
+                        # Сам переход draw и переигровка проверяются отдельно.
+                        stack.append((document, document.labels[command.labels[1]], tuple(),
+                                      variables.copy(), choices + (f"Карты: {command.argument}, fail",),
+                                      seen, visited_labels, steps))
+                        pc, frames = document.labels[command.labels[0]], tuple()
+                        choices += (f"Карты: {command.argument}, win",)
+                    continue
+
                 if line.startswith("load"):
                     target = _route_load_target(document, line)
                     document = _route_document(target, cache)
@@ -322,8 +337,8 @@ def validate_script(
 ) -> list[str]:
     """Применяет существующие статические проверки к любому TXT, без обхода."""
     errors: list[str] = []
-    from audio_catalog import load_audio_catalog
-    from script_audio import parse_audio_command
+    from audio.catalog import load_audio_catalog
+    from story.audio_commands import parse_audio_command
     audio_catalog = load_audio_catalog()
     project_root = ROOT_DIR if root_dir is None else root_dir
     resources_path = project_root / "TS" / "resources.yaml"
@@ -363,6 +378,12 @@ def validate_script(
     show_count = 0
 
     for number, line in source_lines:
+        if line.startswith("cards"):
+            try:
+                command = parse_card_command(line)
+                validate_card_labels(command, parser.labels)
+            except ValueError as exc:
+                errors.append(f"{script_path.name}:{number}: {exc}")
         if line.split(maxsplit=1)[:1] in (["play"], ["stop"], ["volume"]):
             try:
                 parse_audio_command(line, audio_catalog)
@@ -425,7 +446,7 @@ def validate_script(
         for command, arguments in (
             ("window", {"show", "hide"}),
             ("mode", {"adv", "nvl"}),
-            ("time", {"day", "sunset", "night"}),
+            ("time", TIMES_OF_DAY),
         ):
             if line.startswith(command + " ") and line.split(maxsplit=1)[1] not in arguments:
                 errors.append(f"{script_path.name}:{number}: некорректная команда {command}: {line}")

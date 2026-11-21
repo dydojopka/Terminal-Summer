@@ -9,23 +9,15 @@ if not hasattr(sys, "_MEIPASS"):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from gallery_catalog import load_gallery_catalog, resolve_gallery_image, validate_gallery_assets
-from audio_catalog import load_audio_catalog, validate_audio_assets
+from audio.catalog import load_audio_catalog, validate_audio_assets
 from file_io import install_missing
-from script_resources import visual_asset_problems
+from paths import get_frozen_bundle_dir, get_project_root
+from story.resources import visual_asset_problems
 
 # Полный архив; после публикации обновления URL можно сменить без пересборки.
 ASSETS_URL = os.environ.get(
     "TS_ASSETS_URL", "https://storage.yandexcloud.net/terminal-summer-assets/TS.zip"
 )
-
-def get_project_root() -> Path:
-    """Возвращает рабочий корень, где должны лежать папка TS и settings"""
-    if hasattr(sys, "_MEIPASS"):
-        # Для onefile-сборки работаем рядом с бинарником
-        return Path(sys.executable).resolve().parent
-    # scripts/assets_manager.py -> корень проекта на уровень выше scripts
-    return Path(__file__).resolve().parent.parent
-
 
 def _required_asset_paths() -> list[Path]:
     ts_dir = get_project_root() / "TS"
@@ -57,8 +49,8 @@ def _asset_problems(*, require_audio=False, require_endings=False) -> tuple[list
         for error in validate_audio_assets(ts_dir):
             (missing if any(name in error for name in absent) else invalid).append(error)
     if require_endings:
-        from endings_catalog import load_endings_catalog, runtime_ending_ansi, ENDING_ICON_WIDTHS
-        from endings_ansi import read_ending_ansi
+        from endings.ansi import read_ending_ansi
+        from endings.catalog import load_endings_catalog, runtime_ending_ansi, ENDING_ICON_WIDTHS
         for ending in load_endings_catalog():
             for width in ENDING_ICON_WIDTHS:
                 for unlocked in (True, False):
@@ -132,9 +124,10 @@ def migrate_legacy_gallery(ts_dir: Path | None = None) -> int:
 
 def restore_bundled_scripts() -> None:
     """Восстанавливает отсутствующие сценарии onefile, не затирая внешние."""
-    if not hasattr(sys, "_MEIPASS"):
+    bundle_dir = get_frozen_bundle_dir()
+    if bundle_dir is None:
         return
-    source = Path(sys._MEIPASS) / "TS" / "text"
+    source = bundle_dir / "TS" / "text"
     target = get_project_root() / "TS" / "text"
     for script in source.glob("*.txt"):
         destination = target / script.name
