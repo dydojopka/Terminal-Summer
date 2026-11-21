@@ -54,10 +54,10 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def analyzed_files(path: Path) -> dict[str, Path]:
+def analyzed_files(path: Path) -> dict[str, tuple[Path, str]]:
     # TOC PyInstaller — Python-литерал. Читаем записи, не исполняя .spec.
     return {
-        entry[0].replace("\\", "/"): Path(entry[1]).resolve()
+        entry[0].replace("\\", "/"): (Path(entry[1]).resolve(), entry[2])
         for section in ast.literal_eval(path.read_text(encoding="utf-8"))
         if isinstance(section, (tuple, list))
         for entry in section
@@ -112,7 +112,9 @@ def download_source(output: Path, url: str, expected_sha256: str) -> Path:
 
 def collect_scenarios(archive: CArchiveReader, output: Path) -> None:
     # Берём тексты собранной версии, а не потенциально изменившееся рабочее дерево.
-    data = {name.replace("\\", "/"): name for name, entry in archive.toc.items() if entry[-1] == "x"}
+    # PyInstaller помечает DATA как 'b', если os.access(path, X_OK) возвращает
+    # True. На Windows это возможно и для TXT/JSON; ниже отбираем их по пути.
+    data = {name.replace("\\", "/"): name for name, entry in archive.toc.items() if entry[-1] in {"x", "b"}}
     originals = {f"TS/text/{name}" for name in RELEASE_SCRIPTS}
     chapters = {f"TS/text/en/{Path(name).stem}.json" for name in RELEASE_SCRIPTS}
     missing = (originals | chapters) - data.keys()
@@ -131,7 +133,7 @@ def collect(binary: Path, analysis: Path, output: Path, *, download: bool) -> li
     analyzed = analyzed_files(analysis)
     pure = archive.open_embedded_archive("PYZ.pyz").toc
     shipped = set(pure) | {name.replace("\\", "/") for name in archive.toc}
-    used_paths = {analyzed[name] for name in shipped if name in analyzed}
+    used_paths = {analyzed[name][0] for name in shipped if name in analyzed}
     distributions = {}
     owned_paths = set()
     for dist in metadata.distributions():
@@ -191,7 +193,9 @@ def collect(binary: Path, analysis: Path, output: Path, *, download: bool) -> li
         if entry[-1] != "b":
             continue
         name = raw_name.replace("\\", "/")
-        source = analyzed.get(name)
+        source, kind = analyzed.get(name, (None, None))
+        if kind == "DATA":
+            continue  # Не все записи с типом 'b' — нативные библиотеки.
         if source in owned_paths or re.fullmatch(
             r"(?:libpython[0-9.]+\.so(?:\.[0-9.]+)?|python[0-9]+t?\.dll)", name, flags=re.I
         ):
